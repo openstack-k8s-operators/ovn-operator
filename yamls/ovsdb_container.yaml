@@ -1,0 +1,24 @@
+---
+image: "quay.io/mbooth/ovn-central:2.11-k8s"
+env:
+- name: OVS_RUNDIR
+  value: /pod-run
+- name: OVS_DBDIR
+  value: /var/lib/openvswitch
+- name: OVN_LOG_LEVEL
+  value: info
+volumeMounts:
+- mountPath: /var/lib/openvswitch/
+  name: data
+- mountPath: /pod-run
+  name: pod-run
+- mountPath: /var/log/openvswitch/
+  name: logs
+- mountPath: /etc/hosts
+  name: hosts
+  subPath: hosts
+resources:
+  requests:
+    cpu: 10m
+    memory: 300Mi
+terminationMessagePolicy: FallbackToLogsOnError

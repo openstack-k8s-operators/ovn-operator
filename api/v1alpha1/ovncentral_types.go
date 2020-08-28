@@ -17,25 +17,44 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/operator-framework/operator-lib/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// Important: Run "make" to regenerate code after modifying this file
+
+// OVNCentralServer defines the observed state of a member of cluster
+type OVNCentralServerStatus struct {
+	NB *OVNCentralServerDatabaseStatus `json:"nb,omitempty"`
+	SB *OVNCentralServerDatabaseStatus `json:"sb,omitempty"`
+}
+
+type OVNCentralServerDatabaseStatus struct {
+	ServerID     string `json:"serverID"`
+	LocalAddress string `json:"localAddress"`
+}
 
 // OVNCentralSpec defines the desired state of OVNCentral
 type OVNCentralSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of OVNCentral. Edit OVNCentral_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Replicas         int    `json:"replicas"`
+	Image            string `json:"image"`
+	StorageClass     string `json:"storageClass,omitempty"`
+	ConnectionConfig string `json:"connectionConfig,omitempty"`
+	ConnectionCA     string `json:"connectionCA,omitempty"`
+	ConnectionCert   string `json:"connectionCert,omitempty"`
+	NBSchemaVersion  string `json:"nbSchemaVersion,omitempty"`
+	SBSchemaVersion  string `json:"sbSchemaVersion,omitempty"`
 }
 
 // OVNCentralStatus defines the observed state of OVNCentral
 type OVNCentralStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Conditions      status.Conditions                 `json:"conditions"`
+	Replicas        int                               `json:"replicas"`
+	NBClusterID     string                            `json:"nbClusterID,omitempty"`
+	SBClusterID     string                            `json:"sbClusterID,omitempty"`
+	NBSchemaVersion string                            `json:"nbSchemaVersion,omitEmpty"`
+	SBSchemaVersion string                            `json:"sbSchemaVersion,omitEmpty"`
+	Servers         map[string]OVNCentralServerStatus `json:"servers"`
 }
 
 // +kubebuilder:object:root=true
