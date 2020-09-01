@@ -24,10 +24,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ovncentralv1alpha1 "github.com/openstack-k8s-operators/ovn-central-operator/api/v1alpha1"
+	"github.com/openstack-k8s-operators/ovn-central-operator/stubs"
 )
 
 // OVNCentralReconciler reconciles a OVNCentral object
@@ -42,12 +44,22 @@ type reconcilerReturn struct {
 	err    error
 }
 
+const dataVolumeName = "data"
+
+func getBootstrapPVCName(instance *ovncentralv1alpha1.OVNCentral) string {
+	return fmt.Sprintf("%s-%s-0", dataVolumeName, instance.Name)
+}
+
 // +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovncentrals,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovncentrals/status,verbs=get;update;patch
 
 func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("ovncentral", req.NamespacedName)
 	ctx := context.Background()
+
+	//
+	// Fetch the instance
+	//
 
 	instance := &ovncentralv1alpha1.OVNCentral{}
 	err := r.Client.Get(ctx, req.NamespacedName, instance)
@@ -62,9 +74,36 @@ func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 		return ctrl.Result{}, err
 	}
 
-	ret := r.setDefaultValues(req, ctx, instance)
-	if ret != nil {
-		return ret.result, ret.err
+	//
+	// Set Default values
+	//
+
+	instanceUpdated := r.setDefaultValues(ctx, instance)
+	if instanceUpdated {
+		err := r.Client.Update(ctx, instance)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	//
+	// Check the bootstrap PVC exists
+	//
+	// The bootstrap PVC is the PVC of the first pod in the statefulset. We
+	// manually initialise it with a database before starting the
+	// statefulset.
+	//
+
+	bootstrapPVCName := getBootstrapPVCName(instance)
+	bootstrapPVC := &corev1.PersistentVolumeClaim{}
+	err = r.Client.Get(ctx, types.NamespacedName{Name: bootstrapPVCName, Namespace: instance.Namespace}, bootstrapPVC)
+	if err != nil {
+		if k8s_errors.IsNotFound(err) {
+			return r.createBootstrapPVC(ctx, instance, bootstrapPVCName)
+		}
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
@@ -74,43 +113,49 @@ func (r *OVNCentralReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ovncentralv1alpha1.OVNCentral{}).
 		Owns(&corev1.ConfigMap{}).
+		Owns(&corev1.PersistentVolumeClaim{}).
 		Owns(&corev1.Secret{}).
 		Complete(r)
 }
 
-func (r *OVNCentralReconciler) setDefaultValues(req ctrl.Request, ctx context.Context,
-	instance *ovncentralv1alpha1.OVNCentral) *reconcilerReturn {
+func (r *OVNCentralReconciler) setDefaultValues(ctx context.Context,
+	instance *ovncentralv1alpha1.OVNCentral) bool {
 
-	// Check that ConnectionConfig, ConnectionCA, and ConnectionCert have
-	// non-empty values. Default them if they are not set.
+	logDefault := func(field string, value interface{}) {
+		r.Log.Info(fmt.Sprintf("Defaulting empty %s", field), "value", value)
+	}
+
 	var updatedInstance bool
 	if instance.Spec.ConnectionConfig == "" {
 		instance.Spec.ConnectionConfig = fmt.Sprintf("%s-connection", instance.Name)
-		r.Log.Info("Defaulting empty ConnectionConfig", "value", instance.Spec.ConnectionConfig)
+		logDefault("ConnectionConfig", instance.Spec.ConnectionConfig)
 
 		updatedInstance = true
 	}
 	if instance.Spec.ConnectionCA == "" {
 		instance.Spec.ConnectionCA = fmt.Sprintf("%s-ca", instance.Name)
-		r.Log.Info("Defaulting empty ConnectionCA", "value", instance.Spec.ConnectionCA)
+		logDefault("ConnectionCA", instance.Spec.ConnectionCA)
 		updatedInstance = true
 	}
 	if instance.Spec.ConnectionCert == "" {
 		instance.Spec.ConnectionCert = fmt.Sprintf("%s-cert", instance.Name)
-		r.Log.Info("Defaulting empty ConnectionCert", "value", instance.Spec.ConnectionCert)
+		logDefault("ConnectionCert", instance.Spec.ConnectionCert)
 		updatedInstance = true
 	}
 
-	if updatedInstance {
-		err := r.Client.Update(ctx, instance)
-		if err != nil {
-			return &reconcilerReturn{ctrl.Result{}, err}
-		}
+	return updatedInstance
+}
 
-		return &reconcilerReturn{ctrl.Result{Requeue: true}, nil}
+// +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;create;update;delete
+func (r *OVNCentralReconciler) createBootstrapPVC(ctx context.Context,
+	instance *ovncentralv1alpha1.OVNCentral, bootstrapPVCName string) (ctrl.Result, error) {
+
+	bootstrapPVC := stubs.PVC(instance, bootstrapPVCName)
+	err := r.Client.Create(ctx, bootstrapPVC)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
-
-	return nil
+	return ctrl.Result{Requeue: true}, nil
 }
 
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;create;update;delete

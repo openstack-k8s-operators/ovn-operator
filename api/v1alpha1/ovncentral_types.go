@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"github.com/operator-framework/operator-lib/status"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -25,8 +26,9 @@ import (
 
 // OVNCentralServer defines the observed state of a member of cluster
 type OVNCentralServerStatus struct {
-	NB *OVNCentralServerDatabaseStatus `json:"nb,omitempty"`
-	SB *OVNCentralServerDatabaseStatus `json:"sb,omitempty"`
+	Name string                          `json:"name"`
+	NB   *OVNCentralServerDatabaseStatus `json:"nb,omitempty"`
+	SB   *OVNCentralServerDatabaseStatus `json:"sb,omitempty"`
 }
 
 type OVNCentralServerDatabaseStatus struct {
@@ -36,25 +38,26 @@ type OVNCentralServerDatabaseStatus struct {
 
 // OVNCentralSpec defines the desired state of OVNCentral
 type OVNCentralSpec struct {
-	Replicas         int    `json:"replicas"`
-	Image            string `json:"image"`
-	StorageClass     string `json:"storageClass,omitempty"`
-	ConnectionConfig string `json:"connectionConfig,omitempty"`
-	ConnectionCA     string `json:"connectionCA,omitempty"`
-	ConnectionCert   string `json:"connectionCert,omitempty"`
-	NBSchemaVersion  string `json:"nbSchemaVersion,omitempty"`
-	SBSchemaVersion  string `json:"sbSchemaVersion,omitempty"`
+	Replicas         int               `json:"replicas"`
+	Image            string            `json:"image"`
+	StorageClass     *string           `json:"storageClass,omitempty"`
+	StorageSize      resource.Quantity `json:"storageSize,omitempty"`
+	ConnectionConfig string            `json:"connectionConfig,omitempty"`
+	ConnectionCA     string            `json:"connectionCA,omitempty"`
+	ConnectionCert   string            `json:"connectionCert,omitempty"`
+	NBSchemaVersion  string            `json:"nbSchemaVersion,omitempty"`
+	SBSchemaVersion  string            `json:"sbSchemaVersion,omitempty"`
 }
 
 // OVNCentralStatus defines the observed state of OVNCentral
 type OVNCentralStatus struct {
-	Conditions      status.Conditions                 `json:"conditions"`
-	Replicas        int                               `json:"replicas"`
-	NBClusterID     string                            `json:"nbClusterID,omitempty"`
-	SBClusterID     string                            `json:"sbClusterID,omitempty"`
-	NBSchemaVersion string                            `json:"nbSchemaVersion,omitEmpty"`
-	SBSchemaVersion string                            `json:"sbSchemaVersion,omitEmpty"`
-	Servers         map[string]OVNCentralServerStatus `json:"servers"`
+	Conditions      status.Conditions        `json:"conditions"`
+	Replicas        int                      `json:"replicas"`
+	NBClusterID     string                   `json:"nbClusterID,omitempty"`
+	SBClusterID     string                   `json:"sbClusterID,omitempty"`
+	NBSchemaVersion string                   `json:"nbSchemaVersion,omitEmpty"`
+	SBSchemaVersion string                   `json:"sbSchemaVersion,omitEmpty"`
+	Servers         []OVNCentralServerStatus `json:"servers" patchStrategy:"merge" patchMergeKey:"name"`
 }
 
 // +kubebuilder:object:root=true

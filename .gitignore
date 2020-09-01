@@ -17,6 +17,7 @@ bin
 
 !vendor/**/zz_generated.*
 api/**/zz_generated.*
+config/crd/bases/ovn-central.openstack.org_ovncentrals.yaml
 
 # editor and IDE paraphernalia
 .idea

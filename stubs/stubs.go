@@ -2,16 +2,18 @@ package stubs
 
 import (
 	"io/ioutil"
-	corev1 "k8s.io/api/core/v1"
 	"os"
 	"path"
+
+	corev1 "k8s.io/api/core/v1"
 	yaml "sigs.k8s.io/yaml"
 
 	ovncentralv1alpha1 "github.com/openstack-k8s-operators/ovn-central-operator/api/v1alpha1"
 )
 
 var (
-	ovsdb_container corev1.Container
+	ovsdb_container_tpl corev1.Container
+	pvc_tpl             corev1.PersistentVolumeClaim
 )
 
 func init() {
@@ -21,7 +23,8 @@ func init() {
 	}
 
 	yamls := map[string]interface{}{
-		"ovsdb_container.yaml": &ovsdb_container,
+		"ovsdb_container.yaml": &ovsdb_container_tpl,
+		"pvc.yaml":             &pvc_tpl,
 	}
 
 	for file, obj := range yamls {
@@ -37,13 +40,24 @@ func init() {
 	}
 }
 
-func OVSDBContainer(cr ovncentralv1alpha1.OVNCentralSpec,
+func OVSDBContainer(cr *ovncentralv1alpha1.OVNCentralSpec,
 	containerName string, containerCommand []string) *corev1.Container {
 
-	container := ovsdb_container.DeepCopy()
+	container := ovsdb_container_tpl.DeepCopy()
 	container.Image = cr.Image
 	container.Name = containerName
 	container.Command = containerCommand
 
 	return container
+}
+
+func PVC(cr *ovncentralv1alpha1.OVNCentral, name string) *corev1.PersistentVolumeClaim {
+	pvc := pvc_tpl.DeepCopy()
+
+	pvc.Name = name
+	pvc.Namespace = cr.Namespace
+	pvc.Spec.Resources.Requests = corev1.ResourceList{corev1.ResourceStorage: cr.Spec.StorageSize}
+	pvc.Spec.StorageClassName = cr.Spec.StorageClass
+
+	return pvc
 }

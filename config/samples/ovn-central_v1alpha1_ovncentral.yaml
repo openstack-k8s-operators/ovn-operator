@@ -3,5 +3,6 @@ kind: OVNCentral
 metadata:
   name: ovncentral-sample
 spec:
-  # Add fields here
-  foo: bar
+  replicas: 3
+  image: quay.io/mbooth/ovn-central:2.11
+  storageSize: 1G
