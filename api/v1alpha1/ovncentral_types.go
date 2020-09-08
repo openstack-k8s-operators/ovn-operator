@@ -26,39 +26,59 @@ import (
 
 // OVNCentralServer defines the observed state of a member of cluster
 type OVNCentralServerStatus struct {
-	Name string                          `json:"name"`
-	NB   *OVNCentralServerDatabaseStatus `json:"nb,omitempty"`
-	SB   *OVNCentralServerDatabaseStatus `json:"sb,omitempty"`
+	Name string                         `json:"name"`
+	NB   OVNCentralServerDatabaseStatus `json:"nb,omitempty"`
+	SB   OVNCentralServerDatabaseStatus `json:"sb,omitempty"`
 }
 
 type OVNCentralServerDatabaseStatus struct {
-	ServerID     string `json:"serverID"`
-	LocalAddress string `json:"localAddress"`
+	ClusterID string `json:"clusterID,omitempty"`
+	Name      string `json:"name,omitempty"`
+	ServerID  string `json:"serverID,omitempty"`
+	Address   string `json:"address,omitempty"`
 }
 
 // OVNCentralSpec defines the desired state of OVNCentral
 type OVNCentralSpec struct {
-	Replicas         int               `json:"replicas"`
-	Image            string            `json:"image"`
-	StorageClass     *string           `json:"storageClass,omitempty"`
-	StorageSize      resource.Quantity `json:"storageSize,omitempty"`
-	ConnectionConfig string            `json:"connectionConfig,omitempty"`
-	ConnectionCA     string            `json:"connectionCA,omitempty"`
-	ConnectionCert   string            `json:"connectionCert,omitempty"`
-	NBSchemaVersion  string            `json:"nbSchemaVersion,omitempty"`
-	SBSchemaVersion  string            `json:"sbSchemaVersion,omitempty"`
+	// Required properties
+
+	Replicas    int               `json:"replicas"`
+	Image       string            `json:"image"`
+	StorageSize resource.Quantity `json:"storageSize,omitempty"`
+
+	// Required properties with default values
+
+	ConnectionConfig string `json:"connectionConfig,omitempty"`
+	ConnectionCA     string `json:"connectionCA,omitempty"`
+	ConnectionCert   string `json:"connectionCert,omitempty"`
+	NBSchemaVersion  string `json:"nbSchemaVersion,omitempty"`
+	SBSchemaVersion  string `json:"sbSchemaVersion,omitempty"`
+
+	// Optional properties
+
+	StorageClass *string `json:"storageClass,omitempty"`
 }
 
 // OVNCentralStatus defines the observed state of OVNCentral
 type OVNCentralStatus struct {
-	Conditions      status.Conditions        `json:"conditions"`
-	Replicas        int                      `json:"replicas"`
-	NBClusterID     string                   `json:"nbClusterID,omitempty"`
-	SBClusterID     string                   `json:"sbClusterID,omitempty"`
-	NBSchemaVersion string                   `json:"nbSchemaVersion,omitEmpty"`
-	SBSchemaVersion string                   `json:"sbSchemaVersion,omitEmpty"`
+	Conditions      status.Conditions        `json:"conditions,omitempty"`
+	Replicas        *int                     `json:"replicas,omitempty"`
+	NBClusterID     *string                  `json:"nbClusterID,omitempty"`
+	SBClusterID     *string                  `json:"sbClusterID,omitempty"`
+	NBSchemaVersion *string                  `json:"nbSchemaVersion,omitEmpty"`
+	SBSchemaVersion *string                  `json:"sbSchemaVersion,omitEmpty"`
 	Servers         []OVNCentralServerStatus `json:"servers" patchStrategy:"merge" patchMergeKey:"name"`
 }
+
+const (
+	OVNCentralFailed    status.ConditionType = "Failed"
+	OVNCentralAvailable status.ConditionType = "Available"
+)
+
+const (
+	OVNCentralInconsistentCluster status.ConditionReason = "InconsistentCluster"
+	OVNCentralBootstrapFailed     status.ConditionReason = "BootstrapFailed"
+)
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
