@@ -30,18 +30,6 @@ import (
 	"github.com/go-test/deep"
 )
 
-type ApplyType string
-
-const (
-	ApplyTypeNone   ApplyType = "None"
-	ApplyTypeCreate           = "Create"
-	ApplyTypeUpdate           = "Update"
-)
-
-func (at *ApplyType) String() string {
-	return string(*at)
-}
-
 type k8sObject interface {
 	metav1.Object
 	runtime.Object

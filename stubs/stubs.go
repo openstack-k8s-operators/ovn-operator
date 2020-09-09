@@ -22,7 +22,6 @@ import (
 	"os"
 	"path"
 
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -126,19 +125,19 @@ func PVC(
 	return pvc
 }
 
-func BootstrapJob(
+func BootstrapPod(
 	cr *ovncentralv1alpha1.OVNCentral,
 	scheme *runtime.Scheme,
-	pvc *corev1.PersistentVolumeClaim) *batchv1.Job {
+	pvc *corev1.PersistentVolumeClaim) *corev1.Pod {
 
-	bootstrapJob := &batchv1.Job{}
-	bootstrapJob.Name = fmt.Sprintf("%s-bootstrap", cr.Name)
-	bootstrapJob.Namespace = cr.Namespace
+	bootstrapPod := &corev1.Pod{}
+	bootstrapPod.Name = fmt.Sprintf("%s-bootstrap", cr.Name)
+	bootstrapPod.Namespace = cr.Namespace
 
-	podSpec := &bootstrapJob.Spec.Template.Spec
+	podSpec := &bootstrapPod.Spec
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
 	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
-		Name:         "data",
+		Name:         dataVolumeName,
 		VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvc.Name}},
 	})
 
@@ -160,7 +159,7 @@ func BootstrapJob(
 
 	podSpec.Containers = []corev1.Container{*nbContainer, *sbContainer}
 
-	controllerutil.SetControllerReference(cr, bootstrapJob, scheme)
+	controllerutil.SetControllerReference(cr, bootstrapPod, scheme)
 
-	return bootstrapJob
+	return bootstrapPod
 }
