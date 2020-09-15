@@ -10,6 +10,7 @@ set -xe -o pipefail
 if [ "${DB_TYPE}" == "NB" ]; then
   exec /usr/share/openvswitch/scripts/ovn-ctl \
     --no-monitor \
+    --db-nb-create-insecure-remote=yes \
     --db-nb-cluster-local-addr="${SVC_NAME}" \
     --db-nb-cluster-local-proto=tcp \
     --ovn-nb-log="-vconsole:${OVN_LOG_LEVEL} -vfile:off" \
@@ -18,6 +19,7 @@ if [ "${DB_TYPE}" == "NB" ]; then
 elif [ "${DB_TYPE}" == "SB" ]; then
   exec /usr/share/openvswitch/scripts/ovn-ctl \
     --no-monitor \
+    --db-sb-create-insecure-remote=yes \
     --db-sb-cluster-local-addr="${SVC_NAME}" \
     --db-sb-cluster-local-proto=tcp \
     --ovn-sb-log="-vconsole:${OVN_LOG_LEVEL} -vfile:off" \

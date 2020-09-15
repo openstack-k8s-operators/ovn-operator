@@ -20,6 +20,6 @@ RUN /bin/bash -c 'touch /var/log/openvswitch/ovsdb-server-{n,s}b.log; \
                   chown -R 1000:1000 /var/log/openvswitch'
 
 USER 1000:1000
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/entrypoint"]
 
 VOLUME ["/var/lib/openvswitch", "/pod-run"]

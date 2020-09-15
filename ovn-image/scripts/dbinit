@@ -1,0 +1,27 @@
+#!/bin/bash
+
+set -ex -o pipefail
+
+# Always required:
+#   DB_TYPE: "NB" or "SB"
+#   SVC_NAME: Name of the service exposing this server
+#   OVS_DBDIR: volume mount containing databases
+#
+# For bootstrap:
+#   BOOTSTRAP: "true"
+#
+# For scale up:
+#   CID: cluster ID of previously initialised cluster database
+#   REMOTES: Space-separated list of remote server addresses
+
+. /dbtype.sh
+
+if [ ! -f "$db" ]; then
+    raft_address=tcp:${SVC_NAME}:$raft_port
+    if [ "$BOOTSTRAP" == "true" ]; then
+        ovsdb-tool create-cluster "$db" "$schema" "$raft_address"
+    else
+        ovsdb-tool join-cluster --cid="$CID" \
+            "$db" "$db_name" "$raft_address" $REMOTES
+    fi
+fi

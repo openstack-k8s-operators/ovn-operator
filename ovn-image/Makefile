@@ -9,3 +9,7 @@ build: .imagebuild.$(TAG)
 .PHONY: push
 push:
 	buildah push ovn-central:$(TAG) quay.io/mbooth/ovn-central:$(TAG)
+
+.PHONY: clean
+clean:
+	rm -f .imagebuild.$(TAG)

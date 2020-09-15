@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -e -o pipefail
+
+. /dbtype.sh
+
+cid=$(ovsdb-tool db-cid "$db")
+name=$(ovsdb-tool db-name "$db")
+sid=$(ovsdb-tool db-sid "$db")
+raft_address=$(ovsdb-tool db-local-address "$db")
+
+jq -n --arg cid "$cid" \
+      --arg name "$name" \
+      --arg sid "$sid" \
+      --arg raft_address "$raft_address" \
+      '{"clusterID": $cid, "name": $name, "serverID": $sid, "raftAddress": $raft_address}'
