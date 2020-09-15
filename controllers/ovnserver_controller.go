@@ -21,15 +21,21 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -53,7 +59,7 @@ func (r *OVNServerReconciler) GetLogger() logr.Logger {
 }
 
 const (
-	dbInitContainerName = "db-init"
+	dbStatusContainerName = "dbstatus"
 )
 
 // +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovnservers,verbs=get;list;watch;create;update;patch;delete
@@ -90,7 +96,7 @@ func (r *OVNServerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if op != controllerutil.OperationResultNone {
 		LogForObject(r, string(op), service)
 		// Modified a watched object. Wait for reconcile.
-		return ctrl.Result{}, nil
+		return r.reconciling(ctx, server)
 	}
 
 	//
@@ -104,7 +110,7 @@ func (r *OVNServerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if op != controllerutil.OperationResultNone {
 		LogForObject(r, string(op), pvc)
 		// Modified a watched object. Wait for reconcile.
-		return ctrl.Result{}, nil
+		return r.reconciling(ctx, server)
 	}
 
 	//
@@ -136,7 +142,7 @@ func (r *OVNServerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			}
 			LogForObject(r, "Create", podIntent)
 			// Created a watched object. Wait for reconcile.
-			return ctrl.Result{}, err
+			return r.reconciling(ctx, server)
 		}
 
 		// Error getting object
@@ -152,6 +158,66 @@ func (r *OVNServerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 		LogForObject(r, "Delete", podCurrent)
 		// Deleted a watched object. Wait for reconcile.
+		return r.reconciling(ctx, server)
+	}
+
+	//
+	// Update DB Status
+	//
+	// If the pod is initialised, read DB status from the dbstatus
+	// initcontainer and update if necessary
+	//
+
+	if isConditionSet(corev1.PodInitialized, podCurrent) {
+		logReader, err := getLogStream(ctx, podCurrent, dbStatusContainerName, 1024)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		defer logReader.Close()
+
+		dbStatus := &ovncentralv1alpha1.DatabaseStatus{}
+		jsonReader := json.NewDecoder(logReader)
+		err = jsonReader.Decode(dbStatus)
+		if err != nil {
+			err := fmt.Errorf("Decode database status from pod/%s logs: %w", podCurrent.Name, err)
+			return ctrl.Result{}, err
+		}
+
+		if !equality.Semantic.DeepDerivative(dbStatus, &server.Status.DatabaseStatus) {
+			r.Log.Info(fmt.Sprintf("Read db status: %v", *dbStatus))
+			server.Status.DatabaseStatus = *dbStatus
+			err = r.Client.Status().Update(ctx, server)
+			if err != nil {
+				err = WrapErrorForObject("Update Status", server, err)
+				return ctrl.Result{}, err
+			}
+
+			// Wait for reconcile
+			return r.reconciling(ctx, server)
+		}
+
+		// Pod initialized, status is uptodate
+	} else {
+		// Wait for pod to be initialized
+		return r.reconciling(ctx, server)
+	}
+
+	//
+	// Mark server available if pod is Ready
+	//
+
+	if isConditionSet(corev1.PodReady, podCurrent) {
+		if !server.IsAvailable() {
+			server.SetAvailable(true)
+		}
+
+		err = r.Client.Status().Update(ctx, server)
+		if err != nil {
+			err = WrapErrorForObject("Update Status", server, err)
+			return ctrl.Result{}, err
+		}
+
+		// Wait for reconcile
 		return ctrl.Result{}, nil
 	}
 
@@ -322,7 +388,7 @@ func (r *OVNServerReconciler) Pod(
 			envValue("SVC_NAME", serviceName),
 			envValue("HOSTS_VOLUME", hostsTmpMount),
 		},
-		Command: []string{"/add_service_to_hosts.sh"},
+		Command: []string{"/add_service_to_hosts"},
 		VolumeMounts: []corev1.VolumeMount{
 			volumeMount(hostsVolumeName, hostsTmpMount),
 		},
@@ -331,7 +397,7 @@ func (r *OVNServerReconciler) Pod(
 	}
 
 	dbInitContainer := corev1.Container{
-		Name:  dbInitContainerName,
+		Name:  "dbinit",
 		Image: server.Spec.Image,
 		Env: []corev1.EnvVar{
 			envValue("DB_TYPE", "NB"),
@@ -340,7 +406,26 @@ func (r *OVNServerReconciler) Pod(
 			envValue("OVS_RUNDIR", ovsRunDir),
 			envValue("BOOTSTRAP", "true"),
 		},
-		Command: []string{"/dbinit.sh"},
+		Command: []string{"/dbinit"},
+		VolumeMounts: []corev1.VolumeMount{
+			corev1.VolumeMount{
+				Name: hostsVolumeName, MountPath: "/etc/hosts", SubPath: "hosts",
+			},
+			volumeMount(runVolumeName, ovsRunDir),
+			volumeMount(dataVolumeName, ovsDBDir),
+		},
+	}
+
+	dbStatusContainer := corev1.Container{
+		Name:  dbStatusContainerName,
+		Image: server.Spec.Image,
+		Env: []corev1.EnvVar{
+			envValue("DB_TYPE", "NB"),
+			envValue("SVC_NAME", serviceName),
+			envValue("OVS_DBDIR", ovsDBDir),
+			envValue("OVS_RUNDIR", ovsRunDir),
+		},
+		Command: []string{"/dbstatus"},
 		VolumeMounts: []corev1.VolumeMount{
 			corev1.VolumeMount{
 				Name: hostsVolumeName, MountPath: "/etc/hosts", SubPath: "hosts",
@@ -353,6 +438,7 @@ func (r *OVNServerReconciler) Pod(
 	pod.Spec.InitContainers = []corev1.Container{
 		hostsInitContainer,
 		dbInitContainer,
+		dbStatusContainer,
 	}
 
 	dbContainer := corev1.Container{
@@ -373,8 +459,8 @@ func (r *OVNServerReconciler) Pod(
 			volumeMount(dataVolumeName, ovsDBDir),
 		},
 	}
-	dbContainer.ReadinessProbe = execProbe("/is_ready.sh")
-	dbContainer.LivenessProbe = execProbe("/is_live.sh")
+	dbContainer.ReadinessProbe = execProbe("/is_ready")
+	dbContainer.LivenessProbe = execProbe("/is_live")
 	dbContainer.LivenessProbe.InitialDelaySeconds = 60
 
 	pod.Spec.Containers = []corev1.Container{
@@ -400,6 +486,66 @@ func initLabelMap(m *map[string]string) {
 	if *m == nil {
 		*m = make(map[string]string)
 	}
+}
+
+func getLogStream(ctx context.Context, pod *corev1.Pod, container string, limit int64) (io.ReadCloser, error) {
+	// Get a config from either the pod's environment, or KUBECONFIG if we're
+	// running the operator locally.
+	getConfig := func() (*rest.Config, error) {
+		config, err := rest.InClusterConfig()
+		if err == nil {
+			return config, nil
+		}
+		origErr := fmt.Errorf("InClusterConfig: %w", err)
+
+		kubeconfigPath := os.Getenv("KUBECONFIG")
+		if kubeconfigPath == "" {
+			return nil, origErr
+		}
+
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		if err != nil {
+			err = fmt.Errorf("BuildConfigFromFlags(%s): %w", kubeconfigPath, err)
+		}
+		return config, err
+	}
+
+	config, err := getConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		err := fmt.Errorf("NewForConfig: %w", err)
+		return nil, err
+	}
+
+	podLogOpts := corev1.PodLogOptions{Container: container, LimitBytes: &limit}
+	req := clientset.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &podLogOpts)
+	return req.Stream(ctx)
+}
+
+func (r *OVNServerReconciler) reconciling(ctx context.Context, server *ovncentralv1alpha1.OVNServer) (ctrl.Result, error) {
+	if server.IsAvailable() {
+		server.SetAvailable(false)
+		err := r.Client.Status().Update(ctx, server)
+		if err != nil {
+			err = WrapErrorForObject("Update Status", server, err)
+			return ctrl.Result{}, err
+		}
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func isConditionSet(conditionType corev1.PodConditionType, pod *corev1.Pod) bool {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == conditionType {
+			return condition.Status == corev1.ConditionTrue
+		}
+	}
+	return false
 }
 
 // Syntactic sugar variables and functions

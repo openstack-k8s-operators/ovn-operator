@@ -44,11 +44,18 @@ func (name *DatabaseName) String() string {
 	return string(*name)
 }
 
-// ServerAddress
-type ServerAddress string
+// RaftAddress
+type RaftAddress string
 
-func (sa *ServerAddress) String() string {
-	return string(*sa)
+func (address *RaftAddress) String() string {
+	return string(*address)
+}
+
+// DBAddress
+type DBAddress string
+
+func (address *DBAddress) String() string {
+	return string(*address)
 }
 
 const (
@@ -58,9 +65,8 @@ const (
 
 // OVNServerSpec defines the desired state of OVNServer
 type OVNServerSpec struct {
-	NBClusterID *ClusterID      `json:"nbClusterID,omitempty"`
-	SBClusterID *ClusterID      `json:"sbClusterID,omitempty"`
-	InitPeers   []ServerAddress `json:"initPeers,omitempty"`
+	ClusterID *ClusterID    `json:"sbClusterID,omitempty"`
+	InitPeers []RaftAddress `json:"initPeers,omitempty"`
 
 	Image        string            `json:"image"`
 	StorageSize  resource.Quantity `json:"storageSize,omitempty"`
@@ -68,17 +74,17 @@ type OVNServerSpec struct {
 }
 
 type DatabaseStatus struct {
-	ClusterID ClusterID     `json:"clusterID"`
-	ServerID  ServerID      `json:"serverID"`
-	Name      DatabaseName  `json:"name"`
-	Address   ServerAddress `json:"address"`
+	ClusterID   ClusterID    `json:"clusterID,omitempty"`
+	ServerID    ServerID     `json:"serverID,omitempty"`
+	Name        DatabaseName `json:"name,omitempty"`
+	RaftAddress RaftAddress  `json:"raftAddress,omitempty"`
+	DBAddress   DBAddress    `json:"dbAddress,omitempty"`
 }
 
 // OVNServerStatus defines the observed state of OVNServer
 type OVNServerStatus struct {
-	Conditions status.Conditions `json:"conditions,omitempty"`
-	NBDatabase *DatabaseStatus   `json:"nbDatabase,omitEmpty"`
-	SBDatabase *DatabaseStatus   `json:"sbDatabase,omitEmpty"`
+	DatabaseStatus `json:"databaseStatus"`
+	Conditions     status.Conditions `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -106,10 +112,16 @@ func init() {
 	SchemeBuilder.Register(&OVNServer{}, &OVNServerList{})
 }
 
-func (server *OVNServer) SetAvailable() {
+func (server *OVNServer) SetAvailable(available bool) {
+	var condStatus corev1.ConditionStatus
+	if available {
+		condStatus = corev1.ConditionTrue
+	} else {
+		condStatus = corev1.ConditionFalse
+	}
 	condition := status.Condition{
 		Type:   OVNServerAvailable,
-		Status: corev1.ConditionTrue,
+		Status: condStatus,
 	}
 
 	server.Status.Conditions.SetCondition(condition)

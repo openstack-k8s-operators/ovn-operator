@@ -40,12 +40,9 @@ spec:
               type: string
             initPeers:
               items:
-                description: ServerAddress
+                description: RaftAddress
                 type: string
               type: array
-            nbClusterID:
-              description: ClusterID
-              type: string
             sbClusterID:
               description: ClusterID
               type: string
@@ -103,49 +100,26 @@ spec:
                 - type
                 type: object
               type: array
-            nbDatabase:
+            databaseStatus:
               properties:
-                address:
-                  description: ServerAddress
-                  type: string
                 clusterID:
                   description: ClusterID
+                  type: string
+                dbAddress:
+                  description: DBAddress
                   type: string
                 name:
                   description: DatabaseName
                   type: string
-                serverID:
-                  description: ServerID
-                  type: string
-              required:
-              - address
-              - clusterID
-              - name
-              - serverID
-              type: object
-            sbDatabase:
-              properties:
-                address:
-                  description: ServerAddress
-                  type: string
-                clusterID:
-                  description: ClusterID
-                  type: string
-                name:
-                  description: DatabaseName
+                raftAddress:
+                  description: RaftAddress
                   type: string
                 serverID:
                   description: ServerID
                   type: string
-              required:
-              - address
-              - clusterID
-              - name
-              - serverID
               type: object
           required:
-          - nbDatabase
-          - sbDatabase
+          - databaseStatus
           type: object
       type: object
   version: v1alpha1
