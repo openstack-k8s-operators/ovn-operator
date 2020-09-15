@@ -1,0 +1,5 @@
+[fast-datapath]
+name=OVN Fast Datapath
+baseurl=http://pulp.dist.stage.ext.phx2.redhat.com/content/dist/layered/rhel8/x86_64/fast-datapath/os/
+gpgcheck=0
+enabled=1

@@ -18,25 +18,12 @@ package v1alpha1
 
 import (
 	"github.com/operator-framework/operator-lib/status"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Important: Run "make" to regenerate code after modifying this file
-
-// OVNCentralServer defines the observed state of a member of cluster
-type OVNCentralServerStatus struct {
-	Name string                         `json:"name"`
-	NB   OVNCentralServerDatabaseStatus `json:"nb,omitempty"`
-	SB   OVNCentralServerDatabaseStatus `json:"sb,omitempty"`
-}
-
-type OVNCentralServerDatabaseStatus struct {
-	ClusterID string `json:"clusterID,omitempty"`
-	Name      string `json:"name,omitempty"`
-	ServerID  string `json:"serverID,omitempty"`
-	Address   string `json:"address,omitempty"`
-}
 
 // OVNCentralSpec defines the desired state of OVNCentral
 type OVNCentralSpec struct {
@@ -51,8 +38,6 @@ type OVNCentralSpec struct {
 	ConnectionConfig string `json:"connectionConfig,omitempty"`
 	ConnectionCA     string `json:"connectionCA,omitempty"`
 	ConnectionCert   string `json:"connectionCert,omitempty"`
-	NBSchemaVersion  string `json:"nbSchemaVersion,omitempty"`
-	SBSchemaVersion  string `json:"sbSchemaVersion,omitempty"`
 
 	// Optional properties
 
@@ -61,13 +46,10 @@ type OVNCentralSpec struct {
 
 // OVNCentralStatus defines the observed state of OVNCentral
 type OVNCentralStatus struct {
-	Conditions      status.Conditions        `json:"conditions,omitempty"`
-	Replicas        *int                     `json:"replicas,omitempty"`
-	NBClusterID     *string                  `json:"nbClusterID,omitempty"`
-	SBClusterID     *string                  `json:"sbClusterID,omitempty"`
-	NBSchemaVersion *string                  `json:"nbSchemaVersion,omitEmpty"`
-	SBSchemaVersion *string                  `json:"sbSchemaVersion,omitEmpty"`
-	Servers         []OVNCentralServerStatus `json:"servers" patchStrategy:"merge" patchMergeKey:"name"`
+	Conditions  status.Conditions             `json:"conditions,omitempty"`
+	NBClusterID *ClusterID                    `json:"nbClusterID,omitempty"`
+	SBClusterID *ClusterID                    `json:"sbClusterID,omitempty"`
+	Servers     []corev1.LocalObjectReference `json:"servers" patchStrategy:"merge" patchMergeKey:"name"`
 }
 
 const (

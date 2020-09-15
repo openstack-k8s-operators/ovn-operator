@@ -1,0 +1,7 @@
+apiVersion: ovn-central.openstack.org/v1alpha1
+kind: OVNServer
+metadata:
+  name: ovnserver-sample
+spec:
+  # Add fields here
+  foo: bar

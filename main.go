@@ -75,6 +75,14 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OVNCentral")
 		os.Exit(1)
 	}
+	if err = (&controllers.OVNServerReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("OVNServer"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OVNServer")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")

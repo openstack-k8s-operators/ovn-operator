@@ -22,8 +22,8 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/operator-framework/operator-lib/status"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -41,9 +41,16 @@ type OVNCentralReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+func (r *OVNCentralReconciler) GetClient() client.Client {
+	return r.Client
+}
+
+func (r *OVNCentralReconciler) GetLogger() logr.Logger {
+	return r.Log
+}
+
 // +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovncentrals,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovncentrals/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;create;update;delete
 
 func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("ovncentral", req.NamespacedName)
@@ -63,7 +70,8 @@ func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		return ctrl.Result{}, fmt.Errorf("Getting %v: %w", req.NamespacedName, err)
+		err = WrapErrorForObject("Get instance", instance, err)
+		return ctrl.Result{}, err
 	}
 
 	//
@@ -82,64 +90,72 @@ func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 	}
 
 	//
-	// Create a Service for each server
+	// Create the bootstrap server
 	//
 
-	var services []*corev1.Service
-	for i := 0; i < instance.Spec.Replicas; i++ {
-		service := stubs.ServerService(instance, r.Scheme, i)
-		service, err := r.ApplyService(ctx, service)
+	apply := func(server *ovncentralv1alpha1.OVNServer) (*ovncentralv1alpha1.OVNServer, error) {
+		fetched := &ovncentralv1alpha1.OVNServer{}
+		err := r.Client.Get(ctx,
+			types.NamespacedName{Name: server.Name, Namespace: server.Namespace},
+			fetched)
 		if err != nil {
-			return ctrl.Result{}, err
-		}
-		services = append(services, service)
-	}
+			if k8s_errors.IsNotFound(err) {
+				err = r.Client.Create(ctx, server)
+				if err != nil {
+					err = WrapErrorForObject("Create", server, err)
+					return nil, err
+				}
+				LogForObject(r, "Create", server)
 
-	//
-	// Create a PVC for each server
-	//
-	// The stateful set would do this for us, but as we need to do it for the bootstrap server,
-	// we do it for all servers for consistency.
-	//
-	// We must ensure we follow the statefulset's naming pattern.
-	//
-
-	var pvcs []*corev1.PersistentVolumeClaim
-	for i := 0; i < instance.Spec.Replicas; i++ {
-		pvc := stubs.PVC(instance, r.Scheme, i)
-		pvc, err := r.ApplyPVC(ctx, pvc)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		pvcs = append(pvcs, pvc)
-	}
-
-	//
-	// Check we have cluster IDs for the NB and SB databases
-	//
-
-	if instance.Status.NBClusterID == nil || instance.Status.SBClusterID == nil {
-		// Try to get cluster IDs from servers
-		nbClusterID, sbClusterID, err := r.getClusterIDsFromServers(ctx, instance)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		if nbClusterID != nil || sbClusterID != nil {
-			instance.Status.NBClusterID = nbClusterID
-			instance.Status.SBClusterID = sbClusterID
-
-			r.LogForObject("Set ClusterIDs", instance,
-				"NBClusterID", instance.Status.NBClusterID,
-				"SBClusterID", instance.Status.SBClusterID)
-
-			err := r.Client.Status().Update(ctx, instance)
-			if err != nil {
-				err = WrapErrorForObject("Update status", instance, err)
-				return ctrl.Result{}, err
+				return server, nil
 			}
-			return ctrl.Result{}, nil
+
+			err = WrapErrorForObject("Get", server, err)
+			return nil, err
 		}
+
+		if !equality.Semantic.DeepDerivative(server, fetched) {
+			server.ResourceVersion = fetched.ResourceVersion
+			err = r.Client.Update(ctx, server)
+			if err != nil {
+				err = WrapErrorForObject("Update", server, err)
+				return nil, err
+			}
+			LogForObject(r, "Update", server)
+			return server, nil
+		}
+
+		return fetched, nil
+	}
+
+	var servers []corev1.LocalObjectReference
+
+	server := stubs.Server(instance, r.Scheme, 0)
+	server, err = apply(server)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	switch {
+	case server.IsFailed():
+		err = fmt.Errorf("Bootstrap server %s failed", server.Name)
+		if condErr := r.setFailed(ctx, instance, "BootstrapFailed", err); condErr != nil {
+			return ctrl.Result{}, condErr
+		}
+		return ctrl.Result{}, err
+	case server.IsAvailable():
+		// Continue
+	default:
+		// Wait for server to become either Failed or Available
+		return ctrl.Result{}, nil
+	}
+
+	servers = append(servers, corev1.LocalObjectReference{Name: server.Name})
+	instance.Status.Servers = servers
+	err = r.Client.Status().Update(ctx, instance)
+	if err != nil {
+		err = WrapErrorForObject("Update Status", instance, err)
+		return ctrl.Result{}, nil
 	}
 
 	return ctrl.Result{}, nil
@@ -148,11 +164,9 @@ func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 func (r *OVNCentralReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ovncentralv1alpha1.OVNCentral{}).
-		Owns(&batchv1.Job{}).
 		Owns(&corev1.ConfigMap{}).
-		Owns(&corev1.PersistentVolumeClaim{}).
 		Owns(&corev1.Secret{}).
-		Owns(&corev1.Service{}).
+		Owns(&ovncentralv1alpha1.OVNServer{}).
 		Complete(r)
 }
 
@@ -184,122 +198,24 @@ func (r *OVNCentralReconciler) setDefaultValues(ctx context.Context,
 	return updatedInstance
 }
 
-func getAllClusterIDs(servers []ovncentralv1alpha1.OVNCentralServerStatus) ([]string, []string) {
-
-	reduce := func(servers []ovncentralv1alpha1.OVNCentralServerStatus,
-		f func(*ovncentralv1alpha1.OVNCentralServerStatus) string) []string {
-
-		var values []string
-
-		seen := func(value string) bool {
-			for _, i := range values {
-				if i == value {
-					return true
-				}
-			}
-			return false
-		}
-
-		for _, i := range servers {
-			value := f(&i)
-			if !seen(value) {
-				values = append(values, value)
-			}
-		}
-		return values
-	}
-
-	getNB := func(server *ovncentralv1alpha1.OVNCentralServerStatus) string {
-		return server.NB.ClusterID
-	}
-
-	getSB := func(server *ovncentralv1alpha1.OVNCentralServerStatus) string {
-		return server.SB.ClusterID
-	}
-
-	return reduce(servers, getNB), reduce(servers, getSB)
-}
-
-func (r *OVNCentralReconciler) getClusterIDsFromServers(ctx context.Context,
-	instance *ovncentralv1alpha1.OVNCentral) (nbClusterID, sbClusterID *string, err error) {
-
-	// First look to see if we can extract cluster ID from values reported by
-	// running servers. This would be useful recovering lost Status, but
-	// would be an unusual situation.
-
-	nbClusterIDs, sbClusterIDs := getAllClusterIDs(instance.Status.Servers)
-
-	// We can't recover if servers are reporting multiple cluster IDs
-	if len(nbClusterIDs) > 1 || len(sbClusterIDs) > 1 {
-		err = r.setFailed(ctx, instance, ovncentralv1alpha1.OVNCentralInconsistentCluster,
-			"Not all cluster members are reporting the same cluster id")
-		return nil, nil, err
-	}
-
-	if len(nbClusterIDs) == 1 {
-		nbClusterID = &nbClusterIDs[0]
-	}
-	if len(sbClusterIDs) == 1 {
-		sbClusterID = &sbClusterIDs[0]
-	}
-
-	return nbClusterID, sbClusterID, err
-}
-
-func (r *OVNCentralReconciler) createBootstrapper(
-	ctx context.Context, instance *ovncentralv1alpha1.OVNCentral,
-	bootstrapPVC *corev1.PersistentVolumeClaim) (updated bool, err error) {
-
-	bootstrapPod := stubs.BootstrapPod(instance, r.Scheme, bootstrapPVC)
-	fetched := &corev1.Pod{}
-
-	// Check if the pod already exists
-	err = r.Client.Get(ctx,
-		types.NamespacedName{Name: bootstrapPod.Name, Namespace: bootstrapPod.Namespace},
-		fetched)
-	if err != nil {
-		if k8s_errors.IsNotFound(err) {
-			// The job isn't running. Create it.
-			err = r.Client.Create(ctx, bootstrapPod)
-			if err != nil {
-				err = WrapErrorForObject("Create", bootstrapPod, err)
-				return false, err
-			}
-			return true, nil
-		}
-		err = WrapErrorForObject("Get", bootstrapPod, err)
-		return false, err
-	}
-
-	switch fetched.Status.Phase {
-	case corev1.PodSucceeded:
-
-	case corev1.PodFailed:
-	default:
-	}
-
-	// Job is still running and hasn't failed, so keep waiting
-	return false, nil
-}
-
 func (r *OVNCentralReconciler) setFailed(
 	ctx context.Context, instance *ovncentralv1alpha1.OVNCentral,
-	reason status.ConditionReason, message string) error {
+	reason status.ConditionReason, conditionErr error) error {
 
 	condition := status.Condition{
 		Type:    ovncentralv1alpha1.OVNCentralFailed,
 		Status:  corev1.ConditionTrue,
 		Reason:  reason,
-		Message: message,
+		Message: conditionErr.Error(),
 	}
 	instance.Status.Conditions.SetCondition(condition)
-	err := r.Client.Status().Update(ctx, instance)
-	if err != nil {
+	if err := r.Client.Status().Update(ctx, instance); err != nil {
 		err = WrapErrorForObject("Update status", instance, err)
 		return err
 	}
 
-	return fmt.Errorf(message)
+	return nil
 }
 
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;create;update;delete
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;create;update;delete

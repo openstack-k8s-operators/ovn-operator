@@ -19,20 +19,27 @@ package controllers
 import (
 	"fmt"
 
+	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+type ReconcilerCommon interface {
+	GetClient() client.Client
+	GetLogger() logr.Logger
+}
 
 func WrapErrorForObject(msg string, object metav1.Object, err error) error {
 	return fmt.Errorf("%s %T %v/%v: %w",
 		msg, object, object.GetNamespace(), object.GetName(), err)
 }
 
-func (r *OVNCentralReconciler) LogForObject(
+func LogForObject(r ReconcilerCommon,
 	msg string, object metav1.Object, params ...interface{}) {
 
 	params = append([]interface{}{
 		"ObjectType", fmt.Sprintf("%T", object),
 		"ObjectNamespace", object.GetNamespace(),
 		"ObjectName", object.GetName()}, params...)
-	r.Log.Info(msg, params...)
+	r.GetLogger().Info(msg, params...)
 }

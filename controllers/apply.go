@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	corev1 "k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -116,12 +117,12 @@ func (r *OVNCentralReconciler) ApplyService(
 	var updated bool
 
 	if reconcileLabels(fetched, object) {
-		r.LogForObject("Labels differ", object)
+		LogForObject(r, "Labels differ", object)
 		updated = true
 	}
 
 	if reconcileOwners(fetched, object) {
-		r.LogForObject("Owners differ", object)
+		LogForObject(r, "Owners differ", object)
 		updated = true
 	}
 
@@ -144,7 +145,7 @@ func (r *OVNCentralReconciler) ApplyService(
 	// We only directly compare the Specs of the 2 objects
 	if diff := deep.Equal(object.Spec, fetched.Spec); diff != nil {
 		fetched.Spec = object.Spec
-		r.LogForObject("Specs differ", object, "ObjectDiff", diff)
+		LogForObject(r, "Specs differ", object, "ObjectDiff", diff)
 		updated = true
 	}
 
@@ -178,12 +179,12 @@ func (r *OVNCentralReconciler) ApplyPVC(
 	var updated bool
 
 	if reconcileLabels(fetched, object) {
-		r.LogForObject("Labels differ", object)
+		LogForObject(r, "Labels differ", object)
 		updated = true
 	}
 
 	if reconcileOwners(fetched, object) {
-		r.LogForObject("Owners differ", object)
+		LogForObject(r, "Owners differ", object)
 		updated = true
 	}
 
@@ -198,4 +199,57 @@ func (r *OVNCentralReconciler) ApplyPVC(
 	}
 
 	return fetched, nil
+}
+
+func Apply(r ReconcilerCommon, ctx context.Context,
+	intent, current k8sObject) (res k8sObject, updated bool, err error) {
+
+	err = r.GetClient().Get(
+		ctx,
+		types.NamespacedName{Name: intent.GetName(), Namespace: intent.GetNamespace()},
+		current)
+	if err != nil {
+		if k8s_errors.IsNotFound(err) {
+			err = patch.DefaultAnnotator.SetLastAppliedAnnotation(intent)
+			if err != nil {
+				err = WrapErrorForObject("SetLastAppliedAnnotation", intent, err)
+			}
+
+			err = r.GetClient().Create(ctx, intent)
+			if err != nil {
+				err = WrapErrorForObject("Create", intent, err)
+				return nil, false, err
+			}
+			LogForObject(r, "Create", intent)
+
+			return intent, true, nil
+		}
+
+		err = WrapErrorForObject("Get", intent, err)
+		return nil, false, err
+	}
+
+	patchResult, err := patch.DefaultPatchMaker.Calculate(current, intent)
+	if err != nil {
+		err = WrapErrorForObject("CalcuatePatch", current, err)
+		return nil, false, err
+	}
+
+	if !patchResult.IsEmpty() {
+		err := patch.DefaultAnnotator.SetLastAppliedAnnotation(intent)
+		if err != nil {
+			err = WrapErrorForObject("SetLastAppliedAnnotation for update", intent, err)
+			return nil, false, err
+		}
+
+		err = r.GetClient().Update(ctx, intent)
+		if err != nil {
+			err = WrapErrorForObject("Update", intent, err)
+			return nil, false, err
+		}
+
+		return intent, true, nil
+	}
+
+	return current, false, nil
 }

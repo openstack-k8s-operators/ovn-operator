@@ -3,6 +3,6 @@ kind: OVNCentral
 metadata:
   name: ovncentral-sample
 spec:
-  replicas: 3
+  replicas: 1
   image: quay.io/mbooth/ovn-central@sha256:e5336e6f5faa04ae4215541efc22b86f75dbc7b5d1f079a1f671b14fe1992d1a
   storageSize: 1G

@@ -1,0 +1,20 @@
+# permissions for end users to view ovnservers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ovnserver-viewer-role
+rules:
+- apiGroups:
+  - ovn-central.openstack.org
+  resources:
+  - ovnservers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ovn-central.openstack.org
+  resources:
+  - ovnservers/status
+  verbs:
+  - get

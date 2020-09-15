@@ -76,53 +76,10 @@ func OVSDBContainer(cr *ovncentralv1alpha1.OVNCentralSpec,
 	return container
 }
 
-func commonLabels(cr *ovncentralv1alpha1.OVNCentral) map[string]string {
+func commonLabels() map[string]string {
 	return map[string]string{
-		"app":         "ovn-central",
-		"ovn-central": cr.Name,
+		"app": "ovn-central",
 	}
-}
-
-func ServerService(cr *ovncentralv1alpha1.OVNCentral, scheme *runtime.Scheme, index int) *corev1.Service {
-	service := &corev1.Service{}
-
-	service.Name = fmt.Sprintf("%s-%v", cr.Name, index)
-	service.Namespace = cr.Namespace
-	service.Labels = commonLabels(cr)
-
-	service.Spec.Selector = commonLabels(cr)
-	service.Spec.Selector["statefulset.kubernetes.io/pod-name"] = service.Name
-
-	service.Spec.Ports = []corev1.ServicePort{
-		{Name: "north", Port: 6641},
-		{Name: "south", Port: 6642},
-		{Name: "north-raft", Port: 6643},
-		{Name: "south-raft", Port: 6644},
-	}
-
-	service.Spec.Type = corev1.ServiceTypeClusterIP
-	service.Spec.SessionAffinity = corev1.ServiceAffinityNone
-
-	controllerutil.SetControllerReference(cr, service, scheme)
-
-	return service
-}
-
-func PVC(
-	cr *ovncentralv1alpha1.OVNCentral,
-	scheme *runtime.Scheme,
-	index int) *corev1.PersistentVolumeClaim {
-
-	pvc := pvcTpl.DeepCopy()
-
-	pvc.Name = fmt.Sprintf("%s-%s-%d", dataVolumeName, cr.Name, index)
-	pvc.Namespace = cr.Namespace
-	pvc.Spec.Resources.Requests = corev1.ResourceList{corev1.ResourceStorage: cr.Spec.StorageSize}
-	pvc.Spec.StorageClassName = cr.Spec.StorageClass
-
-	controllerutil.SetControllerReference(cr, pvc, scheme)
-
-	return pvc
 }
 
 func BootstrapPod(
@@ -162,4 +119,21 @@ func BootstrapPod(
 	controllerutil.SetControllerReference(cr, bootstrapPod, scheme)
 
 	return bootstrapPod
+}
+
+func Server(
+	central *ovncentralv1alpha1.OVNCentral,
+	scheme *runtime.Scheme,
+	index int) *ovncentralv1alpha1.OVNServer {
+
+	server := &ovncentralv1alpha1.OVNServer{}
+	server.Name = fmt.Sprintf("%s-%d", central.Name, index)
+	server.Namespace = central.Namespace
+
+	server.Spec.Image = central.Spec.Image
+	server.Spec.StorageSize = central.Spec.StorageSize
+	server.Spec.StorageClass = central.Spec.StorageClass
+
+	controllerutil.SetControllerReference(central, server, scheme)
+	return server
 }
