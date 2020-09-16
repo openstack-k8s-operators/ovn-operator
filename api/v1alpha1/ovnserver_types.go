@@ -112,16 +112,18 @@ func init() {
 	SchemeBuilder.Register(&OVNServer{}, &OVNServerList{})
 }
 
-func (server *OVNServer) SetAvailable(available bool) {
-	var condStatus corev1.ConditionStatus
-	if available {
-		condStatus = corev1.ConditionTrue
+func conditionStatus(status bool) corev1.ConditionStatus {
+	if status {
+		return corev1.ConditionTrue
 	} else {
-		condStatus = corev1.ConditionFalse
+		return corev1.ConditionFalse
 	}
+}
+
+func (server *OVNServer) SetAvailable(available bool) {
 	condition := status.Condition{
 		Type:   OVNServerAvailable,
-		Status: condStatus,
+		Status: conditionStatus(available),
 	}
 
 	server.Status.Conditions.SetCondition(condition)
@@ -131,12 +133,16 @@ func (server *OVNServer) IsAvailable() bool {
 	return server.Status.Conditions.IsTrueFor(OVNServerAvailable)
 }
 
-func (server *OVNServer) SetFailed(reason status.ConditionReason, err error) {
+func (server *OVNServer) SetFailed(failed bool, reason status.ConditionReason, err error) {
+	msg := ""
+	if err != nil {
+		msg = err.Error()
+	}
 	condition := status.Condition{
 		Type:    OVNServerFailed,
-		Status:  corev1.ConditionTrue,
+		Status:  conditionStatus(failed),
 		Reason:  reason,
-		Message: err.Error(),
+		Message: msg,
 	}
 
 	server.Status.Conditions.SetCondition(condition)

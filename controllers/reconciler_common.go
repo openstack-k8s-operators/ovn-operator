@@ -34,12 +34,23 @@ func WrapErrorForObject(msg string, object metav1.Object, err error) error {
 		msg, object, object.GetNamespace(), object.GetName(), err)
 }
 
+func logObjectParams(object metav1.Object) []interface{} {
+	return []interface{}{
+		"ObjectType", fmt.Sprintf("%T", object),
+		"ObjectNamespace", object.GetNamespace(),
+		"ObjectName", object.GetName()}
+}
+
 func LogForObject(r ReconcilerCommon,
 	msg string, object metav1.Object, params ...interface{}) {
 
-	params = append([]interface{}{
-		"ObjectType", fmt.Sprintf("%T", object),
-		"ObjectNamespace", object.GetNamespace(),
-		"ObjectName", object.GetName()}, params...)
+	params = append(params, logObjectParams(object)...)
 	r.GetLogger().Info(msg, params...)
+}
+
+func LogErrorForObject(r ReconcilerCommon,
+	err error, msg string, object metav1.Object, params ...interface{}) {
+
+	params = append(params, logObjectParams(object)...)
+	r.GetLogger().Error(err, msg, params...)
 }
