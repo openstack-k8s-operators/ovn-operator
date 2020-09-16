@@ -20,25 +20,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	"github.com/go-test/deep"
-
 	ovncentralv1alpha1 "github.com/openstack-k8s-operators/ovn-central-operator/api/v1alpha1"
+	"github.com/openstack-k8s-operators/ovn-central-operator/util"
 )
 
 // OVNServerReconciler reconciles a OVNServer object
@@ -154,12 +148,12 @@ func (r *OVNServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, err 
 
 	// Delete the bootstrap pod if it exists
 	bootstrapPod := bootstrapPodShell(server)
-	if err := r.deleteIfExists(ctx, bootstrapPod); err != nil {
+	if err := DeleteIfExists(r, ctx, bootstrapPod); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	dbPod := dbPodShell(server)
-	_, err = r.createOrDelete(ctx, dbPod, func() error {
+	_, err = CreateOrDelete(r, ctx, dbPod, func() error {
 		return r.dbPod(dbPod, server, pvc, serviceName)
 	})
 
@@ -170,7 +164,7 @@ func (r *OVNServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, err 
 	// initcontainer and update if necessary
 	//
 
-	if isPodConditionSet(corev1.PodInitialized, dbPod) {
+	if util.IsPodConditionSet(corev1.PodInitialized, dbPod) {
 		updated, err := r.updateDBStatus(ctx, server, dbPod, dbStatusContainerName)
 		if updated || err != nil {
 			return ctrl.Result{}, nil
@@ -183,7 +177,7 @@ func (r *OVNServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, err 
 	// Mark server available if pod is Ready
 	//
 
-	if !isPodConditionSet(corev1.PodReady, dbPod) {
+	if !util.IsPodConditionSet(corev1.PodReady, dbPod) {
 		// Wait until pod is ready
 		return ctrl.Result{}, nil
 	}
@@ -209,7 +203,7 @@ func (r *OVNServerReconciler) updateDBStatus(
 	pod *corev1.Pod,
 	container string) (bool, error) {
 
-	logReader, err := getLogStream(ctx, pod, container, 1024)
+	logReader, err := util.GetLogStream(ctx, pod, container, 1024)
 	if err != nil {
 		return false, err
 	}
@@ -244,13 +238,13 @@ func (r *OVNServerReconciler) bootstrapDB(
 
 	// Ensure the DB pod isn't running
 	dbPod := dbPodShell(server)
-	if err := r.deleteIfExists(ctx, dbPod); err != nil {
+	if err := DeleteIfExists(r, ctx, dbPod); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Ensure the bootstrap pod is running
 	bootstrapPod := bootstrapPodShell(server)
-	_, err := r.createOrDelete(ctx, bootstrapPod, func() error {
+	_, err := CreateOrDelete(r, ctx, bootstrapPod, func() error {
 		return r.bootstrapPod(bootstrapPod, server, pvc, serviceName)
 	})
 
@@ -282,7 +276,7 @@ func (r *OVNServerReconciler) Service(
 	service.Name = server.Name
 	service.Namespace = server.Namespace
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, service, func() error {
-		initLabelMap(&service.Labels)
+		util.InitLabelMap(&service.Labels)
 
 		setCommonLabels(server, service.Labels)
 
@@ -344,7 +338,7 @@ func (r *OVNServerReconciler) PVC(
 	pvc.Namespace = server.Namespace
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, pvc, func() error {
-		initLabelMap(&pvc.Labels)
+		util.InitLabelMap(&pvc.Labels)
 		setCommonLabels(server, pvc.Labels)
 
 		pvc.Spec.Resources.Requests = corev1.ResourceList{
@@ -393,8 +387,8 @@ func dbPodVolumes(volumes *[]corev1.Volume, pvc *corev1.PersistentVolumeClaim) {
 			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 				ClaimName: pvc.Name}},
 		},
-		{Name: runVolumeName, VolumeSource: emptyDirVol()},
-		{Name: hostsVolumeName, VolumeSource: emptyDirVol()},
+		{Name: runVolumeName, VolumeSource: util.EmptyDirVol()},
+		{Name: hostsVolumeName, VolumeSource: util.EmptyDirVol()},
 	} {
 		updated := false
 		for i := 0; i < len(*volumes); i++ {
@@ -411,57 +405,11 @@ func dbPodVolumes(volumes *[]corev1.Volume, pvc *corev1.PersistentVolumeClaim) {
 }
 
 func dbPodVolumeMounts(mounts []corev1.VolumeMount) []corev1.VolumeMount {
-	return mergeVolumeMounts(mounts, mountSetterMap{
-		hostsVolumeName: volumeMountWithSubpath("/etc/hosts", "hosts"),
-		runVolumeName:   volumeMount(ovsRunDir),
-		dataVolumeName:  volumeMount(ovsDBDir),
+	return util.MergeVolumeMounts(mounts, util.MountSetterMap{
+		hostsVolumeName: util.VolumeMountWithSubpath("/etc/hosts", "hosts"),
+		runVolumeName:   util.VolumeMount(ovsRunDir),
+		dataVolumeName:  util.VolumeMount(ovsDBDir),
 	})
-}
-
-type envSetter func(*corev1.EnvVar)
-type envSetterMap map[string]envSetter
-
-func mergeEnvs(envs []corev1.EnvVar, newEnvs envSetterMap) []corev1.EnvVar {
-	for name, f := range newEnvs {
-		updated := false
-		for i := 0; i < len(envs); i++ {
-			if envs[i].Name == name {
-				f(&envs[i])
-				updated = true
-				break
-			}
-		}
-
-		if !updated {
-			envs = append(envs, corev1.EnvVar{Name: name})
-			f(&envs[len(envs)-1])
-		}
-	}
-
-	return envs
-}
-
-type mountSetter func(*corev1.VolumeMount)
-type mountSetterMap map[string]mountSetter
-
-func mergeVolumeMounts(mounts []corev1.VolumeMount, newMounts mountSetterMap) []corev1.VolumeMount {
-	for name, f := range newMounts {
-		updated := false
-		for i := 0; i < len(mounts); i++ {
-			if mounts[i].Name == name {
-				f(&mounts[i])
-				updated = true
-				break
-			}
-		}
-
-		if !updated {
-			mounts = append(mounts, corev1.VolumeMount{Name: name})
-			f(&mounts[len(mounts)-1])
-		}
-	}
-
-	return mounts
 }
 
 // Define a local entry for the service in /hosts pointing to the pod IP. This
@@ -473,13 +421,13 @@ func hostsInitContainer(container *corev1.Container, server *ovncentralv1alpha1.
 	container.Name = "override-local-service-ip"
 	container.Image = server.Spec.Image
 	container.Command = []string{"/add_service_to_hosts"}
-	container.VolumeMounts = mergeVolumeMounts(container.VolumeMounts, mountSetterMap{
-		hostsVolumeName: volumeMount(hostsTmpMount),
+	container.VolumeMounts = util.MergeVolumeMounts(container.VolumeMounts, util.MountSetterMap{
+		hostsVolumeName: util.VolumeMount(hostsTmpMount),
 	})
-	container.Env = mergeEnvs(container.Env, envSetterMap{
-		"POD_IP":       envDownwardAPI("status.podIP"),
-		"SVC_NAME":     envValue(serviceName),
-		"HOSTS_VOLUME": envValue(hostsTmpMount),
+	container.Env = util.MergeEnvs(container.Env, util.EnvSetterMap{
+		"POD_IP":       util.EnvDownwardAPI("status.podIP"),
+		"SVC_NAME":     util.EnvValue(serviceName),
+		"HOSTS_VOLUME": util.EnvValue(hostsTmpMount),
 	})
 }
 
@@ -488,11 +436,11 @@ func dbStatusContainer(container *corev1.Container, server *ovncentralv1alpha1.O
 	container.Image = server.Spec.Image
 	container.Command = []string{"/dbstatus"}
 	container.VolumeMounts = dbPodVolumeMounts(container.VolumeMounts)
-	container.Env = mergeEnvs(container.Env, envSetterMap{
-		"DB_TYPE":    envValue("NB"),
-		"SVC_NAME":   envValue(serviceName),
-		"OVS_DBDIR":  envValue(ovsDBDir),
-		"OVS_RUNDIR": envValue(ovsRunDir),
+	container.Env = util.MergeEnvs(container.Env, util.EnvSetterMap{
+		"DB_TYPE":    util.EnvValue("NB"),
+		"SVC_NAME":   util.EnvValue(serviceName),
+		"OVS_DBDIR":  util.EnvValue(ovsDBDir),
+		"OVS_RUNDIR": util.EnvValue(ovsRunDir),
 	})
 }
 
@@ -510,7 +458,7 @@ func (r *OVNServerReconciler) dbPod(
 	pvc *corev1.PersistentVolumeClaim,
 	serviceName string) error {
 
-	initLabelMap(&pod.Labels)
+	util.InitLabelMap(&pod.Labels)
 	setCommonLabels(server, pod.Labels)
 
 	pod.Spec.RestartPolicy = corev1.RestartPolicyAlways
@@ -534,21 +482,21 @@ func (r *OVNServerReconciler) dbPod(
 	dbContainer.Name = "ovsdb-server"
 	dbContainer.Image = server.Spec.Image
 	dbContainer.VolumeMounts = dbPodVolumeMounts(dbContainer.VolumeMounts)
-	dbContainer.Env = mergeEnvs(dbContainer.Env, envSetterMap{
-		"DB_TYPE":       envValue("NB"),
-		"SVC_NAME":      envValue(serviceName),
-		"OVS_DBDIR":     envValue(ovsDBDir),
-		"OVS_RUNDIR":    envValue(ovsRunDir),
-		"OVN_LOG_LEVEL": envValue("info"),
+	dbContainer.Env = util.MergeEnvs(dbContainer.Env, util.EnvSetterMap{
+		"DB_TYPE":       util.EnvValue("NB"),
+		"SVC_NAME":      util.EnvValue(serviceName),
+		"OVS_DBDIR":     util.EnvValue(ovsDBDir),
+		"OVS_RUNDIR":    util.EnvValue(ovsRunDir),
+		"OVN_LOG_LEVEL": util.EnvValue("info"),
 	})
 
-	dbContainer.ReadinessProbe = execProbe("/is_ready")
+	dbContainer.ReadinessProbe = util.ExecProbe("/is_ready")
 	dbContainer.ReadinessProbe.PeriodSeconds = 10
 	dbContainer.ReadinessProbe.SuccessThreshold = 1
 	dbContainer.ReadinessProbe.FailureThreshold = 1
 	dbContainer.ReadinessProbe.TimeoutSeconds = 60
 
-	dbContainer.LivenessProbe = execProbe("/is_live")
+	dbContainer.LivenessProbe = util.ExecProbe("/is_live")
 	dbContainer.LivenessProbe.InitialDelaySeconds = 60
 	dbContainer.LivenessProbe.PeriodSeconds = 10
 	dbContainer.LivenessProbe.SuccessThreshold = 1
@@ -574,7 +522,7 @@ func (r *OVNServerReconciler) bootstrapPod(
 	pvc *corev1.PersistentVolumeClaim,
 	serviceName string) error {
 
-	initLabelMap(&pod.Labels)
+	util.InitLabelMap(&pod.Labels)
 	setCommonLabels(server, pod.Labels)
 
 	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
@@ -595,12 +543,12 @@ func (r *OVNServerReconciler) bootstrapPod(
 	dbInitContainer.Image = server.Spec.Image
 	dbInitContainer.Command = []string{"/dbinit"}
 	dbInitContainer.VolumeMounts = dbPodVolumeMounts(dbInitContainer.VolumeMounts)
-	dbInitContainer.Env = mergeEnvs(dbInitContainer.Env, envSetterMap{
-		"DB_TYPE":    envValue("NB"),
-		"SVC_NAME":   envValue(serviceName),
-		"OVS_DBDIR":  envValue(ovsDBDir),
-		"OVS_RUNDIR": envValue(ovsRunDir),
-		"BOOTSTRAP":  envValue("true"),
+	dbInitContainer.Env = util.MergeEnvs(dbInitContainer.Env, util.EnvSetterMap{
+		"DB_TYPE":    util.EnvValue("NB"),
+		"SVC_NAME":   util.EnvValue(serviceName),
+		"OVS_DBDIR":  util.EnvValue(ovsDBDir),
+		"OVS_RUNDIR": util.EnvValue(ovsRunDir),
+		"BOOTSTRAP":  util.EnvValue("true"),
 	})
 
 	if len(pod.Spec.Containers) != 1 {
@@ -618,181 +566,4 @@ func setCommonLabels(server *ovncentralv1alpha1.OVNServer, labels map[string]str
 	labels["app"] = "ovsdb-server"
 	labels["ovsdb-server"] = server.Name
 	// TODO: Add ovn-central label
-}
-
-// Inititialise a label map to an empty map if it is nil.
-// Unlike some other maps and slices, we don't blindly overwrite this because
-// we want to support other tools setting arbitrary labels.
-func initLabelMap(m *map[string]string) {
-	if *m == nil {
-		*m = make(map[string]string)
-	}
-}
-
-func (r *OVNServerReconciler) deleteIfExists(ctx context.Context, obj runtime.Object) error {
-	accessor := getAccessorOrDie(obj)
-	key, err := client.ObjectKeyFromObject(obj)
-	if err != nil {
-		err = WrapErrorForObject("ObjectKeyFromObject", accessor, err)
-		return err
-	}
-
-	err = r.Client.Get(ctx, key, obj)
-	if err != nil {
-		if k8s_errors.IsNotFound(err) {
-			return nil
-		}
-		err = WrapErrorForObject("Get", accessor, err)
-		return err
-	}
-
-	err = r.Client.Delete(ctx, obj)
-	if err != nil {
-		err = WrapErrorForObject("Delete", accessor, err)
-		return err
-	}
-
-	LogForObject(r, "Delete", accessor)
-	return nil
-}
-
-func getLogStream(ctx context.Context,
-	pod *corev1.Pod,
-	container string,
-	limit int64) (io.ReadCloser, error) {
-
-	// mdbooth: AFAICT it is not possible to read pod logs using the
-	// controller-runtime client
-	config, err := config.GetConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		err := fmt.Errorf("NewForConfig: %w", err)
-		return nil, err
-	}
-
-	podLogOpts := corev1.PodLogOptions{Container: container, LimitBytes: &limit}
-	req := clientset.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &podLogOpts)
-	return req.Stream(ctx)
-}
-
-func isPodConditionSet(conditionType corev1.PodConditionType, pod *corev1.Pod) bool {
-	for _, condition := range pod.Status.Conditions {
-		if condition.Type == conditionType {
-			return condition.Status == corev1.ConditionTrue
-		}
-	}
-	return false
-}
-
-func (r *OVNServerReconciler) createOrDelete(
-	ctx context.Context,
-	obj runtime.Object,
-	f controllerutil.MutateFn) (controllerutil.OperationResult, error) {
-
-	accessor := getAccessorOrDie(obj)
-
-	key, err := client.ObjectKeyFromObject(obj)
-	if err != nil {
-		err = WrapErrorForObject("ObjectKeyFromObject", accessor, err)
-		return controllerutil.OperationResultNone, err
-	}
-
-	if err := r.Client.Get(ctx, key, obj); err != nil {
-		if k8s_errors.IsNotFound(err) {
-			if err := f(); err != nil {
-				err = WrapErrorForObject("Initialise", accessor, err)
-				return controllerutil.OperationResultNone, err
-			}
-
-			if err := r.Client.Create(ctx, obj); err != nil {
-				err = WrapErrorForObject("Create", accessor, err)
-				return controllerutil.OperationResultNone, err
-			}
-
-			return controllerutil.OperationResultCreated, nil
-		} else {
-			err = WrapErrorForObject("Get", accessor, err)
-			return controllerutil.OperationResultNone, err
-		}
-	}
-
-	existing := obj.DeepCopyObject()
-	if err := f(); err != nil {
-		return controllerutil.OperationResultNone, err
-	}
-
-	if equality.Semantic.DeepEqual(existing, obj) {
-		return controllerutil.OperationResultNone, nil
-	}
-
-	diff := deep.Equal(existing, obj)
-	LogForObject(r, "Objects differ", accessor, "ObjectDiff", diff)
-
-	if err := r.Client.Delete(ctx, obj); err != nil {
-		err = WrapErrorForObject("Delete", accessor, err)
-		return controllerutil.OperationResultNone, nil
-	}
-
-	return controllerutil.OperationResultUpdated, nil
-}
-
-func getAccessorOrDie(obj runtime.Object) metav1.Object {
-	accessor, err := meta.Accessor(obj)
-	if err != nil {
-		// Programming error: obj is of the wrong type
-		panic(fmt.Errorf("Unable to get accessor for object %v: %w", obj, err))
-	}
-
-	return accessor
-}
-
-// Syntactic sugar variables and functions
-
-func emptyDirVol() corev1.VolumeSource {
-	return corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}
-}
-
-func envDownwardAPI(field string) envSetter {
-	return func(env *corev1.EnvVar) {
-		if env.ValueFrom == nil {
-			env.ValueFrom = &corev1.EnvVarSource{}
-		}
-		env.Value = ""
-
-		if env.ValueFrom.FieldRef == nil {
-			env.ValueFrom.FieldRef = &corev1.ObjectFieldSelector{}
-		}
-
-		env.ValueFrom.FieldRef.FieldPath = field
-	}
-}
-
-func envValue(value string) envSetter {
-	return func(env *corev1.EnvVar) {
-		env.Value = value
-		env.ValueFrom = nil
-	}
-}
-
-func volumeMount(mountPath string) mountSetter {
-	return func(mount *corev1.VolumeMount) {
-		mount.MountPath = mountPath
-	}
-}
-
-func volumeMountWithSubpath(mountPath, subPath string) mountSetter {
-	return func(mount *corev1.VolumeMount) {
-		mount.MountPath = mountPath
-		mount.SubPath = subPath
-	}
-}
-
-func execProbe(command ...string) *corev1.Probe {
-	return &corev1.Probe{
-		Handler: corev1.Handler{Exec: &corev1.ExecAction{Command: command}},
-	}
 }
