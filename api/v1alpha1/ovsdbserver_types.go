@@ -23,40 +23,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ClusterID
-type ClusterID string
-
-func (cid *ClusterID) String() string {
-	return string(*cid)
-}
-
-// ServerID
-type ServerID string
-
-func (sid *ServerID) String() string {
-	return string(*sid)
-}
-
-// DatabaseName
-type DatabaseName string
-
-func (name *DatabaseName) String() string {
-	return string(*name)
-}
-
-// RaftAddress
-type RaftAddress string
-
-func (address *RaftAddress) String() string {
-	return string(*address)
-}
-
-// DBAddress
-type DBAddress string
-
-func (address *DBAddress) String() string {
-	return string(*address)
-}
+const (
+	DBTypeNB = "NB"
+	DBTypeSB = "SB"
+)
 
 const (
 	OVSDBServerAvailable status.ConditionType = "Available"
@@ -65,8 +35,9 @@ const (
 
 // OVSDBServerSpec defines the desired state of OVSDBServer
 type OVSDBServerSpec struct {
-	ClusterID *ClusterID    `json:"sbClusterID,omitempty"`
-	InitPeers []RaftAddress `json:"initPeers,omitempty"`
+	ClusterID *string  `json:"sbClusterID,omitempty"`
+	InitPeers []string `json:"initPeers,omitempty"`
+	DBType    string   `json:"dbType,omitempty"`
 
 	Image        string            `json:"image"`
 	StorageSize  resource.Quantity `json:"storageSize,omitempty"`
@@ -74,11 +45,11 @@ type OVSDBServerSpec struct {
 }
 
 type DatabaseStatus struct {
-	ClusterID   ClusterID    `json:"clusterID,omitempty"`
-	ServerID    ServerID     `json:"serverID,omitempty"`
-	Name        DatabaseName `json:"name,omitempty"`
-	RaftAddress RaftAddress  `json:"raftAddress,omitempty"`
-	DBAddress   DBAddress    `json:"dbAddress,omitempty"`
+	ClusterID   string `json:"clusterID,omitempty"`
+	ServerID    string `json:"serverID,omitempty"`
+	Name        string `json:"name,omitempty"`
+	RaftAddress string `json:"raftAddress,omitempty"`
+	DBAddress   string `json:"dbAddress,omitempty"`
 }
 
 // OVSDBServerStatus defines the observed state of OVSDBServer

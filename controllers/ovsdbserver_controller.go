@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -423,27 +424,40 @@ func hostsInitContainer(container *corev1.Container, server *ovncentralv1alpha1.
 	const hostsTmpMount = "/hosts-new"
 	container.Name = "override-local-service-ip"
 	container.Image = server.Spec.Image
-	container.Command = []string{"/add_service_to_hosts"}
+	container.Command = []string{
+		"/bin/bash",
+		"-c",
+		"cp /etc/hosts $HOSTS_VOLUME/hosts; " +
+			"echo \"$POD_IP $SERVER_NAME\" >> $HOSTS_VOLUME/hosts",
+	}
 	container.VolumeMounts = util.MergeVolumeMounts(container.VolumeMounts, util.MountSetterMap{
 		hostsVolumeName: util.VolumeMount(hostsTmpMount),
 	})
 	container.Env = util.MergeEnvs(container.Env, util.EnvSetterMap{
 		"POD_IP":       util.EnvDownwardAPI("status.podIP"),
-		"SVC_NAME":     util.EnvValue(serviceName),
+		"SERVER_NAME":  util.EnvValue(serviceName),
 		"HOSTS_VOLUME": util.EnvValue(hostsTmpMount),
 	})
+
+	// XXX: Dev only. Both pods use this container, so this ensures we
+	// always pull the latest image.
+	container.ImagePullPolicy = corev1.PullAlways
 }
 
-func dbStatusContainer(container *corev1.Container, server *ovncentralv1alpha1.OVSDBServer, serviceName string) {
+func dbStatusContainer(
+	container *corev1.Container,
+	server *ovncentralv1alpha1.OVSDBServer,
+	serviceName string) {
+
 	container.Name = dbStatusContainerName
 	container.Image = server.Spec.Image
 	container.Command = []string{"/dbstatus"}
 	container.VolumeMounts = dbPodVolumeMounts(container.VolumeMounts)
 	container.Env = util.MergeEnvs(container.Env, util.EnvSetterMap{
-		"DB_TYPE":    util.EnvValue("NB"),
-		"SVC_NAME":   util.EnvValue(serviceName),
-		"OVS_DBDIR":  util.EnvValue(ovsDBDir),
-		"OVS_RUNDIR": util.EnvValue(ovsRunDir),
+		"DB_TYPE":     util.EnvValue(server.Spec.DBType),
+		"SERVER_NAME": util.EnvValue(serviceName),
+		"OVS_DBDIR":   util.EnvValue(ovsDBDir),
+		"OVS_RUNDIR":  util.EnvValue(ovsRunDir),
 	})
 }
 
@@ -486,8 +500,8 @@ func (r *OVSDBServerReconciler) dbPod(
 	dbContainer.Image = server.Spec.Image
 	dbContainer.VolumeMounts = dbPodVolumeMounts(dbContainer.VolumeMounts)
 	dbContainer.Env = util.MergeEnvs(dbContainer.Env, util.EnvSetterMap{
-		"DB_TYPE":       util.EnvValue("NB"),
-		"SVC_NAME":      util.EnvValue(serviceName),
+		"DB_TYPE":       util.EnvValue(server.Spec.DBType),
+		"SERVER_NAME":   util.EnvValue(serviceName),
 		"OVS_DBDIR":     util.EnvValue(ovsDBDir),
 		"OVS_RUNDIR":    util.EnvValue(ovsRunDir),
 		"OVN_LOG_LEVEL": util.EnvValue("info"),
@@ -546,13 +560,28 @@ func (r *OVSDBServerReconciler) bootstrapPod(
 	dbInitContainer.Image = server.Spec.Image
 	dbInitContainer.Command = []string{"/dbinit"}
 	dbInitContainer.VolumeMounts = dbPodVolumeMounts(dbInitContainer.VolumeMounts)
-	dbInitContainer.Env = util.MergeEnvs(dbInitContainer.Env, util.EnvSetterMap{
-		"DB_TYPE":    util.EnvValue("NB"),
-		"SVC_NAME":   util.EnvValue(serviceName),
-		"OVS_DBDIR":  util.EnvValue(ovsDBDir),
-		"OVS_RUNDIR": util.EnvValue(ovsRunDir),
-		"BOOTSTRAP":  util.EnvValue("true"),
-	})
+
+	bootstrapEnv := util.EnvSetterMap{
+		"DB_TYPE":     util.EnvValue(server.Spec.DBType),
+		"SERVER_NAME": util.EnvValue(serviceName),
+		"OVS_DBDIR":   util.EnvValue(ovsDBDir),
+		"OVS_RUNDIR":  util.EnvValue(ovsRunDir),
+	}
+
+	if server.Spec.ClusterID == nil {
+		bootstrapEnv["BOOTSTRAP"] = util.EnvValue("true")
+	} else {
+		if len(server.Spec.InitPeers) == 0 {
+			err := fmt.Errorf("Unable to bootstrap server %s into cluster %s: "+
+				"no InitPeers defined", server.Name, *server.Spec.ClusterID)
+			server.SetFailed(true, "InvalidBootstrap", err)
+			return err
+		}
+		bootstrapEnv["REMOTES"] = util.EnvValue(strings.Join(server.Spec.InitPeers, " "))
+		bootstrapEnv["CID"] = util.EnvValue(*server.Spec.ClusterID)
+	}
+
+	dbInitContainer.Env = util.MergeEnvs(dbInitContainer.Env, bootstrapEnv)
 
 	if len(pod.Spec.Containers) != 1 {
 		pod.Spec.Containers = make([]corev1.Container, 1)

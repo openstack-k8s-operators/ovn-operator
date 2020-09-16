@@ -36,15 +36,15 @@ spec:
         spec:
           description: OVSDBServerSpec defines the desired state of OVSDBServer
           properties:
+            dbType:
+              type: string
             image:
               type: string
             initPeers:
               items:
-                description: RaftAddress
                 type: string
               type: array
             sbClusterID:
-              description: ClusterID
               type: string
             storageClass:
               type: string
@@ -103,19 +103,14 @@ spec:
             databaseStatus:
               properties:
                 clusterID:
-                  description: ClusterID
                   type: string
                 dbAddress:
-                  description: DBAddress
                   type: string
                 name:
-                  description: DatabaseName
                   type: string
                 raftAddress:
-                  description: RaftAddress
                   type: string
                 serverID:
-                  description: ServerID
                   type: string
               type: object
           required:

@@ -206,6 +206,7 @@ func (r *OVNCentralReconciler) Server(
 	server.Name = fmt.Sprintf("%s-%d", central.Name, index)
 	server.Namespace = central.Namespace
 
+	server.Spec.DBType = ovncentralv1alpha1.DBTypeNB
 	server.Spec.Image = central.Spec.Image
 	server.Spec.StorageSize = central.Spec.StorageSize
 	server.Spec.StorageClass = central.Spec.StorageClass

@@ -46,10 +46,8 @@ type OVNCentralSpec struct {
 
 // OVNCentralStatus defines the observed state of OVNCentral
 type OVNCentralStatus struct {
-	Conditions  status.Conditions             `json:"conditions,omitempty"`
-	NBClusterID *ClusterID                    `json:"nbClusterID,omitempty"`
-	SBClusterID *ClusterID                    `json:"sbClusterID,omitempty"`
-	Servers     []corev1.LocalObjectReference `json:"servers" patchStrategy:"merge" patchMergeKey:"name"`
+	Conditions status.Conditions             `json:"conditions,omitempty"`
+	Servers    []corev1.LocalObjectReference `json:"servers" patchStrategy:"merge" patchMergeKey:"name"`
 }
 
 const (
