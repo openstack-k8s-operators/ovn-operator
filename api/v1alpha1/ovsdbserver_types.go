@@ -59,12 +59,12 @@ func (address *DBAddress) String() string {
 }
 
 const (
-	OVNServerAvailable status.ConditionType = "Available"
-	OVNServerFailed    status.ConditionType = "Failed"
+	OVSDBServerAvailable status.ConditionType = "Available"
+	OVSDBServerFailed    status.ConditionType = "Failed"
 )
 
-// OVNServerSpec defines the desired state of OVNServer
-type OVNServerSpec struct {
+// OVSDBServerSpec defines the desired state of OVSDBServer
+type OVSDBServerSpec struct {
 	ClusterID *ClusterID    `json:"sbClusterID,omitempty"`
 	InitPeers []RaftAddress `json:"initPeers,omitempty"`
 
@@ -81,8 +81,8 @@ type DatabaseStatus struct {
 	DBAddress   DBAddress    `json:"dbAddress,omitempty"`
 }
 
-// OVNServerStatus defines the observed state of OVNServer
-type OVNServerStatus struct {
+// OVSDBServerStatus defines the observed state of OVSDBServer
+type OVSDBServerStatus struct {
 	DatabaseStatus `json:"databaseStatus"`
 	Conditions     status.Conditions `json:"conditions,omitempty"`
 }
@@ -90,26 +90,26 @@ type OVNServerStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// OVNServer is the Schema for the servers API
-type OVNServer struct {
+// OVSDBServer is the Schema for the servers API
+type OVSDBServer struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   OVNServerSpec   `json:"spec,omitempty"`
-	Status OVNServerStatus `json:"status,omitempty"`
+	Spec   OVSDBServerSpec   `json:"spec,omitempty"`
+	Status OVSDBServerStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// OVNServerList contains a list of OVNServer
-type OVNServerList struct {
+// OVSDBServerList contains a list of OVSDBServer
+type OVSDBServerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []OVNServer `json:"items"`
+	Items           []OVSDBServer `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&OVNServer{}, &OVNServerList{})
+	SchemeBuilder.Register(&OVSDBServer{}, &OVSDBServerList{})
 }
 
 func conditionStatus(status bool) corev1.ConditionStatus {
@@ -120,26 +120,26 @@ func conditionStatus(status bool) corev1.ConditionStatus {
 	}
 }
 
-func (server *OVNServer) SetAvailable(available bool) {
+func (server *OVSDBServer) SetAvailable(available bool) {
 	condition := status.Condition{
-		Type:   OVNServerAvailable,
+		Type:   OVSDBServerAvailable,
 		Status: conditionStatus(available),
 	}
 
 	server.Status.Conditions.SetCondition(condition)
 }
 
-func (server *OVNServer) IsAvailable() bool {
-	return server.Status.Conditions.IsTrueFor(OVNServerAvailable)
+func (server *OVSDBServer) IsAvailable() bool {
+	return server.Status.Conditions.IsTrueFor(OVSDBServerAvailable)
 }
 
-func (server *OVNServer) SetFailed(failed bool, reason status.ConditionReason, err error) {
+func (server *OVSDBServer) SetFailed(failed bool, reason status.ConditionReason, err error) {
 	msg := ""
 	if err != nil {
 		msg = err.Error()
 	}
 	condition := status.Condition{
-		Type:    OVNServerFailed,
+		Type:    OVSDBServerFailed,
 		Status:  conditionStatus(failed),
 		Reason:  reason,
 		Message: msg,
@@ -148,6 +148,6 @@ func (server *OVNServer) SetFailed(failed bool, reason status.ConditionReason, e
 	server.Status.Conditions.SetCondition(condition)
 }
 
-func (server *OVNServer) IsFailed() bool {
-	return server.Status.Conditions.IsTrueFor(OVNServerFailed)
+func (server *OVSDBServer) IsFailed() bool {
+	return server.Status.Conditions.IsTrueFor(OVSDBServerFailed)
 }

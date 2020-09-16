@@ -1,13 +1,13 @@
-# permissions for end users to edit ovnservers.
+# permissions for end users to edit ovsdbservers.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: ovnserver-editor-role
+  name: ovsdbserver-editor-role
 rules:
 - apiGroups:
   - ovn-central.openstack.org
   resources:
-  - ovnservers
+  - ovsdbservers
   verbs:
   - create
   - delete
@@ -19,6 +19,6 @@ rules:
 - apiGroups:
   - ovn-central.openstack.org
   resources:
-  - ovnservers/status
+  - ovsdbservers/status
   verbs:
   - get

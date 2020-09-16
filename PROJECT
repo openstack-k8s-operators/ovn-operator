@@ -7,7 +7,7 @@ resources:
   kind: OVNCentral
   version: v1alpha1
 - group: ovn-central
-  kind: OVNServer
+  kind: OVSDBServer
   version: v1alpha1
 version: 3-alpha
 plugins:

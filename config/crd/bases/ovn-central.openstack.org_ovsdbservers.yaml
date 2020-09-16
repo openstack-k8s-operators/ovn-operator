@@ -6,20 +6,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
-  name: ovnservers.ovn-central.openstack.org
+  name: ovsdbservers.ovn-central.openstack.org
 spec:
   group: ovn-central.openstack.org
   names:
-    kind: OVNServer
-    listKind: OVNServerList
-    plural: ovnservers
-    singular: ovnserver
+    kind: OVSDBServer
+    listKind: OVSDBServerList
+    plural: ovsdbservers
+    singular: ovsdbserver
   scope: Namespaced
   subresources:
     status: {}
   validation:
     openAPIV3Schema:
-      description: OVNServer is the Schema for the servers API
+      description: OVSDBServer is the Schema for the servers API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -34,7 +34,7 @@ spec:
         metadata:
           type: object
         spec:
-          description: OVNServerSpec defines the desired state of OVNServer
+          description: OVSDBServerSpec defines the desired state of OVSDBServer
           properties:
             image:
               type: string
@@ -58,7 +58,7 @@ spec:
           - image
           type: object
         status:
-          description: OVNServerStatus defines the observed state of OVNServer
+          description: OVSDBServerStatus defines the observed state of OVSDBServer
           properties:
             conditions:
               description: Conditions is a set of Condition instances.

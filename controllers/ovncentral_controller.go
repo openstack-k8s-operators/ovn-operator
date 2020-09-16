@@ -93,8 +93,8 @@ func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 	// Create the bootstrap server
 	//
 
-	apply := func(server *ovncentralv1alpha1.OVNServer) (*ovncentralv1alpha1.OVNServer, error) {
-		fetched := &ovncentralv1alpha1.OVNServer{}
+	apply := func(server *ovncentralv1alpha1.OVSDBServer) (*ovncentralv1alpha1.OVSDBServer, error) {
+		fetched := &ovncentralv1alpha1.OVSDBServer{}
 		err := r.Client.Get(ctx,
 			types.NamespacedName{Name: server.Name, Namespace: server.Namespace},
 			fetched)
@@ -166,7 +166,7 @@ func (r *OVNCentralReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&ovncentralv1alpha1.OVNCentral{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Secret{}).
-		Owns(&ovncentralv1alpha1.OVNServer{}).
+		Owns(&ovncentralv1alpha1.OVSDBServer{}).
 		Complete(r)
 }
 
@@ -200,9 +200,9 @@ func (r *OVNCentralReconciler) setDefaultValues(ctx context.Context,
 
 func (r *OVNCentralReconciler) Server(
 	central *ovncentralv1alpha1.OVNCentral,
-	index int) *ovncentralv1alpha1.OVNServer {
+	index int) *ovncentralv1alpha1.OVSDBServer {
 
-	server := &ovncentralv1alpha1.OVNServer{}
+	server := &ovncentralv1alpha1.OVSDBServer{}
 	server.Name = fmt.Sprintf("%s-%d", central.Name, index)
 	server.Namespace = central.Namespace
 

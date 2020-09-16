@@ -35,33 +35,33 @@ import (
 	"github.com/openstack-k8s-operators/ovn-central-operator/util"
 )
 
-// OVNServerReconciler reconciles a OVNServer object
-type OVNServerReconciler struct {
+// OVSDBServerReconciler reconciles a OVSDBServer object
+type OVSDBServerReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
 }
 
-func (r *OVNServerReconciler) GetClient() client.Client {
+func (r *OVSDBServerReconciler) GetClient() client.Client {
 	return r.Client
 }
 
-func (r *OVNServerReconciler) GetLogger() logr.Logger {
+func (r *OVSDBServerReconciler) GetLogger() logr.Logger {
 	return r.Log
 }
 
-// +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovnservers,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovnservers/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovsdbservers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovsdbservers/status,verbs=get;update;patch
 
-func (r *OVNServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, err error) {
+func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, err error) {
 	ctx := context.Background()
-	_ = r.Log.WithValues("ovnserver", req.NamespacedName)
+	_ = r.Log.WithValues("ovsdbserver", req.NamespacedName)
 
 	//
 	// Fetch the server object
 	//
 
-	server := &ovncentralv1alpha1.OVNServer{}
+	server := &ovncentralv1alpha1.OVSDBServer{}
 	if err = r.Client.Get(ctx, req.NamespacedName, server); err != nil {
 		if k8s_errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request. Owned
@@ -188,18 +188,18 @@ func (r *OVNServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, err 
 	return ctrl.Result{}, nil
 }
 
-func (r *OVNServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OVSDBServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&ovncentralv1alpha1.OVNServer{}).
+		For(&ovncentralv1alpha1.OVSDBServer{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.PersistentVolumeClaim{}).
 		Owns(&corev1.Pod{}).
 		Complete(r)
 }
 
-func (r *OVNServerReconciler) updateDBStatus(
+func (r *OVSDBServerReconciler) updateDBStatus(
 	ctx context.Context,
-	server *ovncentralv1alpha1.OVNServer,
+	server *ovncentralv1alpha1.OVSDBServer,
 	pod *corev1.Pod,
 	container string) (bool, error) {
 
@@ -232,8 +232,8 @@ func (r *OVNServerReconciler) updateDBStatus(
 	return false, nil
 }
 
-func (r *OVNServerReconciler) bootstrapDB(
-	ctx context.Context, server *ovncentralv1alpha1.OVNServer,
+func (r *OVSDBServerReconciler) bootstrapDB(
+	ctx context.Context, server *ovncentralv1alpha1.OVSDBServer,
 	serviceName string, pvc *corev1.PersistentVolumeClaim) (ctrl.Result, error) {
 
 	// Ensure the DB pod isn't running
@@ -267,9 +267,9 @@ func (r *OVNServerReconciler) bootstrapDB(
 	return ctrl.Result{}, err
 }
 
-func (r *OVNServerReconciler) Service(
+func (r *OVSDBServerReconciler) Service(
 	ctx context.Context,
-	server *ovncentralv1alpha1.OVNServer) (
+	server *ovncentralv1alpha1.OVSDBServer) (
 	*corev1.Service, controllerutil.OperationResult, error) {
 
 	service := &corev1.Service{}
@@ -328,9 +328,9 @@ func (r *OVNServerReconciler) Service(
 	return service, op, err
 }
 
-func (r *OVNServerReconciler) PVC(
+func (r *OVSDBServerReconciler) PVC(
 	ctx context.Context,
-	server *ovncentralv1alpha1.OVNServer) (
+	server *ovncentralv1alpha1.OVSDBServer) (
 	*corev1.PersistentVolumeClaim, controllerutil.OperationResult, error) {
 
 	pvc := &corev1.PersistentVolumeClaim{}
@@ -414,7 +414,7 @@ func dbPodVolumeMounts(mounts []corev1.VolumeMount) []corev1.VolumeMount {
 
 // Define a local entry for the service in /hosts pointing to the pod IP. This
 // allows ovsdb-server to bind to the 'service ip' on startup.
-func hostsInitContainer(container *corev1.Container, server *ovncentralv1alpha1.OVNServer,
+func hostsInitContainer(container *corev1.Container, server *ovncentralv1alpha1.OVSDBServer,
 	serviceName string) {
 
 	const hostsTmpMount = "/hosts-new"
@@ -431,7 +431,7 @@ func hostsInitContainer(container *corev1.Container, server *ovncentralv1alpha1.
 	})
 }
 
-func dbStatusContainer(container *corev1.Container, server *ovncentralv1alpha1.OVNServer, serviceName string) {
+func dbStatusContainer(container *corev1.Container, server *ovncentralv1alpha1.OVSDBServer, serviceName string) {
 	container.Name = dbStatusContainerName
 	container.Image = server.Spec.Image
 	container.Command = []string{"/dbstatus"}
@@ -444,7 +444,7 @@ func dbStatusContainer(container *corev1.Container, server *ovncentralv1alpha1.O
 	})
 }
 
-func dbPodShell(server *ovncentralv1alpha1.OVNServer) *corev1.Pod {
+func dbPodShell(server *ovncentralv1alpha1.OVSDBServer) *corev1.Pod {
 	pod := &corev1.Pod{}
 	pod.Name = server.Name
 	pod.Namespace = server.Namespace
@@ -452,9 +452,9 @@ func dbPodShell(server *ovncentralv1alpha1.OVNServer) *corev1.Pod {
 	return pod
 }
 
-func (r *OVNServerReconciler) dbPod(
+func (r *OVSDBServerReconciler) dbPod(
 	pod *corev1.Pod,
-	server *ovncentralv1alpha1.OVNServer,
+	server *ovncentralv1alpha1.OVSDBServer,
 	pvc *corev1.PersistentVolumeClaim,
 	serviceName string) error {
 
@@ -508,7 +508,7 @@ func (r *OVNServerReconciler) dbPod(
 	return nil
 }
 
-func bootstrapPodShell(server *ovncentralv1alpha1.OVNServer) *corev1.Pod {
+func bootstrapPodShell(server *ovncentralv1alpha1.OVSDBServer) *corev1.Pod {
 	pod := &corev1.Pod{}
 	pod.Name = fmt.Sprintf("%s-bootstrap", server.Name)
 	pod.Namespace = server.Namespace
@@ -516,9 +516,9 @@ func bootstrapPodShell(server *ovncentralv1alpha1.OVNServer) *corev1.Pod {
 	return pod
 }
 
-func (r *OVNServerReconciler) bootstrapPod(
+func (r *OVSDBServerReconciler) bootstrapPod(
 	pod *corev1.Pod,
-	server *ovncentralv1alpha1.OVNServer,
+	server *ovncentralv1alpha1.OVSDBServer,
 	pvc *corev1.PersistentVolumeClaim,
 	serviceName string) error {
 
@@ -562,7 +562,7 @@ func (r *OVNServerReconciler) bootstrapPod(
 }
 
 // Set labels which all objects owned by this server will have
-func setCommonLabels(server *ovncentralv1alpha1.OVNServer, labels map[string]string) {
+func setCommonLabels(server *ovncentralv1alpha1.OVSDBServer, labels map[string]string) {
 	labels["app"] = "ovsdb-server"
 	labels["ovsdb-server"] = server.Name
 	// TODO: Add ovn-central label

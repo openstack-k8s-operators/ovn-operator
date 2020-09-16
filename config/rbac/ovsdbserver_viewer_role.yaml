@@ -1,13 +1,13 @@
-# permissions for end users to view ovnservers.
+# permissions for end users to view ovsdbservers.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: ovnserver-viewer-role
+  name: ovsdbserver-viewer-role
 rules:
 - apiGroups:
   - ovn-central.openstack.org
   resources:
-  - ovnservers
+  - ovsdbservers
   verbs:
   - get
   - list
@@ -15,6 +15,6 @@ rules:
 - apiGroups:
   - ovn-central.openstack.org
   resources:
-  - ovnservers/status
+  - ovsdbservers/status
   verbs:
   - get
