@@ -1,5 +1,0 @@
----
-spec:
-  accessModes:
-  - ReadWriteOnce
-  volumeMode: Filesystem

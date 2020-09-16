@@ -29,9 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ovncentralv1alpha1 "github.com/openstack-k8s-operators/ovn-central-operator/api/v1alpha1"
-	"github.com/openstack-k8s-operators/ovn-central-operator/stubs"
 )
 
 // OVNCentralReconciler reconciles a OVNCentral object
@@ -130,7 +130,7 @@ func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 
 	var servers []corev1.LocalObjectReference
 
-	server := stubs.Server(instance, r.Scheme, 0)
+	server := r.Server(instance, 0)
 	server, err = apply(server)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -196,6 +196,22 @@ func (r *OVNCentralReconciler) setDefaultValues(ctx context.Context,
 	}
 
 	return updatedInstance
+}
+
+func (r *OVNCentralReconciler) Server(
+	central *ovncentralv1alpha1.OVNCentral,
+	index int) *ovncentralv1alpha1.OVNServer {
+
+	server := &ovncentralv1alpha1.OVNServer{}
+	server.Name = fmt.Sprintf("%s-%d", central.Name, index)
+	server.Namespace = central.Namespace
+
+	server.Spec.Image = central.Spec.Image
+	server.Spec.StorageSize = central.Spec.StorageSize
+	server.Spec.StorageClass = central.Spec.StorageClass
+
+	controllerutil.SetControllerReference(central, server, r.Scheme)
+	return server
 }
 
 func (r *OVNCentralReconciler) setFailed(
