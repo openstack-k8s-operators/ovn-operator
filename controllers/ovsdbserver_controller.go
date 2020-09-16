@@ -74,7 +74,7 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	}
 
 	//
-	// Set the Available condition to false until reconciliation completes
+	// Set the Available and Failed conditions to false until reconciliation completes
 	//
 
 	origAvailable := server.IsAvailable()
@@ -143,14 +143,17 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	}
 
 	//
-	// Ensure server pod exists
+	// Delete the bootstrap pod if it exists
 	//
 
-	// Delete the bootstrap pod if it exists
 	bootstrapPod := bootstrapPodShell(server)
 	if err := DeleteIfExists(r, ctx, bootstrapPod); err != nil {
 		return ctrl.Result{}, err
 	}
+
+	//
+	// Ensure server pod exists
+	//
 
 	dbPod := dbPodShell(server)
 	_, err = CreateOrDelete(r, ctx, dbPod, func() error {
@@ -167,7 +170,7 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	if util.IsPodConditionSet(corev1.PodInitialized, dbPod) {
 		updated, err := r.updateDBStatus(ctx, server, dbPod, dbStatusContainerName)
 		if updated || err != nil {
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, err
 		}
 
 		// Pod initialized, status is uptodate
