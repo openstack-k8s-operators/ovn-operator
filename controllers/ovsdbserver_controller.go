@@ -67,7 +67,7 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 		if k8s_errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request. Owned
 			// objects are automatically garbage collected. For additional cleanup logic use
-			// finalizers.  Return and don't requeue.
+			// finalizers. Return and don't requeue.
 			return ctrl.Result{}, nil
 		}
 		err = WrapErrorForObject("Get server", server, err)
@@ -139,7 +139,7 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	// Bootstrap the database if clusterID is not set
 	//
 
-	if server.Status.ClusterID == "" {
+	if server.Status.ClusterID == nil {
 		return r.bootstrapDB(ctx, server, serviceName, pvc)
 	}
 

@@ -2,4 +2,5 @@
 resources:
 - ovn-central_v1alpha1_ovncentral.yaml
 - ovn-central_v1alpha1_ovsdbserver.yaml
+- ovn-central_v1alpha1_ovsdbcluster.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

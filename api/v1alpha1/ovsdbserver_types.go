@@ -24,37 +24,32 @@ import (
 )
 
 const (
-	DBTypeNB = "NB"
-	DBTypeSB = "SB"
-)
-
-const (
 	OVSDBServerAvailable status.ConditionType = "Available"
 	OVSDBServerFailed    status.ConditionType = "Failed"
 )
 
 // OVSDBServerSpec defines the desired state of OVSDBServer
 type OVSDBServerSpec struct {
-	ClusterID *string  `json:"sbClusterID,omitempty"`
+	ClusterID *string  `json:"clusterID,omitempty"`
 	InitPeers []string `json:"initPeers,omitempty"`
-	DBType    string   `json:"dbType,omitempty"`
+	DBType    string   `json:"dbType"`
 
 	Image        string            `json:"image"`
-	StorageSize  resource.Quantity `json:"storageSize,omitempty"`
+	StorageSize  resource.Quantity `json:"storageSize"`
 	StorageClass *string           `json:"storageClass,omitempty"`
 }
 
 type DatabaseStatus struct {
-	ClusterID   string `json:"clusterID,omitempty"`
-	ServerID    string `json:"serverID,omitempty"`
-	Name        string `json:"name,omitempty"`
-	RaftAddress string `json:"raftAddress,omitempty"`
-	DBAddress   string `json:"dbAddress,omitempty"`
+	ClusterID   *string `json:"clusterID,omitempty"`
+	ServerID    *string `json:"serverID,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	RaftAddress *string `json:"raftAddress,omitempty"`
+	DBAddress   *string `json:"dbAddress,omitempty"`
 }
 
 // OVSDBServerStatus defines the observed state of OVSDBServer
 type OVSDBServerStatus struct {
-	DatabaseStatus `json:"databaseStatus"`
+	DatabaseStatus `json:"databaseStatus,omitempty"`
 	Conditions     status.Conditions `json:"conditions,omitempty"`
 }
 
@@ -121,4 +116,10 @@ func (server *OVSDBServer) SetFailed(failed bool, reason status.ConditionReason,
 
 func (server *OVSDBServer) IsFailed() bool {
 	return server.Status.Conditions.IsTrueFor(OVSDBServerFailed)
+}
+
+// ObjectWithConditions
+
+func (server *OVSDBServer) GetConditions() *status.Conditions {
+	return &server.Status.Conditions
 }

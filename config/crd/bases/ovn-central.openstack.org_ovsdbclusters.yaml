@@ -6,20 +6,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
-  name: ovsdbservers.ovn-central.openstack.org
+  name: ovsdbclusters.ovn-central.openstack.org
 spec:
   group: ovn-central.openstack.org
   names:
-    kind: OVSDBServer
-    listKind: OVSDBServerList
-    plural: ovsdbservers
-    singular: ovsdbserver
+    kind: OVSDBCluster
+    listKind: OVSDBClusterList
+    plural: ovsdbclusters
+    singular: ovsdbcluster
   scope: Namespaced
   subresources:
     status: {}
   validation:
     openAPIV3Schema:
-      description: OVSDBServer is the Schema for the servers API
+      description: OVSDBCluster is the Schema for the ovsdbclusters API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -34,21 +34,17 @@ spec:
         metadata:
           type: object
         spec:
-          description: OVSDBServerSpec defines the desired state of OVSDBServer
+          description: OVSDBClusterSpec defines the desired state of OVSDBCluster
           properties:
-            clusterID:
-              type: string
             dbType:
               type: string
             image:
               type: string
-            initPeers:
-              items:
-                type: string
-              type: array
-            storageClass:
+            replicas:
+              type: integer
+            serverStorageClass:
               type: string
-            storageSize:
+            serverStorageSize:
               anyOf:
               - type: integer
               - type: string
@@ -57,11 +53,14 @@ spec:
           required:
           - dbType
           - image
-          - storageSize
+          - replicas
+          - serverStorageSize
           type: object
         status:
-          description: OVSDBServerStatus defines the observed state of OVSDBServer
+          description: OVSDBClusterStatus defines the observed state of OVSDBCluster
           properties:
+            clusterID:
+              type: string
             conditions:
               description: Conditions is a set of Condition instances.
               items:
@@ -102,19 +101,6 @@ spec:
                 - type
                 type: object
               type: array
-            databaseStatus:
-              properties:
-                clusterID:
-                  type: string
-                dbAddress:
-                  type: string
-                name:
-                  type: string
-                raftAddress:
-                  type: string
-                serverID:
-                  type: string
-              type: object
           type: object
       type: object
   version: v1alpha1

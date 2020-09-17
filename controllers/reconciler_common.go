@@ -19,8 +19,10 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/go-logr/logr"
+	"github.com/operator-framework/operator-lib/status"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -28,6 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	"github.com/openstack-k8s-operators/ovn-central-operator/util"
 )
 
 type ReconcilerCommon interface {
@@ -35,9 +39,14 @@ type ReconcilerCommon interface {
 	GetLogger() logr.Logger
 }
 
-func WrapErrorForObject(msg string, object metav1.Object, err error) error {
-	return fmt.Errorf("%s %T %v/%v: %w",
-		msg, object, object.GetNamespace(), object.GetName(), err)
+func WrapErrorForObject(msg string, object runtime.Object, err error) error {
+	key, err := client.ObjectKeyFromObject(object)
+	if err != nil {
+		return fmt.Errorf("ObjectKeyFromObject: %v", object)
+	}
+
+	return fmt.Errorf("%s %T %v: %w",
+		msg, object, key, err)
 }
 
 func logObjectParams(object metav1.Object) []interface{} {
@@ -64,10 +73,9 @@ func LogErrorForObject(r ReconcilerCommon,
 func DeleteIfExists(r ReconcilerCommon,
 	ctx context.Context, obj runtime.Object) error {
 
-	accessor := getAccessorOrDie(obj)
 	key, err := client.ObjectKeyFromObject(obj)
 	if err != nil {
-		err = WrapErrorForObject("ObjectKeyFromObject", accessor, err)
+		err = WrapErrorForObject("ObjectKeyFromObject", obj, err)
 		return err
 	}
 
@@ -76,16 +84,17 @@ func DeleteIfExists(r ReconcilerCommon,
 		if k8s_errors.IsNotFound(err) {
 			return nil
 		}
-		err = WrapErrorForObject("Get", accessor, err)
+		err = WrapErrorForObject("Get", obj, err)
 		return err
 	}
 
 	err = r.GetClient().Delete(ctx, obj)
 	if err != nil {
-		err = WrapErrorForObject("Delete", accessor, err)
+		err = WrapErrorForObject("Delete", obj, err)
 		return err
 	}
 
+	accessor := getAccessorOrDie(obj)
 	LogForObject(r, "Delete", accessor)
 	return nil
 }
@@ -96,29 +105,27 @@ func CreateOrDelete(
 	obj runtime.Object,
 	f controllerutil.MutateFn) (controllerutil.OperationResult, error) {
 
-	accessor := getAccessorOrDie(obj)
-
 	key, err := client.ObjectKeyFromObject(obj)
 	if err != nil {
-		err = WrapErrorForObject("ObjectKeyFromObject", accessor, err)
+		err = WrapErrorForObject("ObjectKeyFromObject", obj, err)
 		return controllerutil.OperationResultNone, err
 	}
 
 	if err := r.GetClient().Get(ctx, key, obj); err != nil {
 		if k8s_errors.IsNotFound(err) {
 			if err := f(); err != nil {
-				err = WrapErrorForObject("Initialise", accessor, err)
+				err = WrapErrorForObject("Initialise", obj, err)
 				return controllerutil.OperationResultNone, err
 			}
 
 			if err := r.GetClient().Create(ctx, obj); err != nil {
-				err = WrapErrorForObject("Create", accessor, err)
+				err = WrapErrorForObject("Create", obj, err)
 				return controllerutil.OperationResultNone, err
 			}
 
 			return controllerutil.OperationResultCreated, nil
 		} else {
-			err = WrapErrorForObject("Get", accessor, err)
+			err = WrapErrorForObject("Get", obj, err)
 			return controllerutil.OperationResultNone, err
 		}
 	}
@@ -137,7 +144,7 @@ func CreateOrDelete(
 	//LogForObject(r, "Objects differ", accessor, "ObjectDiff", diff)
 
 	if err := r.GetClient().Delete(ctx, obj); err != nil {
-		err = WrapErrorForObject("Delete", accessor, err)
+		err = WrapErrorForObject("Delete", obj, err)
 		return controllerutil.OperationResultNone, nil
 	}
 
@@ -152,4 +159,24 @@ func getAccessorOrDie(obj runtime.Object) metav1.Object {
 	}
 
 	return accessor
+}
+
+func CheckConditions(
+	r ReconcilerCommon, ctx context.Context,
+	obj util.RuntimeObjectWithConditions, origConditions status.Conditions, err *error) {
+
+	if !reflect.DeepEqual(obj.GetConditions(), &origConditions) {
+		if updateErr := r.GetClient().Status().Update(ctx, obj); updateErr != nil {
+			if *err == nil {
+				// Return the update error if Reconcile() isn't already returning an
+				// error
+				*err = WrapErrorForObject("Update Status", obj, updateErr)
+			} else {
+				// Reconciler() is already returning an error, so log this error but
+				// leave the original unchanged
+				accessor := getAccessorOrDie(obj)
+				LogErrorForObject(r, updateErr, "Update", accessor)
+			}
+		}
+	}
 }

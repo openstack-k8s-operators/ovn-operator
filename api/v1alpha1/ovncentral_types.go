@@ -51,11 +51,6 @@ type OVNCentralStatus struct {
 }
 
 const (
-	OVNCentralFailed    status.ConditionType = "Failed"
-	OVNCentralAvailable status.ConditionType = "Available"
-)
-
-const (
 	OVNCentralInconsistentCluster status.ConditionReason = "InconsistentCluster"
 	OVNCentralBootstrapFailed     status.ConditionReason = "BootstrapFailed"
 )
@@ -83,4 +78,10 @@ type OVNCentralList struct {
 
 func init() {
 	SchemeBuilder.Register(&OVNCentral{}, &OVNCentralList{})
+}
+
+// ObjectWithConditions
+
+func (cluster *OVNCentral) GetConditions() *status.Conditions {
+	return &cluster.Status.Conditions
 }

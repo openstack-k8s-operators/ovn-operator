@@ -83,6 +83,14 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OVSDBServer")
 		os.Exit(1)
 	}
+	if err = (&controllers.OVSDBClusterReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("OVSDBCluster"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OVSDBCluster")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")

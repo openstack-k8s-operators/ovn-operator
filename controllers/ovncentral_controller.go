@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ovncentralv1alpha1 "github.com/openstack-k8s-operators/ovn-central-operator/api/v1alpha1"
+	"github.com/openstack-k8s-operators/ovn-central-operator/util"
 )
 
 // OVNCentralReconciler reconciles a OVNCentral object
@@ -219,13 +220,7 @@ func (r *OVNCentralReconciler) setFailed(
 	ctx context.Context, instance *ovncentralv1alpha1.OVNCentral,
 	reason status.ConditionReason, conditionErr error) error {
 
-	condition := status.Condition{
-		Type:    ovncentralv1alpha1.OVNCentralFailed,
-		Status:  corev1.ConditionTrue,
-		Reason:  reason,
-		Message: conditionErr.Error(),
-	}
-	instance.Status.Conditions.SetCondition(condition)
+	util.SetFailed(instance, reason, conditionErr.Error())
 	if err := r.Client.Status().Update(ctx, instance); err != nil {
 		err = WrapErrorForObject("Update status", instance, err)
 		return err

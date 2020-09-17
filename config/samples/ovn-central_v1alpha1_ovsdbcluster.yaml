@@ -1,0 +1,9 @@
+apiVersion: ovn-central.openstack.org/v1alpha1
+kind: OVSDBCluster
+metadata:
+  name: ovsdbcluster-sample
+spec:
+  dbType: NB
+  replicas: 1
+  image: quay.io/mbooth/ovn-central:2.11-dev
+  serverStorageSize: 1G
