@@ -30,22 +30,37 @@ const (
 const (
 	OVSDBClusterInconsistent status.ConditionReason = "InconsistentCluster"
 	OVSDBClusterBootstrap    status.ConditionReason = "BootstrapFailed"
+	OVSDBClusterInvalid      status.ConditionReason = "InvalidState"
 )
 
 // OVSDBClusterSpec defines the desired state of OVSDBCluster
 type OVSDBClusterSpec struct {
-	DBType   string `json:"dbType"`
-	Replicas int    `json:"replicas"`
+	DBType string `json:"dbType"`
+	Scale  int    `json:"scale"`
 
 	Image              string            `json:"image"`
 	ServerStorageSize  resource.Quantity `json:"serverStorageSize"`
 	ServerStorageClass *string           `json:"serverStorageClass,omitempty"`
 }
 
+type OVSDBServerSummaryState string
+
+const (
+	SummaryStateNone        OVSDBServerSummaryState = ""
+	SummaryStateAvailable   OVSDBServerSummaryState = "Available"
+	SummaryStateInitialised OVSDBServerSummaryState = "Initialised"
+)
+
+type OVSDBServerSummary struct {
+	Name  string                  `json:"name"`
+	State OVSDBServerSummaryState `json:"state"`
+}
+
 // OVSDBClusterStatus defines the observed state of OVSDBCluster
 type OVSDBClusterStatus struct {
-	Conditions status.Conditions `json:"conditions,omitempty"`
-	ClusterID  *string           `json:"clusterID,omitempty"`
+	Conditions status.Conditions    `json:"conditions,omitempty"`
+	ClusterID  *string              `json:"clusterID,omitempty"`
+	Servers    []OVSDBServerSummary `json:"servers,omitempty"`
 }
 
 // +kubebuilder:object:root=true

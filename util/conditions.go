@@ -32,8 +32,9 @@ type RuntimeObjectWithConditions interface {
 }
 
 const (
-	ConditionAvailable status.ConditionType = "Available"
-	ConditionFailed    status.ConditionType = "Failed"
+	ConditionAvailable   status.ConditionType = "Available"
+	ConditionFailed      status.ConditionType = "Failed"
+	ConditionInitialised status.ConditionType = "Initialised"
 )
 
 func SetAvailable(obj ObjectWithConditions) {
@@ -70,6 +71,23 @@ func UnsetFailed(obj ObjectWithConditions) {
 
 func IsFailed(obj ObjectWithConditions) bool {
 	return obj.GetConditions().IsTrueFor(ConditionFailed)
+}
+
+func SetInitialised(obj ObjectWithConditions) {
+	condition := status.Condition{
+		Type:   ConditionInitialised,
+		Status: corev1.ConditionTrue,
+	}
+
+	obj.GetConditions().SetCondition(condition)
+}
+
+func UnsetInitialised(obj ObjectWithConditions) {
+	obj.GetConditions().RemoveCondition(ConditionInitialised)
+}
+
+func IsInitialised(obj ObjectWithConditions) bool {
+	return obj.GetConditions().IsTrueFor(ConditionInitialised)
 }
 
 func DeepCopyConditions(conditions status.Conditions) status.Conditions {

@@ -46,6 +46,8 @@ spec:
               items:
                 type: string
               type: array
+            stopped:
+              type: boolean
             storageClass:
               type: string
             storageSize:

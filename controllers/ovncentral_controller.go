@@ -138,13 +138,13 @@ func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 	}
 
 	switch {
-	case server.IsFailed():
+	case util.IsFailed(server):
 		err = fmt.Errorf("Bootstrap server %s failed", server.Name)
 		if condErr := r.setFailed(ctx, instance, "BootstrapFailed", err); condErr != nil {
 			return ctrl.Result{}, condErr
 		}
 		return ctrl.Result{}, err
-	case server.IsAvailable():
+	case util.IsAvailable(server):
 		// Continue
 	default:
 		// Wait for server to become either Failed or Available

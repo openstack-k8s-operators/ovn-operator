@@ -21,8 +21,7 @@ if [ ! -f "$db" ]; then
     if [ "$BOOTSTRAP" == "true" ]; then
         ovsdb-tool create-cluster "$db" "$schema" "$raft_address"
     else
-        remotes=$(for remote in ${REMOTES}; do echo -n "tcp:$i:$raft_port "; done)
         ovsdb-tool join-cluster --cid="$CID" \
-            "$db" "$db_name" "$raft_address" $remotes
+            "$db" "$db_name" "$raft_address" $REMOTES
     fi
 fi

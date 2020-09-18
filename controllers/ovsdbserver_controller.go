@@ -65,9 +65,9 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	server := &ovncentralv1alpha1.OVSDBServer{}
 	if err = r.Client.Get(ctx, req.NamespacedName, server); err != nil {
 		if k8s_errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request. Owned
-			// objects are automatically garbage collected. For additional cleanup logic use
-			// finalizers. Return and don't requeue.
+			// Request object not found, could have been deleted after reconcile
+			// request. Owned objects are automatically garbage collected. For
+			// additional cleanup logic use finalizers. Return and don't requeue.
 			return ctrl.Result{}, nil
 		}
 		err = WrapErrorForObject("Get server", server, err)
@@ -75,36 +75,54 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	}
 
 	//
-	// Set the Available and Failed conditions to false until reconciliation completes
+	// We're Available iff the db pod is Ready
 	//
 
-	origAvailable := server.IsAvailable()
-	if origAvailable {
-		server.SetAvailable(false)
+	origAvailable := util.IsAvailable(server)
+	origInitialised := util.IsInitialised(server)
+
+	dbPod := dbPodShell(server)
+	dbPodKey, err := client.ObjectKeyFromObject(dbPod)
+	if err != nil {
+		err = WrapErrorForObject("ObjectKeyFromObject db pod", dbPod, err)
+		return ctrl.Result{}, err
 	}
-	origFailed := server.IsFailed()
-	if origFailed {
-		server.SetFailed(false, "", nil)
-	}
-
-	defer func() {
-		if server.IsAvailable() != origAvailable || server.IsFailed() != origFailed {
-			updateErr := r.Client.Status().Update(ctx, server)
-			if updateErr != nil {
-				if err == nil {
-					// Return the update error if Reconcile() isn't already
-					// returning an error
-
-					err = WrapErrorForObject("Update Status", server, updateErr)
-				} else {
-					// Otherwise log the update error and leave the original
-					// error unchanged
-
-					LogErrorForObject(r, updateErr, "Update", server)
-				}
-			}
+	if err := r.Client.Get(ctx, dbPodKey, dbPod); err != nil {
+		if k8s_errors.IsNotFound(err) {
+			util.UnsetAvailable(server)
+		} else {
+			err = WrapErrorForObject("Get db pod", dbPod, err)
+			return ctrl.Result{}, err
 		}
-	}()
+	} else {
+		if util.IsPodConditionSet(corev1.PodReady, dbPod) {
+			util.SetAvailable(server)
+			// Note that we remain Initialised even if we later become Failed or
+			// not Available
+			util.SetInitialised(server)
+		} else {
+			util.UnsetAvailable(server)
+		}
+	}
+
+	if !(origInitialised == util.IsInitialised(server) &&
+		origAvailable == util.IsAvailable(server)) {
+
+		if err := r.Client.Status().Update(ctx, server); err != nil {
+			err = WrapErrorForObject("Update Available condition", dbPod, err)
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, nil
+	}
+
+	//
+	// Unset Failed condition unless it's re-set explicitly
+	//
+
+	origConditions := util.DeepCopyConditions(server.Status.Conditions)
+	util.UnsetFailed(server)
+	defer CheckConditions(r, ctx, server, origConditions, &err)
 
 	//
 	// Ensure Service exists
@@ -153,10 +171,20 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	}
 
 	//
+	// Ensure server pod is not running if Stopped is set
+	//
+
+	if server.Spec.Stopped {
+		if err := DeleteIfExists(r, ctx, dbPod); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
+	//
 	// Ensure server pod exists
 	//
 
-	dbPod := dbPodShell(server)
 	_, err = CreateOrDelete(r, ctx, dbPod, func() error {
 		return r.dbPod(dbPod, server, pvc, serviceName)
 	})
@@ -176,17 +204,6 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 
 		// Pod initialized, status is uptodate
 	}
-
-	//
-	// Mark server available if pod is Ready
-	//
-
-	if !util.IsPodConditionSet(corev1.PodReady, dbPod) {
-		// Wait until pod is ready
-		return ctrl.Result{}, nil
-	}
-
-	server.SetAvailable(true)
 
 	// FIN
 	return ctrl.Result{}, nil
@@ -254,16 +271,22 @@ func (r *OVSDBServerReconciler) bootstrapDB(
 
 	// Set failed condition if bootstrap failed
 	if bootstrapPod.Status.Phase == corev1.PodFailed {
-		err = fmt.Errorf("Bootstrap pod %s failed. See pod logs for details",
+		err := fmt.Errorf("Bootstrap pod %s failed. See pod logs for details",
 			bootstrapPod.Name)
-		server.SetFailed(true, "BootstrapFailed", err)
+		util.SetFailed(server, ovncentralv1alpha1.OVSDBServerBootstrapFailed, err.Error())
 
-		return ctrl.Result{}, err
+		return ctrl.Result{Requeue: false}, err
 	}
 
 	if bootstrapPod.Status.Phase != corev1.PodSucceeded {
 		// Wait for bootstrap to complete
 		return ctrl.Result{}, nil
+	}
+
+	// If we created a new DB we're now initialised. If not we need to wait until we've
+	// actually started the db server and synced with another server.
+	if server.Spec.ClusterID == nil {
+		util.SetInitialised(server)
 	}
 
 	// Read DB state from the status container and update server status
@@ -542,7 +565,7 @@ func (r *OVSDBServerReconciler) bootstrapPod(
 	util.InitLabelMap(&pod.Labels)
 	setCommonLabels(server, pod.Labels)
 
-	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
+	pod.Spec.RestartPolicy = corev1.RestartPolicyOnFailure
 
 	// TODO
 	// pod.Spec.Affinity
@@ -574,7 +597,8 @@ func (r *OVSDBServerReconciler) bootstrapPod(
 		if len(server.Spec.InitPeers) == 0 {
 			err := fmt.Errorf("Unable to bootstrap server %s into cluster %s: "+
 				"no InitPeers defined", server.Name, *server.Spec.ClusterID)
-			server.SetFailed(true, "InvalidBootstrap", err)
+			util.SetFailed(server,
+				ovncentralv1alpha1.OVSDBServerBootstrapInvalid, err.Error())
 			return err
 		}
 		bootstrapEnv["REMOTES"] = util.EnvValue(strings.Join(server.Spec.InitPeers, " "))

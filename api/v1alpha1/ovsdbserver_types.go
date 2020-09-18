@@ -18,21 +18,21 @@ package v1alpha1
 
 import (
 	"github.com/operator-framework/operator-lib/status"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	OVSDBServerAvailable status.ConditionType = "Available"
-	OVSDBServerFailed    status.ConditionType = "Failed"
+	OVSDBServerBootstrapFailed  status.ConditionReason = "BootstrapFailed"
+	OVSDBServerBootstrapInvalid status.ConditionReason = "BootstrapInvalid"
 )
 
 // OVSDBServerSpec defines the desired state of OVSDBServer
 type OVSDBServerSpec struct {
+	DBType    string   `json:"dbType"`
 	ClusterID *string  `json:"clusterID,omitempty"`
 	InitPeers []string `json:"initPeers,omitempty"`
-	DBType    string   `json:"dbType"`
+	Stopped   bool     `json:"stopped,omitempty"`
 
 	Image        string            `json:"image"`
 	StorageSize  resource.Quantity `json:"storageSize"`
@@ -76,46 +76,6 @@ type OVSDBServerList struct {
 
 func init() {
 	SchemeBuilder.Register(&OVSDBServer{}, &OVSDBServerList{})
-}
-
-func conditionStatus(status bool) corev1.ConditionStatus {
-	if status {
-		return corev1.ConditionTrue
-	} else {
-		return corev1.ConditionFalse
-	}
-}
-
-func (server *OVSDBServer) SetAvailable(available bool) {
-	condition := status.Condition{
-		Type:   OVSDBServerAvailable,
-		Status: conditionStatus(available),
-	}
-
-	server.Status.Conditions.SetCondition(condition)
-}
-
-func (server *OVSDBServer) IsAvailable() bool {
-	return server.Status.Conditions.IsTrueFor(OVSDBServerAvailable)
-}
-
-func (server *OVSDBServer) SetFailed(failed bool, reason status.ConditionReason, err error) {
-	msg := ""
-	if err != nil {
-		msg = err.Error()
-	}
-	condition := status.Condition{
-		Type:    OVSDBServerFailed,
-		Status:  conditionStatus(failed),
-		Reason:  reason,
-		Message: msg,
-	}
-
-	server.Status.Conditions.SetCondition(condition)
-}
-
-func (server *OVSDBServer) IsFailed() bool {
-	return server.Status.Conditions.IsTrueFor(OVSDBServerFailed)
 }
 
 // ObjectWithConditions

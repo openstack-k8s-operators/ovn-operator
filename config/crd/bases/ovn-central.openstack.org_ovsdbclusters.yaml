@@ -40,7 +40,7 @@ spec:
               type: string
             image:
               type: string
-            replicas:
+            scale:
               type: integer
             serverStorageClass:
               type: string
@@ -53,7 +53,7 @@ spec:
           required:
           - dbType
           - image
-          - replicas
+          - scale
           - serverStorageSize
           type: object
         status:
@@ -99,6 +99,18 @@ spec:
                 required:
                 - status
                 - type
+                type: object
+              type: array
+            servers:
+              items:
+                properties:
+                  name:
+                    type: string
+                  state:
+                    type: string
+                required:
+                - name
+                - state
                 type: object
               type: array
           type: object
