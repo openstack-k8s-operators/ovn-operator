@@ -142,7 +142,7 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 	origAvailable := util.IsAvailable(cluster)
 	nClusterMembers := nAvailable + nInitialised
 	quorum := int(math.Ceil(float64(nClusterMembers) / 2))
-	if nAvailable >= quorum {
+	if nAvailable >= quorum && nAvailable > 0 {
 		util.SetAvailable(cluster)
 	} else {
 		util.UnsetAvailable(cluster)
@@ -240,11 +240,45 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 	}
 
 	//
-	// Create new servers if required
+	// Refresh all servers which are running but not currently available
 	//
+	// These aren't currently part of a quorum and may even be broken, so just update them all
+	//
+
+	updated := false
+	for _, summary := range serverSummarys {
+		if summary.State == ovncentralv1alpha1.SummaryStateAvailable {
+			continue
+		}
+
+		server, op, err := r.Server(ctx, cluster, servers.Items, summary.Name, false)
+		if err != nil {
+			err = WrapErrorForObject("Create or update server", server, err)
+			return ctrl.Result{}, err
+		}
+
+		if op != controllerutil.OperationResultNone {
+			updated = true
+		}
+	}
+	if updated {
+		return ctrl.Result{}, nil
+	}
+
+	//
+	// Add servers
+	//
+	// Only if we have a quorum
+	//
+
+	if nAvailable < quorum {
+		r.Log.Info("Waiting for quorum")
+		return ctrl.Result{}, nil
+	}
 
 	if len(serverSummarys) < cluster.Spec.Scale {
 		nextIndex := 0
+		newServerNames := make([]string, 0, cluster.Spec.Scale-len(serverSummarys))
 		for i := len(serverSummarys); i < cluster.Spec.Scale; i++ {
 			name := ""
 			for {
@@ -261,28 +295,30 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 				}
 				nextIndex++
 			}
+			newServerNames = append(newServerNames, name)
 			serverSummarys = append(serverSummarys,
 				ovncentralv1alpha1.OVSDBServerSummary{Name: name})
 		}
+
 		sort.Slice(serverSummarys, func(i, j int) bool {
 			return serverSummarys[i].Name < serverSummarys[j].Name
 		})
-	}
 
-	updated := false
-	for _, summary := range serverSummarys {
-		server, op, err := r.Server(ctx, cluster, servers.Items, summary.Name, false)
-		if err != nil {
-			err = WrapErrorForObject("Create or update server", server, err)
+		// Update server summaries before creating new servers. This will prevent
+		// concurrent runs of this reconciler from creating conflicting plans.
+		cluster.Status.Servers = serverSummarys
+		if err := r.Client.Status().Update(ctx, cluster); err != nil {
+			err = WrapErrorForObject("Update status to add servers", cluster, err)
 			return ctrl.Result{}, err
 		}
 
-		if op != controllerutil.OperationResultNone {
-			updated = true
+		for _, name := range newServerNames {
+			_, _, err := r.Server(ctx, cluster, servers.Items, name, false)
+			if err != nil {
+				return ctrl.Result{}, nil
+			}
 		}
-	}
 
-	if updated {
 		return ctrl.Result{}, nil
 	}
 
