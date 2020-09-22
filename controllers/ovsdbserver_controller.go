@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -174,7 +173,7 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	//
 
 	if server.Status.ClusterID == nil {
-		return r.bootstrapDB(ctx, server, serviceName, pvc)
+		return r.bootstrapDB(ctx, server)
 	}
 
 	//
@@ -202,7 +201,7 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	//
 
 	_, err = CreateOrDelete(r, ctx, dbPod, func() error {
-		return r.dbPod(dbPod, server, pvc, serviceName)
+		return r.dbPodApply(dbPod, server)
 	})
 
 	//
@@ -234,13 +233,20 @@ func (r *OVSDBServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+func (r *OVSDBServerReconciler) finalizer(
+	ctx context.Context,
+	server *ovncentralv1alpha1.OVSDBServer) (ctrl.Result, error) {
+
+	return ctrl.Result{}, nil
+}
+
 func (r *OVSDBServerReconciler) updateDBStatus(
 	ctx context.Context,
 	server *ovncentralv1alpha1.OVSDBServer,
 	pod *corev1.Pod,
-	container string) (bool, error) {
+	statusContainerName string) (bool, error) {
 
-	logReader, err := util.GetLogStream(ctx, pod, container, 1024)
+	logReader, err := util.GetLogStream(ctx, pod, statusContainerName, 1024)
 	if err != nil {
 		return false, err
 	}
@@ -252,7 +258,7 @@ func (r *OVSDBServerReconciler) updateDBStatus(
 	if err != nil {
 		return false,
 			fmt.Errorf("Decode database status from container %s in pod/%s logs: %w",
-				container, pod.Name, err)
+				statusContainerName, pod.Name, err)
 	}
 
 	if !equality.Semantic.DeepDerivative(dbStatus, &server.Status.DatabaseStatus) {
@@ -270,8 +276,7 @@ func (r *OVSDBServerReconciler) updateDBStatus(
 }
 
 func (r *OVSDBServerReconciler) bootstrapDB(
-	ctx context.Context, server *ovncentralv1alpha1.OVSDBServer,
-	serviceName string, pvc *corev1.PersistentVolumeClaim) (ctrl.Result, error) {
+	ctx context.Context, server *ovncentralv1alpha1.OVSDBServer) (ctrl.Result, error) {
 
 	// Ensure the DB pod isn't running
 	dbPod := dbPodShell(server)
@@ -282,7 +287,7 @@ func (r *OVSDBServerReconciler) bootstrapDB(
 	// Ensure the bootstrap pod is running
 	bootstrapPod := bootstrapPodShell(server)
 	_, err := CreateOrDelete(r, ctx, bootstrapPod, func() error {
-		return r.bootstrapPod(bootstrapPod, server, pvc, serviceName)
+		return r.bootstrapPodApply(bootstrapPod, server)
 	})
 
 	// Set failed condition if bootstrap failed
@@ -418,17 +423,17 @@ const (
 	runVolumeName   = "pod-run"
 	dataVolumeName  = "data"
 
-	ovsDBDir  = "/var/lib/openvswitch"
-	ovsRunDir = "/pod-run"
+	ovnDBDir  = "/var/lib/openvswitch"
+	ovnRunDir = "/ovn-run"
 
 	dbStatusContainerName = "dbstatus"
 )
 
-func dbPodVolumes(volumes *[]corev1.Volume, pvc *corev1.PersistentVolumeClaim) {
+func dbPodVolumes(volumes *[]corev1.Volume, server *ovncentralv1alpha1.OVSDBServer) {
 	for _, vol := range []corev1.Volume{
 		{Name: dataVolumeName, VolumeSource: corev1.VolumeSource{
 			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-				ClaimName: pvc.Name}},
+				ClaimName: *server.Status.PVCName}},
 		},
 		{Name: runVolumeName, VolumeSource: util.EmptyDirVol()},
 		{Name: hostsVolumeName, VolumeSource: util.EmptyDirVol()},
@@ -447,18 +452,27 @@ func dbPodVolumes(volumes *[]corev1.Volume, pvc *corev1.PersistentVolumeClaim) {
 	}
 }
 
-func dbPodVolumeMounts(mounts []corev1.VolumeMount) []corev1.VolumeMount {
+func dbContainerVolumeMounts(mounts []corev1.VolumeMount) []corev1.VolumeMount {
 	return util.MergeVolumeMounts(mounts, util.MountSetterMap{
 		hostsVolumeName: util.VolumeMountWithSubpath("/etc/hosts", "hosts"),
-		runVolumeName:   util.VolumeMount(ovsRunDir),
-		dataVolumeName:  util.VolumeMount(ovsDBDir),
+		runVolumeName:   util.VolumeMount(ovnRunDir),
+		dataVolumeName:  util.VolumeMount(ovnDBDir),
+	})
+}
+
+func dbContainerEnv(envs []corev1.EnvVar, server *ovncentralv1alpha1.OVSDBServer) []corev1.EnvVar {
+	return util.MergeEnvs(envs, util.EnvSetterMap{
+		"DB_TYPE":       util.EnvValue(server.Spec.DBType),
+		"SERVER_NAME":   util.EnvValue(*server.Status.ServiceName),
+		"OVN_DBDIR":     util.EnvValue(ovnDBDir),
+		"OVN_RUNDIR":    util.EnvValue(ovnRunDir),
+		"OVN_LOG_LEVEL": util.EnvValue("info"),
 	})
 }
 
 // Define a local entry for the service in /hosts pointing to the pod IP. This
 // allows ovsdb-server to bind to the 'service ip' on startup.
-func hostsInitContainer(container *corev1.Container, server *ovncentralv1alpha1.OVSDBServer,
-	serviceName string) {
+func hostsInitContainerApply(container *corev1.Container, server *ovncentralv1alpha1.OVSDBServer) {
 
 	const hostsTmpMount = "/hosts-new"
 	container.Name = "override-local-service-ip"
@@ -474,7 +488,7 @@ func hostsInitContainer(container *corev1.Container, server *ovncentralv1alpha1.
 	})
 	container.Env = util.MergeEnvs(container.Env, util.EnvSetterMap{
 		"POD_IP":       util.EnvDownwardAPI("status.podIP"),
-		"SERVER_NAME":  util.EnvValue(serviceName),
+		"SERVER_NAME":  util.EnvValue(*server.Status.ServiceName),
 		"HOSTS_VOLUME": util.EnvValue(hostsTmpMount),
 	})
 
@@ -483,21 +497,15 @@ func hostsInitContainer(container *corev1.Container, server *ovncentralv1alpha1.
 	container.ImagePullPolicy = corev1.PullAlways
 }
 
-func dbStatusContainer(
+func dbStatusContainerApply(
 	container *corev1.Container,
-	server *ovncentralv1alpha1.OVSDBServer,
-	serviceName string) {
+	server *ovncentralv1alpha1.OVSDBServer) {
 
 	container.Name = dbStatusContainerName
 	container.Image = server.Spec.Image
 	container.Command = []string{"/dbstatus"}
-	container.VolumeMounts = dbPodVolumeMounts(container.VolumeMounts)
-	container.Env = util.MergeEnvs(container.Env, util.EnvSetterMap{
-		"DB_TYPE":     util.EnvValue(server.Spec.DBType),
-		"SERVER_NAME": util.EnvValue(serviceName),
-		"OVS_DBDIR":   util.EnvValue(ovsDBDir),
-		"OVS_RUNDIR":  util.EnvValue(ovsRunDir),
-	})
+	container.VolumeMounts = dbContainerVolumeMounts(container.VolumeMounts)
+	container.Env = dbContainerEnv(container.Env, server)
 }
 
 func dbPodShell(server *ovncentralv1alpha1.OVSDBServer) *corev1.Pod {
@@ -508,11 +516,9 @@ func dbPodShell(server *ovncentralv1alpha1.OVSDBServer) *corev1.Pod {
 	return pod
 }
 
-func (r *OVSDBServerReconciler) dbPod(
+func (r *OVSDBServerReconciler) dbPodApply(
 	pod *corev1.Pod,
-	server *ovncentralv1alpha1.OVSDBServer,
-	pvc *corev1.PersistentVolumeClaim,
-	serviceName string) error {
+	server *ovncentralv1alpha1.OVSDBServer) error {
 
 	util.InitLabelMap(&pod.Labels)
 	setCommonLabels(server, pod.Labels)
@@ -522,13 +528,13 @@ func (r *OVSDBServerReconciler) dbPod(
 	// TODO
 	// pod.Spec.Affinity
 
-	dbPodVolumes(&pod.Spec.Volumes, pvc)
+	dbPodVolumes(&pod.Spec.Volumes, server)
 
 	if len(pod.Spec.InitContainers) != 2 {
 		pod.Spec.InitContainers = make([]corev1.Container, 2)
 	}
-	hostsInitContainer(&pod.Spec.InitContainers[0], server, serviceName)
-	dbStatusContainer(&pod.Spec.InitContainers[1], server, serviceName)
+	hostsInitContainerApply(&pod.Spec.InitContainers[0], server)
+	dbStatusContainerApply(&pod.Spec.InitContainers[1], server)
 
 	if len(pod.Spec.Containers) != 1 {
 		pod.Spec.Containers = make([]corev1.Container, 1)
@@ -537,14 +543,9 @@ func (r *OVSDBServerReconciler) dbPod(
 	dbContainer := &pod.Spec.Containers[0]
 	dbContainer.Name = "ovsdb-server"
 	dbContainer.Image = server.Spec.Image
-	dbContainer.VolumeMounts = dbPodVolumeMounts(dbContainer.VolumeMounts)
-	dbContainer.Env = util.MergeEnvs(dbContainer.Env, util.EnvSetterMap{
-		"DB_TYPE":       util.EnvValue(server.Spec.DBType),
-		"SERVER_NAME":   util.EnvValue(serviceName),
-		"OVS_DBDIR":     util.EnvValue(ovsDBDir),
-		"OVS_RUNDIR":    util.EnvValue(ovsRunDir),
-		"OVN_LOG_LEVEL": util.EnvValue("info"),
-	})
+	dbContainer.Command = []string{"/dbserver"}
+	dbContainer.VolumeMounts = dbContainerVolumeMounts(dbContainer.VolumeMounts)
+	dbContainer.Env = dbContainerEnv(dbContainer.Env, server)
 
 	dbContainer.ReadinessProbe = util.ExecProbe("/is_ready")
 	dbContainer.ReadinessProbe.PeriodSeconds = 10
@@ -572,11 +573,9 @@ func bootstrapPodShell(server *ovncentralv1alpha1.OVSDBServer) *corev1.Pod {
 	return pod
 }
 
-func (r *OVSDBServerReconciler) bootstrapPod(
+func (r *OVSDBServerReconciler) bootstrapPodApply(
 	pod *corev1.Pod,
-	server *ovncentralv1alpha1.OVSDBServer,
-	pvc *corev1.PersistentVolumeClaim,
-	serviceName string) error {
+	server *ovncentralv1alpha1.OVSDBServer) error {
 
 	util.InitLabelMap(&pod.Labels)
 	setCommonLabels(server, pod.Labels)
@@ -588,27 +587,20 @@ func (r *OVSDBServerReconciler) bootstrapPod(
 	// We should ensure the bootstrap pod has the same affinity as the db
 	// pod to better support late binding PVCs.
 
-	dbPodVolumes(&pod.Spec.Volumes, pvc)
+	dbPodVolumes(&pod.Spec.Volumes, server)
 
 	if len(pod.Spec.InitContainers) != 2 {
 		pod.Spec.InitContainers = make([]corev1.Container, 2)
 	}
-	hostsInitContainer(&pod.Spec.InitContainers[0], server, serviceName)
+	hostsInitContainerApply(&pod.Spec.InitContainers[0], server)
 	dbInitContainer := &pod.Spec.InitContainers[1]
 	dbInitContainer.Name = "dbinit"
 	dbInitContainer.Image = server.Spec.Image
-	dbInitContainer.Command = []string{"/dbinit"}
-	dbInitContainer.VolumeMounts = dbPodVolumeMounts(dbInitContainer.VolumeMounts)
-
-	bootstrapEnv := util.EnvSetterMap{
-		"DB_TYPE":     util.EnvValue(server.Spec.DBType),
-		"SERVER_NAME": util.EnvValue(serviceName),
-		"OVS_DBDIR":   util.EnvValue(ovsDBDir),
-		"OVS_RUNDIR":  util.EnvValue(ovsRunDir),
-	}
+	dbInitContainer.VolumeMounts = dbContainerVolumeMounts(dbInitContainer.VolumeMounts)
+	dbInitContainer.Env = dbContainerEnv(dbInitContainer.Env, server)
 
 	if server.Spec.ClusterID == nil {
-		bootstrapEnv["BOOTSTRAP"] = util.EnvValue("true")
+		dbInitContainer.Command = []string{"/cluster-create"}
 	} else {
 		if len(server.Spec.InitPeers) == 0 {
 			err := fmt.Errorf("Unable to bootstrap server %s into cluster %s: "+
@@ -617,16 +609,14 @@ func (r *OVSDBServerReconciler) bootstrapPod(
 				ovncentralv1alpha1.OVSDBServerBootstrapInvalid, err.Error())
 			return err
 		}
-		bootstrapEnv["REMOTES"] = util.EnvValue(strings.Join(server.Spec.InitPeers, " "))
-		bootstrapEnv["CID"] = util.EnvValue(*server.Spec.ClusterID)
+		dbInitContainer.Command = []string{"/cluster-join", *server.Spec.ClusterID}
+		dbInitContainer.Command = append(dbInitContainer.Command, server.Spec.InitPeers...)
 	}
-
-	dbInitContainer.Env = util.MergeEnvs(dbInitContainer.Env, bootstrapEnv)
 
 	if len(pod.Spec.Containers) != 1 {
 		pod.Spec.Containers = make([]corev1.Container, 1)
 	}
-	dbStatusContainer(&pod.Spec.Containers[0], server, serviceName)
+	dbStatusContainerApply(&pod.Spec.Containers[0], server)
 
 	controllerutil.SetControllerReference(server, pod, r.Scheme)
 
