@@ -40,9 +40,9 @@ type ReconcilerCommon interface {
 }
 
 func WrapErrorForObject(msg string, object runtime.Object, err error) error {
-	key, err := client.ObjectKeyFromObject(object)
-	if err != nil {
-		return fmt.Errorf("ObjectKeyFromObject: %v", object)
+	key, keyErr := client.ObjectKeyFromObject(object)
+	if keyErr != nil {
+		return fmt.Errorf("ObjectKeyFromObject %v: %w", object, keyErr)
 	}
 
 	return fmt.Errorf("%s %T %v: %w",
