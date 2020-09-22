@@ -50,6 +50,8 @@ type DatabaseStatus struct {
 // OVSDBServerStatus defines the observed state of OVSDBServer
 type OVSDBServerStatus struct {
 	DatabaseStatus `json:"databaseStatus,omitempty"`
+	ServiceName    *string           `json:"serviceName,omitempty"`
+	PVCName        *string           `json:"pvcName,omitempty"`
 	Conditions     status.Conditions `json:"conditions,omitempty"`
 }
 

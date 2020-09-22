@@ -138,6 +138,14 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 		return ctrl.Result{}, nil
 	}
 	serviceName := fmt.Sprintf("%s.%s.svc.cluster.local", service.Name, service.Namespace)
+	if server.Status.ServiceName == nil || *server.Status.ServiceName != serviceName {
+		server.Status.ServiceName = &serviceName
+		if err := r.Client.Status().Update(ctx, server); err != nil {
+			err = WrapErrorForObject("Update service name in status", server, err)
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
 
 	//
 	// Ensure PVC exists
@@ -150,6 +158,14 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	if op != controllerutil.OperationResultNone {
 		LogForObject(r, string(op), pvc)
 		// Modified a watched object. Wait for reconcile.
+		return ctrl.Result{}, nil
+	}
+	if server.Status.PVCName == nil || *server.Status.PVCName != pvc.Name {
+		server.Status.PVCName = &pvc.Name
+		if err := r.Client.Status().Update(ctx, server); err != nil {
+			err = WrapErrorForObject("Update PVC name in status", server, err)
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, nil
 	}
 

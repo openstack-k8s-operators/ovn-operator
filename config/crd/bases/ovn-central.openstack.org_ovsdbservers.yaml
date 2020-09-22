@@ -117,6 +117,10 @@ spec:
                 serverID:
                   type: string
               type: object
+            pvcName:
+              type: string
+            serviceName:
+              type: string
           type: object
       type: object
   version: v1alpha1
