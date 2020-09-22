@@ -9,7 +9,7 @@ COPY fdp.repo /etc/yum.repos.d/fdp.repo
 RUN dnf -y install \
     ${brew}/${pkg}/${version}/${release}/noarch/${pkg}-${version}-${release}.noarch.rpm \
     ${brew}/${pkg}/${version}/${release}/noarch/${pkg}-ovn-central-${version}-${release}.noarch.rpm \
-    /usr/bin/jq && dnf -y clean all
+    jq && dnf -y clean all
 
 # We explicitly disable log output to file, but nevertheless we fail to startup
 # if the files don't exist.

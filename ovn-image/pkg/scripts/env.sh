@@ -1,17 +1,17 @@
 #!/bin/bash
 
 if [ "${DB_TYPE}" == "NB" ]; then
-    db="${OVS_DBDIR}/ovnnb_db.db"
+    db="${OVN_DBDIR}/ovnnb_db.db"
     db_name="OVN_Northbound"
-    db_sock=${OVS_RUNDIR}/ovnnb_db.sock
+    db_sock=${OVN_RUNDIR}/ovnnb_db.sock
     db_port=6641
     raft_port=6643
     db_global_table=NB_Global
     schema="/usr/share/openvswitch/ovn-nb.ovsschema"
 elif [ "${DB_TYPE}" == "SB" ]; then
-    db="${OVS_DBDIR}/ovnsb_db.db"
+    db="${OVN_DBDIR}/ovnsb_db.db"
     db_name="OVN_Southbound"
-    db_sock=${OVS_RUNDIR}/ovnsb_db.sock
+    db_sock=${OVN_RUNDIR}/ovnsb_db.sock
     db_port=6642
     raft_port=6644
     db_global_table=SB_Global
@@ -29,5 +29,7 @@ fi
 raft_address=tcp:${SERVER_NAME}:$raft_port
 ovn_ctl=/usr/share/openvswitch/scripts/ovn-ctl
 
-OVS_DBDIR=${OVS_DBDIR:-$OVN_DBDIR}
-OVS_RUNDIR=${OVS_RUNDIR:-$OVN_RUNDIR}
+# These environment variables changed name at some point. OVN_* is the new name, but this version
+# uses OVS_*.
+export OVS_DBDIR=${OVN_DBDIR}
+export OVS_RUNDIR=${OVN_RUNDIR}

@@ -1,5 +1,8 @@
 #!/bin/bash
+
 set -xe -o pipefail
+
+. /env.sh
 
 # XXX: Add SSL. service-ca generated certs don't seem to work here.
 #--ovn-nb-db-ssl-key=
