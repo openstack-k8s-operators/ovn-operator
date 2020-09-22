@@ -20,3 +20,14 @@ else
     echo "Unknown DB_TYPE: ${DB_TYPE}" >&2
     exit 1
 fi
+
+if [ -z "${SERVER_NAME}" ]; then
+	echo "SERVER_NAME is not set" >&2
+	exit 1
+fi
+
+raft_address=tcp:${SERVER_NAME}:$raft_port
+ovn_ctl=/usr/share/openvswitch/scripts/ovn-ctl
+
+OVS_DBDIR=${OVS_DBDIR:-$OVN_DBDIR}
+OVS_RUNDIR=${OVS_RUNDIR:-$OVN_RUNDIR}

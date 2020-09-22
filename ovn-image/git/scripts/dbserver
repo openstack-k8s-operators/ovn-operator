@@ -1,5 +1,8 @@
 #!/bin/bash
+
 set -xe -o pipefail
+
+. /env.sh
 
 # XXX: Add SSL. service-ca generated certs don't seem to work here.
 #--ovn-nb-db-ssl-key=
@@ -8,7 +11,7 @@ set -xe -o pipefail
 #--db-nb-cluster-local-proto=ssl
 
 if [ "${DB_TYPE}" == "NB" ]; then
-  exec /usr/share/openvswitch/scripts/ovn-ctl \
+  exec ${ovn_ctl} \
     --no-monitor \
     --db-nb-create-insecure-remote=yes \
     --db-nb-cluster-local-addr="${SERVER_NAME}" \
@@ -17,7 +20,7 @@ if [ "${DB_TYPE}" == "NB" ]; then
     run_nb_ovsdb
 
 elif [ "${DB_TYPE}" == "SB" ]; then
-  exec /usr/share/openvswitch/scripts/ovn-ctl \
+  exec ${ovn_ctl} \
     --no-monitor \
     --db-sb-create-insecure-remote=yes \
     --db-sb-cluster-local-addr="${SERVER_NAME}" \

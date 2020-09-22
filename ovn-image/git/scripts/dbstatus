@@ -2,7 +2,7 @@
 
 set -e -o pipefail
 
-. /dbtype.sh
+. /env.sh
 
 cid=$(ovsdb-tool db-cid "$db")
 name=$(ovsdb-tool db-name "$db")

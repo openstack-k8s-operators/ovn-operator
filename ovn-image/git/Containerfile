@@ -1,0 +1,55 @@
+FROM centos:centos8 AS builder
+
+RUN dnf install -y git gcc unbound-devel openssl-devel libcap-ng-devel \
+	autoconf automake libtool make python3
+
+ARG OVSREPO=https://github.com/openvswitch/ovs.git
+ARG OVSBRANCH=master
+ARG OVNREPO=https://github.com/openvswitch/ovn.git
+ARG OVNBRANCH=master
+
+VOLUME ["/gitcache"]
+
+WORKDIR /root
+RUN git clone --reference-if-able /gitcache/ovs.git $OVSREPO -b $OVSBRANCH
+RUN git clone --reference-if-able /gitcache/ovn.git $OVNREPO -b $OVNBRANCH
+
+WORKDIR /root/ovs
+RUN ./boot.sh && \
+    ./configure --prefix=/opt --localstatedir=/var --sysconfdir=/etc CFLAGS="-g -O2" && \
+    make -j4 && \
+    make install
+
+WORKDIR /root/ovn
+RUN ./boot.sh && \
+    ./configure --prefix=/opt --localstatedir=/var --sysconfdir=/etc CFLAGS="-g -O2" \
+        --with-ovs-source=/root/ovs && \
+    make -j4 && \
+    make install
+
+WORKDIR /root
+
+FROM centos:centos8
+
+RUN dnf install -y unbound openssl libcap-ng /usr/bin/jq && dnf clean all
+
+# We explicitly disable log output to file, but nevertheless we fail to startup
+# if the files don't exist.
+RUN /bin/bash -c 'mkdir -p /var/log/ovn; \
+                  touch /var/log/ovn/ovsdb-server-{n,s}b.log; \
+                  chown -R 1000:1000 /var/log/ovn'
+
+RUN /bin/bash -c 'mkdir -p /var/lib/openvswitch; \
+		  chown -R 1000:1000 /var/lib/openvswitch'
+
+RUN /bin/bash -c 'mkdir -p /etc/ovn; \
+                  chown -R 1000:1000 /etc/ovn'
+
+COPY --from=builder /opt /opt
+COPY scripts/* /
+
+VOLUME ["/var/lib/openvswitch", "/ovn-run"]
+
+USER 1000:1000
+
+ENTRYPOINT ["/entrypoint"]

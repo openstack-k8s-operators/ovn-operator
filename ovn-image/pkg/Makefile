@@ -1,0 +1,11 @@
+TAG=2.11-dev
+
+default: build
+
+.PHONY: build
+build:
+	buildah bud --layers -t ovn-central:$(TAG)
+
+.PHONY: push
+push:
+	buildah push ovn-central:$(TAG) quay.io/mbooth/ovn-central:$(TAG)

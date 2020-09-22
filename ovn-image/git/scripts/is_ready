@@ -1,6 +1,6 @@
 #!/bin/bash
 
-. /dbtype.sh
+. /env.sh
 
 # Should change this to cluster/status -> Status: "cluster member"
 exec ovsdb-client wait "unix:${db_sock}" "${db_name}" connected
