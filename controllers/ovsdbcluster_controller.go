@@ -97,6 +97,15 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 		return servers[i].Name < servers[j].Name
 	})
 
+	findServer := func(name string) *ovncentralv1alpha1.OVSDBServer {
+		for _, server := range servers {
+			if server.Name == name {
+				return &server
+			}
+		}
+		return nil
+	}
+
 	//
 	// We're Available iff a quorum of servers are Available
 	//
@@ -223,17 +232,6 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 	//
 	// Check in progress operations
 	//
-
-	findServer := func(name string) *ovncentralv1alpha1.OVSDBServer {
-		n := sort.Search(len(servers), func(i int) bool {
-			return servers[i].Name >= name
-		})
-
-		if n == len(servers) {
-			return nil
-		}
-		return &servers[n]
-	}
 
 	var inProgress []ovncentralv1alpha1.OVSDBServerOperation
 	for _, operation := range cluster.Status.Operations {
