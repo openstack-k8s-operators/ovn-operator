@@ -24,10 +24,11 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/operator-framework/operator-lib/status"
 	"k8s.io/apimachinery/pkg/api/equality"
-	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -70,6 +71,19 @@ func LogErrorForObject(r ReconcilerCommon,
 	r.GetLogger().Error(err, msg, params...)
 }
 
+func UpdateStatus(r ReconcilerCommon,
+	ctx context.Context,
+	object runtime.Object,
+	errMsg string,
+	params ...interface{}) (ctrl.Result, error) {
+
+	if err := r.GetClient().Status().Update(ctx, object); err != nil {
+		err = WrapErrorForObject(errMsg, object, err)
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, nil
+}
+
 func DeleteIfExists(r ReconcilerCommon,
 	ctx context.Context, obj runtime.Object) error {
 
@@ -81,7 +95,7 @@ func DeleteIfExists(r ReconcilerCommon,
 
 	err = r.GetClient().Get(ctx, key, obj)
 	if err != nil {
-		if k8s_errors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			return nil
 		}
 		err = WrapErrorForObject("Get", obj, err)
@@ -99,6 +113,35 @@ func DeleteIfExists(r ReconcilerCommon,
 	return nil
 }
 
+func NeedsUpdate(
+	r ReconcilerCommon,
+	ctx context.Context,
+	obj runtime.Object,
+	f controllerutil.MutateFn) (bool, error) {
+
+	key, err := client.ObjectKeyFromObject(obj)
+	if err != nil {
+		err = WrapErrorForObject("ObjectKeyFromObject", obj, err)
+		return false, err
+	}
+
+	if err := r.GetClient().Get(ctx, key, obj); err != nil {
+		if errors.IsNotFound(err) {
+			return true, nil
+		} else {
+			err = WrapErrorForObject("Get", obj, err)
+			return false, err
+		}
+	}
+
+	existing := obj.DeepCopyObject()
+	if err := f(); err != nil {
+		return false, err
+	}
+
+	return !equality.Semantic.DeepEqual(existing, obj), nil
+}
+
 func CreateOrDelete(
 	r ReconcilerCommon,
 	ctx context.Context,
@@ -112,7 +155,7 @@ func CreateOrDelete(
 	}
 
 	if err := r.GetClient().Get(ctx, key, obj); err != nil {
-		if k8s_errors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			if err := f(); err != nil {
 				err = WrapErrorForObject("Initialise", obj, err)
 				return controllerutil.OperationResultNone, err

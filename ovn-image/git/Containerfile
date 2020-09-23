@@ -31,7 +31,7 @@ WORKDIR /root
 
 FROM centos:centos8
 
-RUN dnf install -y unbound openssl libcap-ng /usr/bin/jq && dnf clean all
+RUN dnf install -y unbound openssl libcap-ng jq && dnf clean all
 
 # We explicitly disable log output to file, but nevertheless we fail to startup
 # if the files don't exist.

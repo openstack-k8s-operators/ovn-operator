@@ -24,7 +24,7 @@ import (
 	"github.com/operator-framework/operator-lib/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -64,7 +64,7 @@ func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 	instance := &ovncentralv1alpha1.OVNCentral{}
 	err := r.Client.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
-		if k8s_errors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile
 			// request.  Owned objects are automatically garbage collected.  For
 			// additional cleanup logic use finalizers. Return and don't requeue.
@@ -100,7 +100,7 @@ func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 			types.NamespacedName{Name: server.Name, Namespace: server.Namespace},
 			fetched)
 		if err != nil {
-			if k8s_errors.IsNotFound(err) {
+			if errors.IsNotFound(err) {
 				err = r.Client.Create(ctx, server)
 				if err != nil {
 					err = WrapErrorForObject("Create", server, err)

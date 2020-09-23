@@ -24,7 +24,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/equality"
-	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -68,7 +68,7 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 
 	cluster := &ovncentralv1alpha1.OVSDBCluster{}
 	if err := r.Client.Get(ctx, req.NamespacedName, cluster); err != nil {
-		if k8s_errors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after
 			// reconcile request. Owned objects are automatically garbage
 			// collected. For additional cleanup logic use finalizers.
@@ -83,77 +83,58 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 	// Get a list of the OVSDBServers we manage
 	//
 
-	servers := &ovncentralv1alpha1.OVSDBServerList{}
+	serverList := &ovncentralv1alpha1.OVSDBServerList{}
 	serverListOpts := &client.ListOptions{Namespace: cluster.Namespace}
 	client.MatchingLabels{
 		clusterLabel: cluster.Name,
 	}.ApplyToList(serverListOpts)
-	if err := r.Client.List(ctx, servers, serverListOpts); err != nil {
+	if err := r.Client.List(ctx, serverList, serverListOpts); err != nil {
 		err = fmt.Errorf("Error listing servers for cluster %s: %w", cluster.Name, err)
 		return ctrl.Result{}, err
 	}
-	sort.Slice(servers.Items, func(i, j int) bool {
-		return servers.Items[i].Name < servers.Items[j].Name
+	servers := serverList.Items
+	sort.Slice(servers, func(i, j int) bool {
+		return servers[i].Name < servers[j].Name
 	})
-
-	//
-	// Update server availability in status
-	//
-	// This is important for concurrency. By doing this we know that if we ever execute this
-	// reconcile concurrently, all continuing threads will have the same view of available and
-	// unavailable servers, and will therefore make the same scale up/down decisions. This is
-	// defensive, as we do not intend this reconcile loop to be executed concurrently.
-	//
-
-	var nAvailable, nInitialised int
-	serverSummarys := make([]ovncentralv1alpha1.OVSDBServerSummary, 0, len(servers.Items))
-	for _, server := range servers.Items {
-		var state ovncentralv1alpha1.OVSDBServerSummaryState
-		if util.IsAvailable(&server) {
-			state = ovncentralv1alpha1.SummaryStateAvailable
-			nAvailable++
-		} else if util.IsInitialised(&server) {
-			state = ovncentralv1alpha1.SummaryStateInitialised
-			nInitialised++
-		}
-
-		serverSummarys = append(serverSummarys, ovncentralv1alpha1.OVSDBServerSummary{
-			Name:  server.Name,
-			State: state,
-		})
-	}
-
-	if !equality.Semantic.DeepEqual(serverSummarys, cluster.Status.Servers) {
-		cluster.Status.Servers = serverSummarys
-		if err := r.Client.Status().Update(ctx, cluster); err != nil {
-			err = WrapErrorForObject("Update Status.Servers", cluster, err)
-			return ctrl.Result{}, err
-		}
-
-		return ctrl.Result{}, nil
-	}
 
 	//
 	// We're Available iff a quorum of servers are Available
 	//
-	// Quorum is based on the number of servers which currently exist, not the target scale
+	// Quorum is based on the number of servers which have been initialised into the cluster,
+	// not the target number of replicas.
 	//
 
+	var nAvailable, nInitialised int
+	for _, server := range servers {
+		if util.IsAvailable(&server) {
+			nAvailable++
+		} else if util.IsInitialised(&server) {
+			nInitialised++
+		}
+	}
+
+	clusterSize := nAvailable + nInitialised
+	clusterQuorum := int(math.Ceil(float64(clusterSize) / 2))
+
+	if cluster.Status.AvailableServers != nAvailable ||
+		cluster.Status.ClusterSize != clusterSize ||
+		cluster.Status.ClusterQuorum != clusterQuorum {
+
+		cluster.Status.AvailableServers = nAvailable
+		cluster.Status.ClusterSize = clusterSize
+		cluster.Status.ClusterQuorum = clusterQuorum
+
+		return UpdateStatus(r, ctx, cluster, "Update cluster stats in status")
+	}
+
 	origAvailable := util.IsAvailable(cluster)
-	nClusterMembers := nAvailable + nInitialised
-	quorum := int(math.Ceil(float64(nClusterMembers) / 2))
-	if nAvailable >= quorum && nAvailable > 0 {
+	if nAvailable >= clusterQuorum && nAvailable > 0 {
 		util.SetAvailable(cluster)
 	} else {
 		util.UnsetAvailable(cluster)
 	}
 	if origAvailable != util.IsAvailable(cluster) {
-		if err := r.Client.Status().Update(ctx, cluster); err != nil {
-			err = WrapErrorForObject("Update Available condition", cluster, err)
-			return ctrl.Result{}, err
-		}
-
-		return ctrl.Result{}, nil
+		return UpdateStatus(r, ctx, cluster, "Update Available condition")
 	}
 
 	//
@@ -169,7 +150,7 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 	//
 
 	clusterIDUpdated := false
-	for _, server := range servers.Items {
+	for _, server := range servers {
 		if cluster.Status.ClusterID == nil {
 			cluster.Status.ClusterID = server.Status.ClusterID
 			clusterIDUpdated = true
@@ -182,35 +163,35 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 				util.SetFailed(
 					cluster,
 					ovncentralv1alpha1.OVSDBClusterInconsistent, err.Error())
-				return ctrl.Result{Requeue: false}, err
+				return ctrl.Result{}, err
 			}
 
 		}
 	}
 	if clusterIDUpdated {
-		if err := r.Client.Status().Update(ctx, cluster); err != nil {
-			err = WrapErrorForObject("Set ClusterID", cluster, err)
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
+		return UpdateStatus(r, ctx, cluster, "Set ClusterID")
 	}
 
 	//
 	// Bootstrap the cluster if necessary
 	//
 
-	if len(servers.Items) == 0 {
+	if len(servers) == 0 {
 		if cluster.Status.ClusterID != nil {
 			err := fmt.Errorf("Cannot re-bootstrap a previously initialised " +
 				"cluster with no remaining servers")
 			util.SetFailed(cluster,
 				ovncentralv1alpha1.OVSDBClusterInvalid, err.Error())
-			return ctrl.Result{Requeue: false}, err
+			return ctrl.Result{}, err
 		}
 
 		bootstrapServerName := serverNameForIndex(cluster, 0)
 
-		_, _, err := r.Server(ctx, cluster, servers.Items, bootstrapServerName, true)
+		bootstrapServer := serverShell(cluster, bootstrapServerName)
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, bootstrapServer,
+			func() error {
+				return r.serverApply(cluster, bootstrapServer, servers, true)
+			})
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -222,7 +203,7 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 	if cluster.Status.ClusterID == nil {
 		// It's never going to complete if the bootstrap server failed
 		progressing := false
-		for _, server := range servers.Items {
+		for _, server := range servers {
 			if !util.IsFailed(&server) {
 				progressing = true
 				break
@@ -230,39 +211,116 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 		}
 		if !progressing {
 			err := fmt.Errorf("Cluster bootstrapping failed. "+
-				"See ovsdbserver/%s for details", servers.Items[0].Name)
+				"See ovsdbserver/%s for details", servers[0].Name)
 			util.SetFailed(cluster,
 				ovncentralv1alpha1.OVSDBClusterBootstrap, err.Error())
-			return ctrl.Result{Requeue: false}, err
-		}
-
-		return ctrl.Result{}, nil
-	}
-
-	//
-	// Refresh all servers which are running but not currently available
-	//
-	// These aren't currently part of a quorum and may even be broken, so just update them all
-	//
-
-	updated := false
-	for _, summary := range serverSummarys {
-		if summary.State == ovncentralv1alpha1.SummaryStateAvailable {
-			continue
-		}
-
-		server, op, err := r.Server(ctx, cluster, servers.Items, summary.Name, false)
-		if err != nil {
-			err = WrapErrorForObject("Create or update server", server, err)
 			return ctrl.Result{}, err
 		}
 
-		if op != controllerutil.OperationResultNone {
-			updated = true
+		return ctrl.Result{}, nil
+	}
+
+	//
+	// Check in progress operations
+	//
+
+	findServer := func(name string) *ovncentralv1alpha1.OVSDBServer {
+		n := sort.Search(len(servers), func(i int) bool {
+			return servers[i].Name >= name
+		})
+
+		if n == len(servers) {
+			return nil
+		}
+		return &servers[n]
+	}
+
+	var inProgress []ovncentralv1alpha1.OVSDBServerOperation
+	for _, operation := range cluster.Status.Operations {
+		server := findServer(operation.Name)
+		if operation.Terminate {
+			if server == nil {
+				r.Log.Info("Observed deletion of server", "server", operation.Name)
+			} else if server.DeletionTimestamp == nil {
+				if err := r.Client.Delete(ctx, server); err != nil {
+					err = WrapErrorForObject("Delete server", server, err)
+					return ctrl.Result{}, err
+				}
+
+				LogForObject(r, "Deleted server", server)
+				inProgress = append(inProgress, operation)
+			}
+		} else {
+			switch {
+			case server != nil && operation.UID == nil:
+				r.Log.Info("Observed creation of server", "server", operation.Name)
+			case server != nil && operation.UID != nil && server.UID != *operation.UID:
+				r.Log.Info("Object scheduled for update was deleted")
+				inProgress = append(inProgress, operation)
+				inProgress[len(inProgress)-1].TargetGeneration = 0
+			case server != nil &&
+				operation.TargetGeneration > 0 &&
+				server.Status.ObservedGeneration >= operation.TargetGeneration:
+				r.Log.Info("Observed update of server", "server", operation.Name)
+			default:
+				server = serverShell(cluster, operation.Name)
+				_, err = controllerutil.CreateOrUpdate(ctx, r.Client, server,
+					func() error {
+						return r.serverApply(cluster, server, servers, false)
+					})
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+				inProgress = append(inProgress, operation)
+				inProgress[len(inProgress)-1].TargetGeneration = server.Generation
+			}
 		}
 	}
-	if updated {
+	if !equality.Semantic.DeepEqual(cluster.Status.Operations, inProgress) {
+		cluster.Status.Operations = inProgress
+		return UpdateStatus(r, ctx, cluster, "Remove completed operations")
+	}
+
+	//
+	// Wait for in progress operations to complete before continuing
+	//
+
+	if len(cluster.Status.Operations) > 0 {
+		r.Log.Info("Waiting for in progress server operations")
 		return ctrl.Result{}, nil
+	}
+
+	//
+	// Refresh existing servers
+	//
+	// Only allow one in progress update at a time, and only if we have quorum+1 available
+	// servers.
+	//
+
+	// Ignore quorum if cluster size is less than 3. Updating a cluster of this size will
+	// always result in loss of quorum.
+	if clusterSize >= 3 && nAvailable < clusterQuorum+1 {
+		r.Log.Info("Waiting for quorum")
+		return ctrl.Result{}, nil
+	}
+
+	for _, server := range servers {
+		update, err := NeedsUpdate(r, ctx, &server, func() error {
+			return r.serverApply(cluster, &server, servers, false)
+		})
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if update {
+			cluster.Status.Operations = append(cluster.Status.Operations,
+				ovncentralv1alpha1.OVSDBServerOperation{
+					Name: server.Name,
+					UID:  &server.UID,
+				})
+			return UpdateStatus(r, ctx, cluster, "Schedule server update",
+				"server", server.Name)
+		}
 	}
 
 	//
@@ -271,55 +329,31 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 	// Only if we have a quorum
 	//
 
-	if nAvailable < quorum {
+	if nAvailable < clusterQuorum {
 		r.Log.Info("Waiting for quorum")
 		return ctrl.Result{}, nil
 	}
 
-	if len(serverSummarys) < cluster.Spec.Scale {
+	if len(servers) < cluster.Spec.Replicas {
 		nextIndex := 0
-		newServerNames := make([]string, 0, cluster.Spec.Scale-len(serverSummarys))
-		for i := len(serverSummarys); i < cluster.Spec.Scale; i++ {
+		for i := len(servers); i < cluster.Spec.Replicas; i++ {
 			name := ""
 			for {
 				name = serverNameForIndex(cluster, nextIndex)
-				conflict := false
-				for _, server := range serverSummarys {
-					if server.Name == name {
-						conflict = true
-						break
-					}
-				}
-				if !conflict {
+				if findServer(name) == nil {
 					break
 				}
 				nextIndex++
 			}
-			newServerNames = append(newServerNames, name)
-			serverSummarys = append(serverSummarys,
-				ovncentralv1alpha1.OVSDBServerSummary{Name: name})
+
+			cluster.Status.Operations = append(cluster.Status.Operations,
+				ovncentralv1alpha1.OVSDBServerOperation{
+					Name: name,
+				})
+			nextIndex++
 		}
 
-		sort.Slice(serverSummarys, func(i, j int) bool {
-			return serverSummarys[i].Name < serverSummarys[j].Name
-		})
-
-		// Update server summaries before creating new servers. This will prevent
-		// concurrent runs of this reconciler from creating conflicting plans.
-		cluster.Status.Servers = serverSummarys
-		if err := r.Client.Status().Update(ctx, cluster); err != nil {
-			err = WrapErrorForObject("Update status to add servers", cluster, err)
-			return ctrl.Result{}, err
-		}
-
-		for _, name := range newServerNames {
-			_, _, err := r.Server(ctx, cluster, servers.Items, name, false)
-			if err != nil {
-				return ctrl.Result{}, nil
-			}
-		}
-
-		return ctrl.Result{}, nil
+		return UpdateStatus(r, ctx, cluster, "Add create server operations")
 	}
 
 	// FIN
@@ -337,50 +371,46 @@ func (r *OVSDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *OVSDBClusterReconciler) Server(
-	ctx context.Context,
+func serverShell(
 	cluster *ovncentralv1alpha1.OVSDBCluster,
-	servers []ovncentralv1alpha1.OVSDBServer,
-	name string,
-	stopped bool) (*ovncentralv1alpha1.OVSDBServer, controllerutil.OperationResult, error) {
+	name string) *ovncentralv1alpha1.OVSDBServer {
 
 	server := &ovncentralv1alpha1.OVSDBServer{}
 	server.Name = name
 	server.Namespace = cluster.Namespace
+	return server
+}
+
+func (r *OVSDBClusterReconciler) serverApply(
+	cluster *ovncentralv1alpha1.OVSDBCluster,
+	server *ovncentralv1alpha1.OVSDBServer,
+	peers []ovncentralv1alpha1.OVSDBServer,
+	stopped bool) error {
 
 	var initPeers []string
-	for _, peer := range servers {
+	for _, peer := range peers {
 		if peer.Name != server.Name && peer.Status.RaftAddress != nil {
 			initPeers = append(initPeers, *peer.Status.RaftAddress)
 		}
 	}
-	sort.Strings(initPeers)
 
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, server, func() error {
-		util.InitLabelMap(&server.Labels)
-		server.Labels["app"] = clusterLabel
-		server.Labels[clusterLabel] = cluster.Name
+	util.InitLabelMap(&server.Labels)
+	server.Labels["app"] = clusterLabel
+	server.Labels[clusterLabel] = cluster.Name
 
-		server.Spec.DBType = cluster.Spec.DBType
-		server.Spec.ClusterID = cluster.Status.ClusterID
-		server.Spec.InitPeers = initPeers
-		server.Spec.Image = cluster.Spec.Image
-		server.Spec.Stopped = stopped
+	server.Spec.DBType = cluster.Spec.DBType
+	server.Spec.ClusterID = cluster.Status.ClusterID
+	server.Spec.InitPeers = initPeers
+	server.Spec.Image = cluster.Spec.Image
+	server.Spec.Stopped = stopped
 
-		server.Spec.StorageSize = cluster.Spec.ServerStorageSize
-		server.Spec.StorageClass = cluster.Spec.ServerStorageClass
+	server.Spec.StorageSize = cluster.Spec.ServerStorageSize
+	server.Spec.StorageClass = cluster.Spec.ServerStorageClass
 
-		err := controllerutil.SetControllerReference(cluster, server, r.Scheme)
-		if err != nil {
-			return WrapErrorForObject("SetControllerReference", server, err)
-		}
-
-		return nil
-	})
-
+	err := controllerutil.SetControllerReference(cluster, server, r.Scheme)
 	if err != nil {
-		err = WrapErrorForObject("CreateOrUpdate Server", server, err)
+		return WrapErrorForObject("SetControllerReference", server, err)
 	}
 
-	return server, op, err
+	return err
 }

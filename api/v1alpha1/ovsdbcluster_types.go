@@ -20,6 +20,7 @@ import (
 	"github.com/operator-framework/operator-lib/status"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -35,32 +36,29 @@ const (
 
 // OVSDBClusterSpec defines the desired state of OVSDBCluster
 type OVSDBClusterSpec struct {
-	DBType string `json:"dbType"`
-	Scale  int    `json:"scale"`
+	DBType   string `json:"dbType"`
+	Replicas int    `json:"replicas"`
 
 	Image              string            `json:"image"`
 	ServerStorageSize  resource.Quantity `json:"serverStorageSize"`
 	ServerStorageClass *string           `json:"serverStorageClass,omitempty"`
 }
 
-type OVSDBServerSummaryState string
-
-const (
-	SummaryStateNone        OVSDBServerSummaryState = ""
-	SummaryStateAvailable   OVSDBServerSummaryState = "Available"
-	SummaryStateInitialised OVSDBServerSummaryState = "Initialised"
-)
-
-type OVSDBServerSummary struct {
-	Name  string                  `json:"name"`
-	State OVSDBServerSummaryState `json:"state"`
+type OVSDBServerOperation struct {
+	Name             string     `json:"name"`
+	UID              *types.UID `json:"uid,omitempty"`
+	TargetGeneration int64      `json:"targetGeneration"`
+	Terminate        bool       `json:"terminate,omitempty"`
 }
 
 // OVSDBClusterStatus defines the observed state of OVSDBCluster
 type OVSDBClusterStatus struct {
-	Conditions status.Conditions    `json:"conditions,omitempty"`
-	ClusterID  *string              `json:"clusterID,omitempty"`
-	Servers    []OVSDBServerSummary `json:"servers,omitempty"`
+	Conditions       status.Conditions      `json:"conditions,omitempty"`
+	ClusterID        *string                `json:"clusterID,omitempty"`
+	Operations       []OVSDBServerOperation `json:"operations,omitempty"`
+	AvailableServers int                    `json:"availableServers"`
+	ClusterSize      int                    `json:"clusterSize"`
+	ClusterQuorum    int                    `json:"clusterQuorum"`
 }
 
 // +kubebuilder:object:root=true

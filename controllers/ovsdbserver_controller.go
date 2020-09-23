@@ -24,7 +24,7 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -63,7 +63,7 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 
 	server := &ovncentralv1alpha1.OVSDBServer{}
 	if err = r.Client.Get(ctx, req.NamespacedName, server); err != nil {
-		if k8s_errors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile
 			// request. Owned objects are automatically garbage collected. For
 			// additional cleanup logic use finalizers. Return and don't requeue.
@@ -74,60 +74,19 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	}
 
 	//
-	// We're Available iff the db pod is Ready
-	//
-
-	origAvailable := util.IsAvailable(server)
-	origInitialised := util.IsInitialised(server)
-
-	dbPod := dbPodShell(server)
-	dbPodKey, err := client.ObjectKeyFromObject(dbPod)
-	if err != nil {
-		err = WrapErrorForObject("ObjectKeyFromObject db pod", dbPod, err)
-		return ctrl.Result{}, err
-	}
-	if err := r.Client.Get(ctx, dbPodKey, dbPod); err != nil {
-		if k8s_errors.IsNotFound(err) {
-			util.UnsetAvailable(server)
-		} else {
-			err = WrapErrorForObject("Get db pod", dbPod, err)
-			return ctrl.Result{}, err
-		}
-	} else {
-		if util.IsPodConditionSet(corev1.PodReady, dbPod) {
-			util.SetAvailable(server)
-			// Note that we remain Initialised even if we later become Failed or
-			// not Available
-			util.SetInitialised(server)
-		} else {
-			util.UnsetAvailable(server)
-		}
-	}
-
-	if !(origInitialised == util.IsInitialised(server) &&
-		origAvailable == util.IsAvailable(server)) {
-
-		if err := r.Client.Status().Update(ctx, server); err != nil {
-			err = WrapErrorForObject("Update Available condition", dbPod, err)
-			return ctrl.Result{}, err
-		}
-
-		return ctrl.Result{}, nil
-	}
-
-	//
-	// Unset Failed condition unless it's re-set explicitly
+	// Unset Failed and Available conditions unless they are re-set explicitly
 	//
 
 	origConditions := util.DeepCopyConditions(server.Status.Conditions)
 	util.UnsetFailed(server)
+	util.UnsetAvailable(server)
 	defer CheckConditions(r, ctx, server, origConditions, &err)
 
 	//
 	// Ensure Service exists
 	//
 
-	service, op, err := r.Service(ctx, server)
+	service, op, err := r.service(ctx, server)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -136,35 +95,18 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 		// Modified a watched object. Wait for reconcile.
 		return ctrl.Result{}, nil
 	}
-	serviceName := fmt.Sprintf("%s.%s.svc.cluster.local", service.Name, service.Namespace)
-	if server.Status.ServiceName == nil || *server.Status.ServiceName != serviceName {
-		server.Status.ServiceName = &serviceName
-		if err := r.Client.Status().Update(ctx, server); err != nil {
-			err = WrapErrorForObject("Update service name in status", server, err)
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
-	}
 
 	//
 	// Ensure PVC exists
 	//
 
-	pvc, op, err := r.PVC(ctx, server)
+	pvc, op, err := r.pvc(ctx, server)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if op != controllerutil.OperationResultNone {
 		LogForObject(r, string(op), pvc)
 		// Modified a watched object. Wait for reconcile.
-		return ctrl.Result{}, nil
-	}
-	if server.Status.PVCName == nil || *server.Status.PVCName != pvc.Name {
-		server.Status.PVCName = &pvc.Name
-		if err := r.Client.Status().Update(ctx, server); err != nil {
-			err = WrapErrorForObject("Update PVC name in status", server, err)
-			return ctrl.Result{}, err
-		}
 		return ctrl.Result{}, nil
 	}
 
@@ -189,20 +131,25 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	// Ensure server pod is not running if Stopped is set
 	//
 
+	dbPod := dbPodShell(server)
 	if server.Spec.Stopped {
 		if err := DeleteIfExists(r, ctx, dbPod); err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, nil
+
+		return r.reconcileComplete(ctx, server)
 	}
 
 	//
 	// Ensure server pod exists
 	//
 
-	_, err = CreateOrDelete(r, ctx, dbPod, func() error {
+	op, err = CreateOrDelete(r, ctx, dbPod, func() error {
 		return r.dbPodApply(dbPod, server)
 	})
+	if op != controllerutil.OperationResultNone {
+		return ctrl.Result{}, nil
+	}
 
 	//
 	// Update DB Status
@@ -211,17 +158,36 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	// initcontainer and update if necessary
 	//
 
-	if util.IsPodConditionSet(corev1.PodInitialized, dbPod) {
-		updated, err := r.updateDBStatus(ctx, server, dbPod, dbStatusContainerName)
-		if updated || err != nil {
-			return ctrl.Result{}, err
-		}
-
-		// Pod initialized, status is uptodate
+	dbPod, err = r.getDBPod(ctx, server)
+	if err != nil {
+		err = WrapErrorForObject("Get DB Pod", dbPod, err)
+		return ctrl.Result{}, nil
 	}
 
+	if !dbPod.DeletionTimestamp.IsZero() {
+		LogForObject(r, "Waiting for pod to terminate", dbPod)
+		return ctrl.Result{}, nil
+	}
+
+	if !util.IsPodConditionSet(corev1.PodInitialized, dbPod) {
+		LogForObject(r, "Waiting for pod to initialise", server)
+		return ctrl.Result{}, nil
+	}
+	util.SetInitialised(server)
+	updated, err := r.updateDBStatus(ctx, server, dbPod, dbStatusContainerName)
+	if updated || err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if !util.IsPodConditionSet(corev1.PodReady, dbPod) {
+		LogForObject(r, "Wait for pod to become ready", server)
+		return ctrl.Result{}, nil
+	}
+
+	util.SetAvailable(server)
+
 	// FIN
-	return ctrl.Result{}, nil
+	return r.reconcileComplete(ctx, server)
 }
 
 func (r *OVSDBServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -231,6 +197,47 @@ func (r *OVSDBServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.PersistentVolumeClaim{}).
 		Owns(&corev1.Pod{}).
 		Complete(r)
+}
+
+func (r *OVSDBServerReconciler) reconcileComplete(
+	ctx context.Context,
+	server *ovncentralv1alpha1.OVSDBServer) (ctrl.Result, error) {
+
+	if server.Generation != server.Status.ObservedGeneration {
+		server.Status.ObservedGeneration = server.Generation
+		if err := r.Client.Status().Update(ctx, server); err != nil {
+			err = WrapErrorForObject("Update ObservedGeneration", server, err)
+			return ctrl.Result{}, err
+		}
+	}
+
+	LogForObject(r, "Successfully reconciled server", server, "Generation", server.Generation)
+
+	return ctrl.Result{}, nil
+}
+
+func serviceName(server *ovncentralv1alpha1.OVSDBServer) string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local", server.Name, server.Namespace)
+}
+
+func pvcName(server *ovncentralv1alpha1.OVSDBServer) string {
+	return server.Name
+}
+
+func (r *OVSDBServerReconciler) getDBPod(
+	ctx context.Context,
+	server *ovncentralv1alpha1.OVSDBServer) (*corev1.Pod, error) {
+
+	dbPod := dbPodShell(server)
+	dbPodKey, err := client.ObjectKeyFromObject(dbPod)
+	if err != nil {
+		err = WrapErrorForObject("ObjectKeyFromObject db pod", dbPod, err)
+		return dbPod, err
+	}
+	if err := r.Client.Get(ctx, dbPodKey, dbPod); err != nil {
+		return dbPod, err
+	}
+	return dbPod, nil
 }
 
 func (r *OVSDBServerReconciler) finalizer(
@@ -296,7 +303,7 @@ func (r *OVSDBServerReconciler) bootstrapDB(
 			bootstrapPod.Name)
 		util.SetFailed(server, ovncentralv1alpha1.OVSDBServerBootstrapFailed, err.Error())
 
-		return ctrl.Result{Requeue: false}, err
+		return ctrl.Result{}, err
 	}
 
 	if bootstrapPod.Status.Phase != corev1.PodSucceeded {
@@ -315,7 +322,7 @@ func (r *OVSDBServerReconciler) bootstrapDB(
 	return ctrl.Result{}, err
 }
 
-func (r *OVSDBServerReconciler) Service(
+func (r *OVSDBServerReconciler) service(
 	ctx context.Context,
 	server *ovncentralv1alpha1.OVSDBServer) (
 	*corev1.Service, controllerutil.OperationResult, error) {
@@ -376,13 +383,13 @@ func (r *OVSDBServerReconciler) Service(
 	return service, op, err
 }
 
-func (r *OVSDBServerReconciler) PVC(
+func (r *OVSDBServerReconciler) pvc(
 	ctx context.Context,
 	server *ovncentralv1alpha1.OVSDBServer) (
 	*corev1.PersistentVolumeClaim, controllerutil.OperationResult, error) {
 
 	pvc := &corev1.PersistentVolumeClaim{}
-	pvc.Name = server.Name
+	pvc.Name = pvcName(server)
 	pvc.Namespace = server.Namespace
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, pvc, func() error {
@@ -433,7 +440,7 @@ func dbPodVolumes(volumes *[]corev1.Volume, server *ovncentralv1alpha1.OVSDBServ
 	for _, vol := range []corev1.Volume{
 		{Name: dataVolumeName, VolumeSource: corev1.VolumeSource{
 			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-				ClaimName: *server.Status.PVCName}},
+				ClaimName: pvcName(server)}},
 		},
 		{Name: runVolumeName, VolumeSource: util.EmptyDirVol()},
 		{Name: hostsVolumeName, VolumeSource: util.EmptyDirVol()},
@@ -463,7 +470,7 @@ func dbContainerVolumeMounts(mounts []corev1.VolumeMount) []corev1.VolumeMount {
 func dbContainerEnv(envs []corev1.EnvVar, server *ovncentralv1alpha1.OVSDBServer) []corev1.EnvVar {
 	return util.MergeEnvs(envs, util.EnvSetterMap{
 		"DB_TYPE":       util.EnvValue(server.Spec.DBType),
-		"SERVER_NAME":   util.EnvValue(*server.Status.ServiceName),
+		"SERVER_NAME":   util.EnvValue(serviceName(server)),
 		"OVN_DBDIR":     util.EnvValue(ovnDBDir),
 		"OVN_RUNDIR":    util.EnvValue(ovnRunDir),
 		"OVN_LOG_LEVEL": util.EnvValue("info"),
@@ -488,7 +495,7 @@ func hostsInitContainerApply(container *corev1.Container, server *ovncentralv1al
 	})
 	container.Env = util.MergeEnvs(container.Env, util.EnvSetterMap{
 		"POD_IP":       util.EnvDownwardAPI("status.podIP"),
-		"SERVER_NAME":  util.EnvValue(*server.Status.ServiceName),
+		"SERVER_NAME":  util.EnvValue(serviceName(server)),
 		"HOSTS_VOLUME": util.EnvValue(hostsTmpMount),
 	})
 
@@ -523,7 +530,7 @@ func (r *OVSDBServerReconciler) dbPodApply(
 	util.InitLabelMap(&pod.Labels)
 	setCommonLabels(server, pod.Labels)
 
-	pod.Spec.RestartPolicy = corev1.RestartPolicyAlways
+	pod.Spec.RestartPolicy = corev1.RestartPolicyOnFailure
 
 	// TODO
 	// pod.Spec.Affinity

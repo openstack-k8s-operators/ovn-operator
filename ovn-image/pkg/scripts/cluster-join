@@ -14,4 +14,4 @@ cid=$1; shift || exit 1
 [ -f "$db" ] && exit 0
 
 [ $cid != "any" ] && cid_arg="--cid=$cid"
-exec ovsdb-tool join-cluster $cid_arg "$db" "$db_name" "$raft_address" "$*"
+exec ovsdb-tool join-cluster $cid_arg "$db" "$db_name" "$raft_address" "$@"

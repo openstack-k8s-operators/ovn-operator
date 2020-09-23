@@ -40,7 +40,7 @@ spec:
               type: string
             image:
               type: string
-            scale:
+            replicas:
               type: integer
             serverStorageClass:
               type: string
@@ -53,14 +53,20 @@ spec:
           required:
           - dbType
           - image
-          - scale
+          - replicas
           - serverStorageSize
           type: object
         status:
           description: OVSDBClusterStatus defines the observed state of OVSDBCluster
           properties:
+            availableServers:
+              type: integer
             clusterID:
               type: string
+            clusterQuorum:
+              type: integer
+            clusterSize:
+              type: integer
             conditions:
               description: Conditions is a set of Condition instances.
               items:
@@ -101,18 +107,31 @@ spec:
                 - type
                 type: object
               type: array
-            servers:
+            operations:
               items:
                 properties:
                   name:
                     type: string
-                  state:
+                  targetGeneration:
+                    format: int64
+                    type: integer
+                  terminate:
+                    type: boolean
+                  uid:
+                    description: UID is a type that holds unique ID values, including
+                      UUIDs.  Because we don't ONLY use UUIDs, this is an alias to
+                      string.  Being a type captures intent and helps make sure that
+                      UIDs and names do not get conflated.
                     type: string
                 required:
                 - name
-                - state
+                - targetGeneration
                 type: object
               type: array
+          required:
+          - availableServers
+          - clusterQuorum
+          - clusterSize
           type: object
       type: object
   version: v1alpha1
