@@ -147,24 +147,17 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 	}
 
 	//
-	// Unset Failed condition unless it's re-set explicitly
-	//
-
-	origConditions := util.DeepCopyConditions(cluster.Status.Conditions)
-	util.UnsetFailed(cluster)
-	defer CheckConditions(r, ctx, cluster, origConditions, &err)
-
-	//
 	// Set ClusterID from server ClusterIDs
 	//
 
-	clusterIDUpdated := false
 	for _, server := range servers {
 		if cluster.Status.ClusterID == nil {
 			cluster.Status.ClusterID = server.Status.ClusterID
-			clusterIDUpdated = true
-		} else if server.Status.ClusterID != nil {
-			if *cluster.Status.ClusterID != *server.Status.ClusterID {
+			return UpdateStatus(r, ctx, cluster, "Set ClusterID")
+		} else {
+			if server.Status.ClusterID != nil &&
+				*cluster.Status.ClusterID != *server.Status.ClusterID {
+
 				err = fmt.Errorf("Server %s has inconsistent ClusterID %s. "+
 					"Expected ClusterID %s",
 					server.Name, *server.Status.ClusterID,
@@ -177,8 +170,82 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 
 		}
 	}
-	if clusterIDUpdated {
-		return UpdateStatus(r, ctx, cluster, "Set ClusterID")
+
+	//
+	// Unset Failed condition unless it's re-set explicitly
+	//
+
+	origConditions := util.DeepCopyConditions(cluster.Status.Conditions)
+	util.UnsetFailed(cluster)
+	defer CheckConditions(r, ctx, cluster, origConditions, &err)
+
+	//
+	// Check in progress operations
+	//
+
+	var inProgress []ovncentralv1alpha1.OVSDBServerOperation
+	for _, operation := range cluster.Status.ServerOperations {
+		newOperation := operation
+		var server *ovncentralv1alpha1.OVSDBServer
+
+		switch operation.Type {
+		case ovncentralv1alpha1.OperationTypeBootstrap:
+			fallthrough
+
+		case ovncentralv1alpha1.OperationTypeCreate:
+			fallthrough
+
+		case ovncentralv1alpha1.OperationTypeUpdate:
+			server = serverShell(cluster, operation.Server)
+			op, err := controllerutil.CreateOrUpdate(ctx, r.Client, server,
+				func() error {
+					return r.serverApply(cluster, server, servers)
+				})
+			if err != nil {
+				err = WrapErrorForObject("Update server", server, err)
+				return ctrl.Result{}, err
+			}
+
+			// Update UID and TargetGeneration if we just updated the server. Also
+			// check that we're waiting on a TargetGeneration for the correct object.
+			// If the object was unexpectedly deleted its Generation will be reset.
+			if op != controllerutil.OperationResultNone ||
+				operation.UID == nil ||
+				server.UID != *operation.UID {
+
+				LogForObject(r, "Updated server", server)
+				newOperation.UID = &server.UID
+				newOperation.TargetGeneration = server.Generation
+				inProgress = append(inProgress, newOperation)
+			} else if server.Status.ObservedGeneration < operation.TargetGeneration {
+				inProgress = append(inProgress, newOperation)
+			} else {
+				LogForObject(r, "Observed update of server", server)
+				// Operation is complete
+			}
+
+		case ovncentralv1alpha1.OperationTypeDelete:
+			server = findServer(operation.Server)
+			if server == nil {
+				r.Log.Info("Observed deletion of server", "server",
+					operation.Server)
+				// Operation is complete
+			} else if !server.DeletionTimestamp.IsZero() {
+				if err := r.Client.Delete(ctx, server); err != nil {
+					err = WrapErrorForObject("Delete server", server, err)
+					return ctrl.Result{}, err
+				}
+
+				LogForObject(r, "Deleted server", server)
+				inProgress = append(inProgress, newOperation)
+			} else {
+				inProgress = append(inProgress, newOperation)
+			}
+		}
+	}
+	if !equality.Semantic.DeepEqual(cluster.Status.ServerOperations, inProgress) {
+		cluster.Status.ServerOperations = inProgress
+		return UpdateStatus(r, ctx, cluster, "Update server operations")
 	}
 
 	//
@@ -194,17 +261,15 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 			return ctrl.Result{}, err
 		}
 
-		bootstrapServerName := serverNameForIndex(cluster, 0)
-
-		bootstrapServer := serverShell(cluster, bootstrapServerName)
-		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, bootstrapServer,
-			func() error {
-				return r.serverApply(cluster, bootstrapServer, servers, true)
-			})
-		if err != nil {
-			return ctrl.Result{}, err
+		if len(findOperations(cluster, ovncentralv1alpha1.OperationTypeBootstrap)) == 0 {
+			cluster.Status.ServerOperations = append(cluster.Status.ServerOperations,
+				ovncentralv1alpha1.OVSDBServerOperation{
+					Server: serverNameForIndex(cluster, 0),
+					Type:   ovncentralv1alpha1.OperationTypeBootstrap,
+				})
 		}
 
+		r.Log.Info("Waiting for cluster bootstrap server creation")
 		return ctrl.Result{}, nil
 	}
 
@@ -226,64 +291,16 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 			return ctrl.Result{}, err
 		}
 
+		r.Log.Info("Waiting for cluster bootstrap to complete")
+
 		return ctrl.Result{}, nil
 	}
 
 	//
-	// Check in progress operations
+	// Wait for existing target server states to be reached before continuing
 	//
 
-	var inProgress []ovncentralv1alpha1.OVSDBServerOperation
-	for _, operation := range cluster.Status.Operations {
-		server := findServer(operation.Name)
-		if operation.Terminate {
-			if server == nil {
-				r.Log.Info("Observed deletion of server", "server", operation.Name)
-			} else if server.DeletionTimestamp == nil {
-				if err := r.Client.Delete(ctx, server); err != nil {
-					err = WrapErrorForObject("Delete server", server, err)
-					return ctrl.Result{}, err
-				}
-
-				LogForObject(r, "Deleted server", server)
-				inProgress = append(inProgress, operation)
-			}
-		} else {
-			switch {
-			case server != nil && operation.UID == nil:
-				r.Log.Info("Observed creation of server", "server", operation.Name)
-			case server != nil && operation.UID != nil && server.UID != *operation.UID:
-				r.Log.Info("Object scheduled for update was deleted")
-				inProgress = append(inProgress, operation)
-				inProgress[len(inProgress)-1].TargetGeneration = 0
-			case server != nil &&
-				operation.TargetGeneration > 0 &&
-				server.Status.ObservedGeneration >= operation.TargetGeneration:
-				r.Log.Info("Observed update of server", "server", operation.Name)
-			default:
-				server = serverShell(cluster, operation.Name)
-				_, err = controllerutil.CreateOrUpdate(ctx, r.Client, server,
-					func() error {
-						return r.serverApply(cluster, server, servers, false)
-					})
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-				inProgress = append(inProgress, operation)
-				inProgress[len(inProgress)-1].TargetGeneration = server.Generation
-			}
-		}
-	}
-	if !equality.Semantic.DeepEqual(cluster.Status.Operations, inProgress) {
-		cluster.Status.Operations = inProgress
-		return UpdateStatus(r, ctx, cluster, "Remove completed operations")
-	}
-
-	//
-	// Wait for in progress operations to complete before continuing
-	//
-
-	if len(cluster.Status.Operations) > 0 {
+	if len(cluster.Status.ServerOperations) > 0 {
 		r.Log.Info("Waiting for in progress server operations")
 		return ctrl.Result{}, nil
 	}
@@ -304,17 +321,18 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 
 	for _, server := range servers {
 		update, err := NeedsUpdate(r, ctx, &server, func() error {
-			return r.serverApply(cluster, &server, servers, false)
+			return r.serverApply(cluster, &server, servers)
 		})
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 
 		if update {
-			cluster.Status.Operations = append(cluster.Status.Operations,
+			LogForObject(r, "Scheduled server update", &server)
+			cluster.Status.ServerOperations = append(cluster.Status.ServerOperations,
 				ovncentralv1alpha1.OVSDBServerOperation{
-					Name: server.Name,
-					UID:  &server.UID,
+					Server: server.Name,
+					Type:   ovncentralv1alpha1.OperationTypeUpdate,
 				})
 			return UpdateStatus(r, ctx, cluster, "Schedule server update",
 				"server", server.Name)
@@ -344,9 +362,11 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 				nextIndex++
 			}
 
-			cluster.Status.Operations = append(cluster.Status.Operations,
+			r.Log.Info("Scheduled server create", "server", name)
+			cluster.Status.ServerOperations = append(cluster.Status.ServerOperations,
 				ovncentralv1alpha1.OVSDBServerOperation{
-					Name: name,
+					Server: name,
+					Type:   ovncentralv1alpha1.OperationTypeCreate,
 				})
 			nextIndex++
 		}
@@ -360,6 +380,21 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 
 func serverNameForIndex(cluster *ovncentralv1alpha1.OVSDBCluster, index int) string {
 	return fmt.Sprintf("%s-%d", cluster.Name, index)
+}
+
+func findOperations(
+	cluster *ovncentralv1alpha1.OVSDBCluster,
+	operationType ovncentralv1alpha1.OVSDBServerOperationType) (
+	ops []*ovncentralv1alpha1.OVSDBServerOperation) {
+
+	for i := 0; i < len(cluster.Status.ServerOperations); i++ {
+		op := &cluster.Status.ServerOperations[i]
+		if op.Type == operationType {
+			ops = append(ops, op)
+		}
+	}
+	return
+
 }
 
 func (r *OVSDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -382,11 +417,27 @@ func serverShell(
 func (r *OVSDBClusterReconciler) serverApply(
 	cluster *ovncentralv1alpha1.OVSDBCluster,
 	server *ovncentralv1alpha1.OVSDBServer,
-	peers []ovncentralv1alpha1.OVSDBServer,
-	stopped bool) error {
+	allServers []ovncentralv1alpha1.OVSDBServer) error {
+
+	// There are a some situations in which we want to initialise a database but not actually
+	// start the server:
+	//
+	// * We are bootstrapping the cluster
+	//
+	// This is an optimisation to startup. Bootstrap passes different parameters to the init
+	// container than a regular join. We update the bootstrap server to be a regular server
+	// straight after bootstrap. If we allowed bootstrap to start the server pod we would just
+	// kill it again almost immediately after.
+	//
+	// * We are the only remaining server and the cluster has been scaled to 0 replicas
+	//
+	// If we allow all servers to be deleted we irretrievably lose all the cluster's data. To
+	// avoid this we stop, but don't delete, the last server in the cluster.
+	server.Spec.Stopped = cluster.Status.ClusterID == nil || // Bootstrapping
+		len(allServers) == 1 && cluster.Spec.Replicas == 0 // Last server
 
 	var initPeers []string
-	for _, peer := range peers {
+	for _, peer := range allServers {
 		if peer.Name != server.Name && peer.Status.RaftAddress != nil {
 			initPeers = append(initPeers, *peer.Status.RaftAddress)
 		}
@@ -400,7 +451,6 @@ func (r *OVSDBClusterReconciler) serverApply(
 	server.Spec.ClusterID = cluster.Status.ClusterID
 	server.Spec.InitPeers = initPeers
 	server.Spec.Image = cluster.Spec.Image
-	server.Spec.Stopped = stopped
 
 	server.Spec.StorageSize = cluster.Spec.ServerStorageSize
 	server.Spec.StorageClass = cluster.Spec.ServerStorageClass

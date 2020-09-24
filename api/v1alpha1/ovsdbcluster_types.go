@@ -44,21 +44,31 @@ type OVSDBClusterSpec struct {
 	ServerStorageClass *string           `json:"serverStorageClass,omitempty"`
 }
 
+type OVSDBServerOperationType string
+
+const (
+	OperationTypeNone      = ""
+	OperationTypeCreate    = "Create"
+	OperationTypeUpdate    = "Update"
+	OperationTypeDelete    = "Delete"
+	OperationTypeBootstrap = "Bootstrap"
+)
+
 type OVSDBServerOperation struct {
-	Name             string     `json:"name"`
-	UID              *types.UID `json:"uid,omitempty"`
-	TargetGeneration int64      `json:"targetGeneration"`
-	Terminate        bool       `json:"terminate,omitempty"`
+	Server           string                   `json:"server"`
+	Type             OVSDBServerOperationType `json:"type,omitempty"`
+	UID              *types.UID               `json:"uid,omitempty"`
+	TargetGeneration int64                    `json:"targetGeneration,omitempty"`
 }
 
 // OVSDBClusterStatus defines the observed state of OVSDBCluster
 type OVSDBClusterStatus struct {
 	Conditions       status.Conditions      `json:"conditions,omitempty"`
 	ClusterID        *string                `json:"clusterID,omitempty"`
-	Operations       []OVSDBServerOperation `json:"operations,omitempty"`
 	AvailableServers int                    `json:"availableServers"`
 	ClusterSize      int                    `json:"clusterSize"`
 	ClusterQuorum    int                    `json:"clusterQuorum"`
+	ServerOperations []OVSDBServerOperation `json:"serverOperations,omitempty"`
 }
 
 // +kubebuilder:object:root=true

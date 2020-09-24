@@ -107,16 +107,16 @@ spec:
                 - type
                 type: object
               type: array
-            operations:
+            serverOperations:
               items:
                 properties:
-                  name:
+                  server:
                     type: string
                   targetGeneration:
                     format: int64
                     type: integer
-                  terminate:
-                    type: boolean
+                  type:
+                    type: string
                   uid:
                     description: UID is a type that holds unique ID values, including
                       UUIDs.  Because we don't ONLY use UUIDs, this is an alias to
@@ -124,8 +124,7 @@ spec:
                       UIDs and names do not get conflated.
                     type: string
                 required:
-                - name
-                - targetGeneration
+                - server
                 type: object
               type: array
           required:
