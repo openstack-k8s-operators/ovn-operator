@@ -148,50 +148,19 @@ func CreateOrDelete(
 	obj runtime.Object,
 	f controllerutil.MutateFn) (controllerutil.OperationResult, error) {
 
-	key, err := client.ObjectKeyFromObject(obj)
-	if err != nil {
-		err = WrapErrorForObject("ObjectKeyFromObject", obj, err)
-		return controllerutil.OperationResultNone, err
-	}
-
-	if err := r.GetClient().Get(ctx, key, obj); err != nil {
-		if errors.IsNotFound(err) {
-			if err := f(); err != nil {
-				err = WrapErrorForObject("Initialise", obj, err)
-				return controllerutil.OperationResultNone, err
-			}
-
-			if err := r.GetClient().Create(ctx, obj); err != nil {
-				err = WrapErrorForObject("Create", obj, err)
-				return controllerutil.OperationResultNone, err
-			}
-
-			return controllerutil.OperationResultCreated, nil
-		} else {
-			err = WrapErrorForObject("Get", obj, err)
-			return controllerutil.OperationResultNone, err
+	op, err := controllerutil.CreateOrUpdate(ctx, r.GetClient(), obj, f)
+	if err != nil && errors.IsInvalid(err) {
+		// Request to make an unsupported change
+		if err := r.GetClient().Delete(ctx, obj); err != nil {
+			err = WrapErrorForObject("Delete", obj, err)
+			return op, err
 		}
+
+		accessor := getAccessorOrDie(obj)
+		LogForObject(r, "Deleted", accessor)
+		return controllerutil.OperationResultUpdated, nil
 	}
-
-	existing := obj.DeepCopyObject()
-	if err := f(); err != nil {
-		return controllerutil.OperationResultNone, err
-	}
-
-	if equality.Semantic.DeepEqual(existing, obj) {
-		return controllerutil.OperationResultNone, nil
-	}
-
-	// This is really useful for debugging differences. Import github.com/go-test/deep
-	//diff := deep.Equal(existing, obj)
-	//LogForObject(r, "Objects differ", accessor, "ObjectDiff", diff)
-
-	if err := r.GetClient().Delete(ctx, obj); err != nil {
-		err = WrapErrorForObject("Delete", obj, err)
-		return controllerutil.OperationResultNone, nil
-	}
-
-	return controllerutil.OperationResultUpdated, nil
+	return op, err
 }
 
 func getAccessorOrDie(obj runtime.Object) metav1.Object {
