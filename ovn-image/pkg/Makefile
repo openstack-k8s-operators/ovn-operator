@@ -2,8 +2,13 @@ TAG=2.11-dev
 
 default: build
 
+.PHONY: scripts
+scripts:
+	mkdir -p scripts
+	cp ../scripts-common/* scripts/
+
 .PHONY: build
-build:
+build: scripts
 	buildah bud --layers -t ovn-central:$(TAG)
 
 .PHONY: push

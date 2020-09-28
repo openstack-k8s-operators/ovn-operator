@@ -46,6 +46,7 @@ RUN /bin/bash -c 'mkdir -p /etc/ovn; \
                   chown -R 1000:1000 /etc/ovn'
 
 COPY --from=builder /opt /opt
+COPY image-env.sh /
 COPY scripts/* /
 
 VOLUME ["/var/lib/openvswitch", "/ovn-run"]

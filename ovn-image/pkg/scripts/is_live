@@ -1,6 +1,0 @@
-#!/bin/bash
-
-. /env.sh
-
-exec ovsdb-client dump "tcp:${SERVER_NAME}:${db_port}" \
-    "${db_name}" "${db_global_table}" _uuid

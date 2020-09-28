@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# Usage: cluster-kick <server id>
+
+set -ex -o pipefail
+
+. /env.sh
+
+sid=$1; shift || exit 1
+
+stderr_file=/tmp/kick.stderr
+
+ovs-appctl -t $db_ctl cluster/kick $db_name $sid 2>$stderr_file && exit 0
+[ "$(cat $stderr_file | head -n 1)" == "unknown server" ] && exit 0
+
+cat $stderr_file
+exit 1

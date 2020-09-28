@@ -9,8 +9,13 @@ default: build
 gitcache-update:
 	$(MAKE) -C gitcache ovs ovn
 
+.PHONY: scripts
+scripts:
+	mkdir -p scripts
+	cp ../scripts-common/* scripts/
+
 .PHONY: build
-build:
+build: scripts
 	buildah bud --layers --tag ovn-central:trunk \
 		-v $$(pwd)/gitcache:/gitcache:ro \
 		--build-arg OVSREPO=$(OVSREPO) --build-arg OVSBRANCH=$(OVSBRANCH) \
