@@ -29,12 +29,11 @@ const (
 
 // OVSDBServerSpec defines the desired state of OVSDBServer
 type OVSDBServerSpec struct {
-	DBType    string   `json:"dbType"`
-	ClusterID *string  `json:"clusterID,omitempty"`
-	InitPeers []string `json:"initPeers,omitempty"`
-	Stopped   bool     `json:"stopped,omitempty"`
+	ClusterName string   `json:"clusterName"`
+	DBType      string   `json:"dbType"`
+	ClusterID   *string  `json:"clusterID,omitempty"`
+	InitPeers   []string `json:"initPeers,omitempty"`
 
-	Image        string            `json:"image"`
 	StorageSize  resource.Quantity `json:"storageSize"`
 	StorageClass *string           `json:"storageClass,omitempty"`
 }
@@ -49,9 +48,8 @@ type DatabaseStatus struct {
 
 // OVSDBServerStatus defines the observed state of OVSDBServer
 type OVSDBServerStatus struct {
-	DatabaseStatus     `json:"databaseStatus,omitempty"`
-	Conditions         status.Conditions `json:"conditions,omitempty"`
-	ObservedGeneration int64             `json:"observedGeneration,omitempty"`
+	Conditions     status.Conditions `json:"conditions,omitempty"`
+	DatabaseStatus `json:"databaseStatus,omitempty"`
 }
 
 // +kubebuilder:object:root=true

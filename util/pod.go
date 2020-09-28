@@ -71,6 +71,14 @@ func IsPodConditionSet(conditionType corev1.PodConditionType, pod *corev1.Pod) b
 	return false
 }
 
+func IsPodInitialized(pod *corev1.Pod) bool {
+	return IsPodConditionSet(corev1.PodInitialized, pod)
+}
+
+func IsPodReady(pod *corev1.Pod) bool {
+	return IsPodConditionSet(corev1.PodReady, pod)
+}
+
 func PodExec(pod *corev1.Pod, containerName string, command []string) (*ExecResult, error) {
 	clientset, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {

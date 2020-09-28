@@ -208,7 +208,6 @@ func (r *OVNCentralReconciler) Server(
 	server.Namespace = central.Namespace
 
 	server.Spec.DBType = ovncentralv1alpha1.DBTypeNB
-	server.Spec.Image = central.Spec.Image
 	server.Spec.StorageSize = central.Spec.StorageSize
 	server.Spec.StorageClass = central.Spec.StorageClass
 

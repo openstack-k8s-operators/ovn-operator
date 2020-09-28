@@ -22,8 +22,9 @@ import (
 	"reflect"
 
 	"github.com/go-logr/logr"
+	"github.com/go-test/deep"
 	"github.com/operator-framework/operator-lib/status"
-	"k8s.io/apimachinery/pkg/api/equality"
+	//"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -139,7 +140,14 @@ func NeedsUpdate(
 		return false, err
 	}
 
-	return !equality.Semantic.DeepEqual(existing, obj), nil
+	//return !equality.Semantic.DeepEqual(existing, obj), nil
+	diff := deep.Equal(existing, obj)
+	if diff != nil {
+		r.GetLogger().Info("Objects differ", "diff", diff)
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func CreateOrDelete(
@@ -147,6 +155,8 @@ func CreateOrDelete(
 	ctx context.Context,
 	obj runtime.Object,
 	f controllerutil.MutateFn) (controllerutil.OperationResult, error) {
+
+	accessor := getAccessorOrDie(obj)
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.GetClient(), obj, f)
 	if err != nil && errors.IsInvalid(err) {
@@ -159,6 +169,10 @@ func CreateOrDelete(
 		accessor := getAccessorOrDie(obj)
 		LogForObject(r, "Deleted", accessor)
 		return controllerutil.OperationResultUpdated, nil
+	}
+
+	if op != controllerutil.OperationResultNone {
+		LogForObject(r, "Updated", accessor)
 	}
 	return op, err
 }
