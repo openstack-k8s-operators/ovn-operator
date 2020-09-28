@@ -6,6 +6,7 @@ if [ "${DB_TYPE}" == "NB" ]; then
     db="${OVN_DBDIR}/ovnnb_db.db"
     db_name="OVN_Northbound"
     db_sock=${OVN_RUNDIR}/ovnnb_db.sock
+    db_ctl=${OVN_RUNDIR}/ovnnb_db.ctl
     db_port=6641
     raft_port=6643
     db_global_table=NB_Global
@@ -14,6 +15,7 @@ elif [ "${DB_TYPE}" == "SB" ]; then
     db="${OVN_DBDIR}/ovnsb_db.db"
     db_name="OVN_Southbound"
     db_sock=${OVN_RUNDIR}/ovnsb_db.sock
+    db_ctl=${OVN_RUNDIR}/ovnsb_db.ctl
     db_port=6642
     raft_port=6644
     db_global_table=SB_Global

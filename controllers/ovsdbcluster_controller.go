@@ -315,7 +315,7 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 	// Ignore quorum if cluster size is less than 3. Updating a cluster of this size will
 	// always result in loss of quorum.
 	if clusterSize >= 3 && nAvailable < clusterQuorum+1 {
-		r.Log.Info("Waiting for quorum")
+		r.Log.Info("Waiting for super quorum")
 		return ctrl.Result{}, nil
 	}
 

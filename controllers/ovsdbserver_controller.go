@@ -35,6 +35,10 @@ import (
 	"github.com/openstack-k8s-operators/ovn-central-operator/util"
 )
 
+const (
+	OVSDBServerFinalizer = "ovsdbserver.ovn-central.openstack.org"
+)
+
 // OVSDBServerReconciler reconciles a OVSDBServer object
 type OVSDBServerReconciler struct {
 	client.Client
@@ -83,6 +87,26 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	defer CheckConditions(r, ctx, server, origConditions, &err)
 
 	//
+	// Run the finalizer if we're deleting.
+	// Add it if it's not present.
+	//
+
+	if !server.DeletionTimestamp.IsZero() {
+		return r.finalizer(ctx, server)
+	}
+
+	if !controllerutil.ContainsFinalizer(server, OVSDBServerFinalizer) {
+		controllerutil.AddFinalizer(server, OVSDBServerFinalizer)
+		if err := r.Client.Update(ctx, server); err != nil {
+			err = WrapErrorForObject("Add finalizer", server, err)
+			return ctrl.Result{}, err
+		}
+
+		LogForObject(r, "Added finalizer to server", server)
+		return ctrl.Result{}, nil
+	}
+
+	//
 	// Ensure Service exists
 	//
 
@@ -91,7 +115,7 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 		return ctrl.Result{}, err
 	}
 	if op != controllerutil.OperationResultNone {
-		LogForObject(r, string(op), service)
+		LogForObject(r, "Updated service", service)
 		// Modified a watched object. Wait for reconcile.
 		return ctrl.Result{}, nil
 	}
@@ -100,12 +124,15 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	// Ensure PVC exists
 	//
 
-	pvc, op, err := r.pvc(ctx, server)
+	pvc := pvcShell(server)
+	op, err = controllerutil.CreateOrUpdate(ctx, r.Client, pvc, func() error {
+		return r.pvcApply(pvc, server)
+	})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if op != controllerutil.OperationResultNone {
-		LogForObject(r, string(op), pvc)
+		LogForObject(r, "Updated PVC", pvc)
 		// Modified a watched object. Wait for reconcile.
 		return ctrl.Result{}, nil
 	}
@@ -148,6 +175,7 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 		return r.dbPodApply(dbPod, server)
 	})
 	if op != controllerutil.OperationResultNone {
+		LogForObject(r, "Updated server pod", dbPod)
 		return ctrl.Result{}, nil
 	}
 
@@ -243,6 +271,53 @@ func (r *OVSDBServerReconciler) getDBPod(
 func (r *OVSDBServerReconciler) finalizer(
 	ctx context.Context,
 	server *ovncentralv1alpha1.OVSDBServer) (ctrl.Result, error) {
+
+	if !controllerutil.ContainsFinalizer(server, OVSDBServerFinalizer) {
+		LogForObject(r, "Waiting for another finalizer", server)
+		return ctrl.Result{}, nil
+	}
+
+	// Ensure the DB pod isn't running
+	dbPod := dbPodShell(server)
+	if err := DeleteIfExists(r, ctx, dbPod); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	finalizerPod := finalizerPodShell(server)
+	op, err := CreateOrDelete(r, ctx, finalizerPod, func() error {
+		return r.finalizerPodApply(finalizerPod, server)
+	})
+	if err != nil {
+		err = WrapErrorForObject("Create finalizer pod", finalizerPod, err)
+		return ctrl.Result{}, err
+	}
+	if op == controllerutil.OperationResultCreated {
+		LogForObject(r, "Created finalizer pod", server)
+	}
+	if finalizerPod.Status.Phase != corev1.PodSucceeded {
+		LogForObject(r, "Waiting for finalizer to succeed", server)
+		return ctrl.Result{}, err
+	}
+	if err := r.Client.Delete(ctx, finalizerPod); err != nil {
+		err = WrapErrorForObject("Delete finalizer pod", finalizerPod, err)
+		return ctrl.Result{}, err
+	}
+
+	// Ensure we've deleted the PVC before deleting the server. This avoids a race with the
+	// garbage collector if we immediately create a new server. This server has been removed
+	// from the cluster, so attempting to re-use its data will fail.
+	pvc := pvcShell(server)
+	if err := DeleteIfExists(r, ctx, pvc); err != nil {
+		err = WrapErrorForObject("Delete PVC", pvc, err)
+		return ctrl.Result{}, err
+	}
+
+	controllerutil.RemoveFinalizer(server, OVSDBServerFinalizer)
+	if err := r.Client.Update(ctx, server); err != nil {
+		err = WrapErrorForObject("Remove finalizer for server", server, err)
+		return ctrl.Result{}, err
+	}
+	LogForObject(r, "Finalize server completed successfully", server)
 
 	return ctrl.Result{}, nil
 }
@@ -383,46 +458,47 @@ func (r *OVSDBServerReconciler) service(
 	return service, op, err
 }
 
-func (r *OVSDBServerReconciler) pvc(
-	ctx context.Context,
-	server *ovncentralv1alpha1.OVSDBServer) (
-	*corev1.PersistentVolumeClaim, controllerutil.OperationResult, error) {
+func pvcShell(
+	server *ovncentralv1alpha1.OVSDBServer) *corev1.PersistentVolumeClaim {
 
 	pvc := &corev1.PersistentVolumeClaim{}
 	pvc.Name = pvcName(server)
 	pvc.Namespace = server.Namespace
 
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, pvc, func() error {
-		util.InitLabelMap(&pvc.Labels)
-		setCommonLabels(server, pvc.Labels)
+	return pvc
+}
 
-		pvc.Spec.Resources.Requests = corev1.ResourceList{
-			corev1.ResourceStorage: server.Spec.StorageSize,
-		}
+func (r *OVSDBServerReconciler) pvcApply(
+	pvc *corev1.PersistentVolumeClaim,
+	server *ovncentralv1alpha1.OVSDBServer) error {
 
-		// StorageClassName will be defaulted server-side if we
-		// originally passed an empty one, so don't try to overwrite
-		// it.
-		if server.Spec.StorageClass != nil {
-			pvc.Spec.StorageClassName = server.Spec.StorageClass
-		}
+	util.InitLabelMap(&pvc.Labels)
+	setCommonLabels(server, pvc.Labels)
 
-		pvc.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{
-			corev1.ReadWriteOnce,
-		}
+	pvc.Spec.Resources.Requests = corev1.ResourceList{
+		corev1.ResourceStorage: server.Spec.StorageSize,
+	}
 
-		volumeMode := corev1.PersistentVolumeFilesystem
-		pvc.Spec.VolumeMode = &volumeMode
+	// StorageClassName will be defaulted server-side if we
+	// originally passed an empty one, so don't try to overwrite
+	// it.
+	if server.Spec.StorageClass != nil {
+		pvc.Spec.StorageClassName = server.Spec.StorageClass
+	}
 
-		err := controllerutil.SetControllerReference(server, pvc, r.Scheme)
-		if err != nil {
-			return WrapErrorForObject("SetControllerReference", pvc, err)
-		}
+	pvc.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{
+		corev1.ReadWriteOnce,
+	}
 
-		return nil
-	})
+	volumeMode := corev1.PersistentVolumeFilesystem
+	pvc.Spec.VolumeMode = &volumeMode
 
-	return pvc, op, err
+	err := controllerutil.SetControllerReference(server, pvc, r.Scheme)
+	if err != nil {
+		return WrapErrorForObject("SetControllerReference", pvc, err)
+	}
+
+	return nil
 }
 
 const (
@@ -515,6 +591,17 @@ func dbStatusContainerApply(
 	container.Env = dbContainerEnv(container.Env, server)
 }
 
+func dbServerContainerApply(
+	container *corev1.Container,
+	server *ovncentralv1alpha1.OVSDBServer) {
+
+	container.Name = "ovsdb-server"
+	container.Image = server.Spec.Image
+	container.Command = []string{"/dbserver"}
+	container.VolumeMounts = dbContainerVolumeMounts(container.VolumeMounts)
+	container.Env = dbContainerEnv(container.Env, server)
+}
+
 func dbPodShell(server *ovncentralv1alpha1.OVSDBServer) *corev1.Pod {
 	pod := &corev1.Pod{}
 	pod.Name = server.Name
@@ -530,7 +617,7 @@ func (r *OVSDBServerReconciler) dbPodApply(
 	util.InitLabelMap(&pod.Labels)
 	setCommonLabels(server, pod.Labels)
 
-	pod.Spec.RestartPolicy = corev1.RestartPolicyOnFailure
+	pod.Spec.RestartPolicy = corev1.RestartPolicyAlways
 
 	// TODO
 	// pod.Spec.Affinity
@@ -548,11 +635,7 @@ func (r *OVSDBServerReconciler) dbPodApply(
 	}
 
 	dbContainer := &pod.Spec.Containers[0]
-	dbContainer.Name = "ovsdb-server"
-	dbContainer.Image = server.Spec.Image
-	dbContainer.Command = []string{"/dbserver"}
-	dbContainer.VolumeMounts = dbContainerVolumeMounts(dbContainer.VolumeMounts)
-	dbContainer.Env = dbContainerEnv(dbContainer.Env, server)
+	dbServerContainerApply(dbContainer, server)
 
 	dbContainer.ReadinessProbe = util.ExecProbe("/is_ready")
 	dbContainer.ReadinessProbe.PeriodSeconds = 10
@@ -624,6 +707,47 @@ func (r *OVSDBServerReconciler) bootstrapPodApply(
 		pod.Spec.Containers = make([]corev1.Container, 1)
 	}
 	dbStatusContainerApply(&pod.Spec.Containers[0], server)
+
+	controllerutil.SetControllerReference(server, pod, r.Scheme)
+
+	return nil
+}
+
+func finalizerPodShell(server *ovncentralv1alpha1.OVSDBServer) *corev1.Pod {
+	pod := &corev1.Pod{}
+	pod.Name = fmt.Sprintf("%s-finalizer", server.Name)
+	pod.Namespace = server.Namespace
+
+	return pod
+}
+
+func (r *OVSDBServerReconciler) finalizerPodApply(
+	pod *corev1.Pod,
+	server *ovncentralv1alpha1.OVSDBServer) error {
+
+	util.InitLabelMap(&pod.Labels)
+	setCommonLabels(server, pod.Labels)
+	pod.Spec.RestartPolicy = corev1.RestartPolicyOnFailure
+
+	dbPodVolumes(&pod.Spec.Volumes, server)
+
+	if len(pod.Spec.InitContainers) != 1 {
+		pod.Spec.InitContainers = make([]corev1.Container, 1)
+	}
+
+	hostsInitContainerApply(&pod.Spec.InitContainers[0], server)
+
+	if len(pod.Spec.Containers) != 1 {
+		pod.Spec.Containers = make([]corev1.Container, 1)
+	}
+
+	clusterLeaveContainer := &pod.Spec.Containers[0]
+	clusterLeaveContainer.Name = "cluster-leave"
+	clusterLeaveContainer.Image = server.Spec.Image
+	clusterLeaveContainer.VolumeMounts = dbContainerVolumeMounts(
+		clusterLeaveContainer.VolumeMounts)
+	clusterLeaveContainer.Env = dbContainerEnv(clusterLeaveContainer.Env, server)
+	clusterLeaveContainer.Command = []string{"/cluster-leave"}
 
 	controllerutil.SetControllerReference(server, pod, r.Scheme)
 
