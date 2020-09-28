@@ -20,8 +20,10 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -56,6 +58,8 @@ func (r *OVSDBClusterReconciler) GetLogger() logr.Logger {
 const (
 	OVSDBClusterLabel = "ovsdb-cluster"
 	OVSDBServerLabel  = "ovsdb-server"
+
+	OVSDBClusterFinalizer = "ovsdbcluster.ovn-central.openstack.org"
 )
 
 // +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovsdbclusters,verbs=get;list;watch;create;update;patch;delete
@@ -80,6 +84,18 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 		}
 		err = WrapErrorForObject("Get cluster", cluster, err)
 		return ctrl.Result{}, err
+	}
+
+	// Add a finalizer to ourselves
+	if !controllerutil.ContainsFinalizer(cluster, OVSDBClusterFinalizer) {
+		controllerutil.AddFinalizer(cluster, OVSDBClusterFinalizer)
+		if err := r.Client.Update(ctx, cluster); err != nil {
+			err = WrapErrorForObject("Add finalizer to cluster", cluster, err)
+			return ctrl.Result{}, err
+		}
+
+		r.Log.Info("Added cluster finalizer")
+		return ctrl.Result{}, nil
 	}
 
 	//
@@ -143,6 +159,37 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 			}
 		}
 		return nil
+	}
+
+	//
+	// Finalize ourselves
+	//
+
+	if !cluster.DeletionTimestamp.IsZero() {
+		// Remove finalizer from all managed servers
+		for i := 0; i < len(servers); i++ {
+			server := &servers[i]
+			if controllerutil.ContainsFinalizer(server, OVSDBClusterFinalizer) {
+				controllerutil.RemoveFinalizer(server, OVSDBClusterFinalizer)
+
+				if err := r.Client.Update(ctx, server); err != nil {
+					err = WrapErrorForObject(
+						"Remove server finalizer", server, err)
+					return ctrl.Result{}, err
+				}
+
+				LogForObject(r, "Removed finalizer from server", server)
+			}
+		}
+
+		controllerutil.RemoveFinalizer(cluster, OVSDBClusterFinalizer)
+		if err := r.Client.Update(ctx, cluster); err != nil {
+			err = WrapErrorForObject(
+				"Remove cluster finalizer", cluster, err)
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, err
 	}
 
 	//
@@ -226,8 +273,18 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 	}
 
 	//
-	// Scale up servers if required
+	// Update servers
 	//
+
+	var updateServers []*ovncentralv1alpha1.OVSDBServer
+	for i := 0; i < len(servers); i++ {
+		server := &servers[i]
+		if server.DeletionTimestamp.IsZero() {
+			updateServers = append(updateServers, server)
+		}
+	}
+
+	// Create new servers if required
 
 	targetServers := cluster.Spec.Replicas
 	if targetServers == 0 {
@@ -241,7 +298,10 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 
 	for i := len(servers); i < targetServers; i++ {
 		name := nextServerName(cluster, findServer)
-		server := serverShell(cluster, name)
+		updateServers = append(updateServers, serverShell(cluster, name))
+	}
+
+	for _, server := range updateServers {
 		apply := func() error {
 			serverApply(cluster, server, servers)
 
@@ -252,16 +312,16 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 					"Set controller reference for server", server, err)
 			}
 
+			controllerutil.AddFinalizer(server, OVSDBClusterFinalizer)
+
 			return err
 		}
-
-		NeedsUpdate(r, ctx, server, apply)
 		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, server, apply)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 
-		LogForObject(r, "Created server", server)
+		LogForObject(r, "Created/Updated server", server)
 	}
 
 	//
@@ -282,8 +342,9 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 	} else {
 		for i := 0; i < len(servers); i++ {
 			server := &servers[i]
-			if !util.IsAvailable(server) {
-				// Wait for the server to bootstrap
+
+			// Ignore if server is bootstrapping or deleting
+			if !util.IsAvailable(server) || !server.DeletionTimestamp.IsZero() {
 				continue
 			}
 
@@ -321,6 +382,72 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 			}
 			if op != controllerutil.OperationResultNone {
 				nAvailable -= 1
+			}
+		}
+
+		cluster.Status.AvailableServers = nAvailable
+	}
+
+	//
+	// Finalize servers
+	//
+
+	for i := 0; i < len(servers); i++ {
+		server := &servers[i]
+		if !server.DeletionTimestamp.IsZero() &&
+			controllerutil.ContainsFinalizer(server, OVSDBClusterFinalizer) {
+
+			// Pick an available server pod to kick the deleted server
+			var kickerPod *corev1.Pod
+			kickerPod = findPod(server.Name)
+			randomStart := rand.Intn(len(serverPods))
+			for i := randomStart; i < len(serverPods); i++ {
+				pod := &serverPods[i%len(serverPods)]
+				if util.IsPodReady(&serverPods[i]) {
+					kickerPod = pod
+					break
+				}
+			}
+			if kickerPod == nil {
+				LogForObject(r, "No server pod available to finalize server", server)
+				// No point trying to finalize anything else
+				// Continue reconciliation in case we need to fix things
+				break
+			}
+
+			r.Log.Info("Kicking server from cluster",
+				"server", server.Name, "exec pod", kickerPod.Name)
+
+			result, err := util.PodExec(kickerPod, DBServerContainerName,
+				[]string{"/cluster-kick", *server.Status.ServerID}, false)
+			if err != nil {
+				err = WrapErrorForObject(
+					"Sending exec for cluster kick", kickerPod, err)
+				return ctrl.Result{}, err
+			}
+
+			if result.ExitStatus != 0 {
+				r.Log.Info("Failed to kick server from cluster",
+					"server", server.Name, "exec pod", kickerPod.Name)
+
+				return ctrl.Result{RequeueAfter: time.Second * 10}, nil
+			}
+
+			serverPod := findPod(server.Name)
+			if serverPod != nil {
+				if err := r.Client.Delete(ctx, serverPod); err != nil {
+					err = WrapErrorForObject(
+						"Delete db pod during finalizer", serverPod, err)
+					return ctrl.Result{}, err
+				}
+			}
+
+			controllerutil.RemoveFinalizer(server, OVSDBClusterFinalizer)
+
+			if err := r.Client.Update(ctx, server); err != nil {
+				err = WrapErrorForObject(
+					"Remove cluster finalizer from server", server, err)
+				return ctrl.Result{}, err
 			}
 		}
 	}

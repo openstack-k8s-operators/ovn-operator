@@ -79,7 +79,9 @@ func IsPodReady(pod *corev1.Pod) bool {
 	return IsPodConditionSet(corev1.PodReady, pod)
 }
 
-func PodExec(pod *corev1.Pod, containerName string, command []string) (*ExecResult, error) {
+func PodExec(
+	pod *corev1.Pod, containerName string, command []string, output bool) (*ExecResult, error) {
+
 	clientset, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		return nil, fmt.Errorf("Initialising clientset: %w", err)
@@ -104,10 +106,12 @@ func PodExec(pod *corev1.Pod, containerName string, command []string) (*ExecResu
 		return nil, fmt.Errorf("Initialising executor: %w", err)
 	}
 
+	result := &ExecResult{}
+
 	var stdout, stderr bytes.Buffer
-	result := &ExecResult{
-		Stdout: bufio.NewReader(&stdout),
-		Stderr: bufio.NewReader(&stderr),
+	if output {
+		result.Stdout = bufio.NewReader(&stdout)
+		result.Stderr = bufio.NewReader(&stderr)
 	}
 	err = executor.Stream(remotecommand.StreamOptions{
 		Stdin:  nil,

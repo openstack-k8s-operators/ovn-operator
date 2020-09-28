@@ -39,6 +39,7 @@ const (
 	ovnRunDir = "/ovn-run"
 
 	dbStatusContainerName = "dbstatus"
+	DBServerContainerName = "ovsdb-server"
 )
 
 func dbServerShell(server *ovncentralv1alpha1.OVSDBServer) *corev1.Pod {
@@ -238,7 +239,7 @@ func dbServerContainerApply(
 	server *ovncentralv1alpha1.OVSDBServer,
 	cluster *ovncentralv1alpha1.OVSDBCluster) {
 
-	container.Name = "ovsdb-server"
+	container.Name = DBServerContainerName
 	container.Image = cluster.Spec.Image
 	container.Command = []string{"/dbserver"}
 	container.VolumeMounts = dbContainerVolumeMountsApply(container.VolumeMounts)
