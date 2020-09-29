@@ -11,6 +11,7 @@ if [ "${DB_TYPE}" == "NB" ]; then
     raft_port=6643
     db_global_table=NB_Global
 elif [ "${DB_TYPE}" == "SB" ]; then
+    lower="sb"
     db_name="OVN_Southbound"
     db_port=6642
     raft_port=6644
