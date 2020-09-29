@@ -62,6 +62,10 @@ const (
 	OVSDBClusterFinalizer = "ovsdbcluster.ovn-central.openstack.org"
 )
 
+type clusterKickError struct{}
+
+func (e clusterKickError) Error() string { return "" }
+
 // +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovsdbclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovsdbclusters/status,verbs=get;update;patch
 
@@ -134,15 +138,6 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 		return ctrl.Result{}, err
 	}
 
-	findServer := func(name string) *ovncentralv1alpha1.OVSDBServer {
-		for i := 0; i < len(servers); i++ {
-			if servers[i].Name == name {
-				return &servers[i]
-			}
-		}
-		return nil
-	}
-
 	//
 	// Get all the DB server Pods we manage
 	//
@@ -152,123 +147,21 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 		return ctrl.Result{}, err
 	}
 
-	findPod := func(name string) *corev1.Pod {
-		for i := 0; i < len(serverPods); i++ {
-			if serverPods[i].Name == name {
-				return &serverPods[i]
-			}
-		}
-		return nil
+	//
+	// Finalize cluster if it has been deleted
+	//
+
+	if util.IsDeleted(cluster) {
+		return r.finalizeCluster(ctx, cluster, servers)
 	}
 
 	//
-	// Finalize ourselves
+	// Update status based on the observed state of servers and pods
 	//
 
-	if !cluster.DeletionTimestamp.IsZero() {
-		// Remove finalizer from all managed servers
-		for i := 0; i < len(servers); i++ {
-			server := &servers[i]
-			if controllerutil.ContainsFinalizer(server, OVSDBClusterFinalizer) {
-				controllerutil.RemoveFinalizer(server, OVSDBClusterFinalizer)
-
-				if err := r.Client.Update(ctx, server); err != nil {
-					err = WrapErrorForObject(
-						"Remove server finalizer", server, err)
-					return ctrl.Result{}, err
-				}
-
-				LogForObject(r, "Removed finalizer from server", server)
-			}
-		}
-
-		controllerutil.RemoveFinalizer(cluster, OVSDBClusterFinalizer)
-		if err := r.Client.Update(ctx, cluster); err != nil {
-			err = WrapErrorForObject(
-				"Remove cluster finalizer", cluster, err)
-			return ctrl.Result{}, err
-		}
-
-		return ctrl.Result{}, err
-	}
-
-	//
-	// We're Available iff a quorum of server pods are Ready
-	//
-	// Quorum is based on the number of servers which have been initialised into the cluster,
-	// not the target number of replicas.
-	//
-
-	clusterSize := 0
-	for i := 0; i < len(servers); i++ {
-		if util.IsAvailable(&servers[i]) {
-			clusterSize++
-		}
-	}
-	clusterQuorum := int(math.Ceil(float64(clusterSize) / 2))
-
-	nAvailable := 0
-	for i := 0; i < len(serverPods); i++ {
-		if util.IsPodReady(&serverPods[i]) {
-			nAvailable++
-		}
-	}
-
-	if nAvailable >= clusterQuorum && nAvailable > 0 {
-		util.SetAvailable(cluster)
-	} else {
-		util.UnsetAvailable(cluster)
-	}
-
-	cluster.Status.AvailableServers = nAvailable
-	cluster.Status.ClusterSize = clusterSize
-	cluster.Status.ClusterQuorum = clusterQuorum
-
-	//
-	// If any servers have failed, also set failed on the cluster
-	//
-
-	for i := 0; i < len(servers); i++ {
-		var failed []string
-		if util.IsFailed(&servers[i]) {
-			failed = append(failed, servers[i].Name)
-		}
-
-		if len(failed) > 0 {
-			msg := fmt.Sprintf("The following servers have failed to intialize: %s",
-				strings.Join(failed, ", "))
-			util.SetFailed(cluster, ovncentralv1alpha1.OVSDBClusterBootstrap, msg)
-		}
-	}
-
-	//
-	// Set ClusterID from server ClusterIDs
-	//
-
-	for _, server := range servers {
-		if cluster.Status.ClusterID == nil {
-			cluster.Status.ClusterID = server.Status.ClusterID
-		} else {
-			if server.Status.ClusterID != nil &&
-				*cluster.Status.ClusterID != *server.Status.ClusterID {
-
-				// N.B. This overwrites a ClusterBootstrap failure. I guess this is
-				// ok, as we can only set 1 failure condition and it's arbitrary
-				// which one.
-				msg := fmt.Sprintf("Server %s has inconsistent ClusterID %s. "+
-					"Expected ClusterID %s",
-					server.Name, *server.Status.ClusterID,
-					*cluster.Status.ClusterID)
-				util.SetFailed(
-					cluster,
-					ovncentralv1alpha1.OVSDBClusterInconsistent, msg)
-			}
-
-		}
-	}
-
-	// Status will be saved automatically
+	updateClusterStatus(cluster, servers, serverPods)
 	if statusChanged() {
+		// Status will be saved automatically
 		return ctrl.Result{}, nil
 	}
 
@@ -276,193 +169,60 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 	// Update servers
 	//
 
-	var updateServers []*ovncentralv1alpha1.OVSDBServer
-	for i := 0; i < len(servers); i++ {
-		server := &servers[i]
-		if server.DeletionTimestamp.IsZero() {
-			updateServers = append(updateServers, server)
-		}
-	}
-
-	// Create new servers if required
-
-	targetServers := cluster.Spec.Replicas
-	if targetServers == 0 {
-		// The cluster needs at least one server as a datastore, even if it's not running
-		targetServers = 1
-	}
-	if cluster.Status.ClusterID == nil {
-		// Create exactly one server if we're not bootstrapped
-		targetServers = 1
-	}
-
-	for i := len(servers); i < targetServers; i++ {
-		name := nextServerName(cluster, findServer)
-		updateServers = append(updateServers, serverShell(cluster, name))
-	}
-
-	for _, server := range updateServers {
-		apply := func() error {
-			serverApply(cluster, server, servers)
-
-			err := controllerutil.SetControllerReference(
-				cluster, server, r.Scheme)
-			if err != nil {
-				return WrapErrorForObject(
-					"Set controller reference for server", server, err)
-			}
-
-			controllerutil.AddFinalizer(server, OVSDBClusterFinalizer)
-
-			return err
-		}
-		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, server, apply)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		LogForObject(r, "Created/Updated server", server)
+	if err := r.updateServers(ctx, cluster, servers); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	//
 	// Ensure we have a pod for each available server
 	//
 
-	if cluster.Spec.Replicas == 0 {
-		// If we scale down to zero we'll still have 1 server, but we don't want any
-		// running pods.
-		for i := 0; i < len(serverPods); i++ {
-			serverPod := &serverPods[i]
-			if err := r.Delete(ctx, serverPod); err != nil {
-				err = WrapErrorForObject("Delete server pod", &serverPods[i], err)
-				return ctrl.Result{}, err
-			}
-			LogForObject(r, "Deleted server pod", serverPod)
-		}
-	} else {
-		for i := 0; i < len(servers); i++ {
-			server := &servers[i]
-
-			// Ignore if server is bootstrapping or deleting
-			if !util.IsAvailable(server) || !server.DeletionTimestamp.IsZero() {
-				continue
-			}
-
-			serverPod := findPod(server.Name)
-
-			// If the pod already exists, updating could potentially cause an outage of
-			// it.
-			if serverPod != nil {
-				// Updating a cluster with less than 3 servers will always cause
-				// loss of quorum, so just do it.
-				if clusterSize >= 3 && nAvailable <= clusterQuorum {
-					continue
-				}
-			} else {
-				serverPod = dbServerShell(server)
-			}
-
-			apply := func() error {
-				dbServerApply(serverPod, server, cluster)
-
-				if err := controllerutil.SetControllerReference(
-					cluster, serverPod, r.Scheme); err != nil {
-
-					err = WrapErrorForObject(
-						"Set controller reference for server pod",
-						serverPod, err)
-					return err
-				}
-				return nil
-			}
-			op, err := CreateOrDelete(r, ctx, serverPod, apply)
-			if err != nil {
-				err = WrapErrorForObject("Update server pod", serverPod, err)
-				return ctrl.Result{}, err
-			}
-			if op != controllerutil.OperationResultNone {
-				nAvailable -= 1
-			}
-		}
-
-		cluster.Status.AvailableServers = nAvailable
+	if err := r.updateServerPods(ctx, cluster, servers, serverPods); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	//
 	// Finalize servers
 	//
 
-	for i := 0; i < len(servers); i++ {
-		server := &servers[i]
-		if !server.DeletionTimestamp.IsZero() &&
-			controllerutil.ContainsFinalizer(server, OVSDBClusterFinalizer) {
-
-			// Pick an available server pod to kick the deleted server
-			var kickerPod *corev1.Pod
-			kickerPod = findPod(server.Name)
-			randomStart := rand.Intn(len(serverPods))
-			for i := randomStart; i < len(serverPods); i++ {
-				pod := &serverPods[i%len(serverPods)]
-				if util.IsPodReady(&serverPods[i]) {
-					kickerPod = pod
-					break
-				}
-			}
-			if kickerPod == nil {
-				LogForObject(r, "No server pod available to finalize server", server)
-				// No point trying to finalize anything else
-				// Continue reconciliation in case we need to fix things
-				break
-			}
-
-			r.Log.Info("Kicking server from cluster",
-				"server", server.Name, "exec pod", kickerPod.Name)
-
-			result, err := util.PodExec(kickerPod, DBServerContainerName,
-				[]string{"/cluster-kick", *server.Status.ServerID}, false)
-			if err != nil {
-				err = WrapErrorForObject(
-					"Sending exec for cluster kick", kickerPod, err)
-				return ctrl.Result{}, err
-			}
-
-			if result.ExitStatus != 0 {
-				r.Log.Info("Failed to kick server from cluster",
-					"server", server.Name, "exec pod", kickerPod.Name)
-
-				return ctrl.Result{RequeueAfter: time.Second * 10}, nil
-			}
-
-			serverPod := findPod(server.Name)
-			if serverPod != nil {
-				if err := r.Client.Delete(ctx, serverPod); err != nil {
-					err = WrapErrorForObject(
-						"Delete db pod during finalizer", serverPod, err)
-					return ctrl.Result{}, err
-				}
-			}
-
-			controllerutil.RemoveFinalizer(server, OVSDBClusterFinalizer)
-
-			if err := r.Client.Update(ctx, server); err != nil {
-				err = WrapErrorForObject(
-					"Remove cluster finalizer from server", server, err)
-				return ctrl.Result{}, err
-			}
+	if err := r.finalizeServers(ctx, cluster, servers, serverPods); err != nil {
+		if _, ok := err.(clusterKickError); ok {
+			return ctrl.Result{RequeueAfter: time.Second * 10}, nil
 		}
+
+		return ctrl.Result{}, err
 	}
 
 	// FIN
 	return ctrl.Result{}, nil
 }
 
+func findServer(name string, servers []ovncentralv1alpha1.OVSDBServer) *ovncentralv1alpha1.OVSDBServer {
+	for i := 0; i < len(servers); i++ {
+		if servers[i].Name == name {
+			return &servers[i]
+		}
+	}
+	return nil
+}
+
+func findPod(name string, serverPods []corev1.Pod) *corev1.Pod {
+	for i := 0; i < len(serverPods); i++ {
+		if serverPods[i].Name == name {
+			return &serverPods[i]
+		}
+	}
+	return nil
+}
+
 func nextServerName(
 	cluster *ovncentralv1alpha1.OVSDBCluster,
-	findServer func(name string) *ovncentralv1alpha1.OVSDBServer) string {
+	servers []ovncentralv1alpha1.OVSDBServer,
+) string {
 
 	for i := 0; ; i++ {
 		name := fmt.Sprintf("%s-%d", cluster.Name, i)
-		if findServer(name) == nil {
+		if findServer(name, servers) == nil {
 			return name
 		}
 	}
@@ -470,7 +230,8 @@ func nextServerName(
 
 func (r *OVSDBClusterReconciler) getServers(
 	ctx context.Context,
-	cluster *ovncentralv1alpha1.OVSDBCluster) ([]ovncentralv1alpha1.OVSDBServer, error) {
+	cluster *ovncentralv1alpha1.OVSDBCluster,
+) ([]ovncentralv1alpha1.OVSDBServer, error) {
 
 	serverList := &ovncentralv1alpha1.OVSDBServerList{}
 	serverListOpts := &client.ListOptions{Namespace: cluster.Namespace}
@@ -492,7 +253,8 @@ func (r *OVSDBClusterReconciler) getServers(
 
 func (r *OVSDBClusterReconciler) getServerPods(
 	ctx context.Context,
-	cluster *ovncentralv1alpha1.OVSDBCluster) ([]corev1.Pod, error) {
+	cluster *ovncentralv1alpha1.OVSDBCluster,
+) ([]corev1.Pod, error) {
 
 	podList := &corev1.PodList{}
 	podListOpts := &client.ListOptions{Namespace: cluster.Namespace}
@@ -521,9 +283,301 @@ func (r *OVSDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+func (r *OVSDBClusterReconciler) finalizeCluster(
+	ctx context.Context,
+	cluster *ovncentralv1alpha1.OVSDBCluster,
+	servers []ovncentralv1alpha1.OVSDBServer,
+) (ctrl.Result, error) {
+	// Remove finalizer from all managed servers
+	for i := 0; i < len(servers); i++ {
+		server := &servers[i]
+		if controllerutil.ContainsFinalizer(server, OVSDBClusterFinalizer) {
+			controllerutil.RemoveFinalizer(server, OVSDBClusterFinalizer)
+
+			if err := r.Client.Update(ctx, server); err != nil {
+				err = WrapErrorForObject(
+					"Remove server finalizer", server, err)
+				return ctrl.Result{}, err
+			}
+
+			LogForObject(r, "Removed finalizer from server", server)
+		}
+	}
+
+	controllerutil.RemoveFinalizer(cluster, OVSDBClusterFinalizer)
+	if err := r.Client.Update(ctx, cluster); err != nil {
+		err = WrapErrorForObject(
+			"Remove cluster finalizer", cluster, err)
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *OVSDBClusterReconciler) finalizeServers(
+	ctx context.Context,
+	cluster *ovncentralv1alpha1.OVSDBCluster,
+	servers []ovncentralv1alpha1.OVSDBServer,
+	serverPods []corev1.Pod,
+) error {
+	for i := 0; i < len(servers); i++ {
+		server := &servers[i]
+		if util.IsDeleted(server) &&
+			controllerutil.ContainsFinalizer(server, OVSDBClusterFinalizer) {
+
+			// Pick an available server pod to kick the deleted server
+			var kickerPod *corev1.Pod
+			kickerPod = findPod(server.Name, serverPods)
+			for i := rand.Intn(len(serverPods)); i < len(serverPods); i++ {
+				pod := &serverPods[i%len(serverPods)]
+				if util.IsPodReady(&serverPods[i]) {
+					kickerPod = pod
+					break
+				}
+			}
+			if kickerPod == nil {
+				LogForObject(r, "No server pod available to finalize server", server)
+				// No point trying to finalize anything else right now
+				break
+			}
+
+			r.Log.Info("Kicking server from cluster",
+				"server", server.Name, "exec pod", kickerPod.Name)
+
+			result, err := util.PodExec(kickerPod, DBServerContainerName,
+				[]string{"/cluster-kick", *server.Status.ServerID}, false)
+			if err != nil {
+				return WrapErrorForObject("Sending exec for cluster kick", kickerPod, err)
+			}
+
+			if result.ExitStatus != 0 {
+				r.Log.Info("Failed to kick server from cluster",
+					"server", server.Name, "exec pod", kickerPod.Name)
+
+				return clusterKickError{}
+			}
+
+			serverPod := findPod(server.Name, serverPods)
+			if serverPod != nil {
+				if err := r.Client.Delete(ctx, serverPod); err != nil {
+					return WrapErrorForObject("Delete db pod during finalizer", serverPod, err)
+				}
+			}
+
+			controllerutil.RemoveFinalizer(server, OVSDBClusterFinalizer)
+			if err := r.Client.Update(ctx, server); err != nil {
+				return WrapErrorForObject("Remove cluster finalizer from server", server, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func updateClusterStatus(
+	cluster *ovncentralv1alpha1.OVSDBCluster,
+	servers []ovncentralv1alpha1.OVSDBServer,
+	serverPods []corev1.Pod,
+) {
+	// Cluster size is the basis of the quorum calculation. It is the number of
+	// servers which have been added to the cluster, not the target number of
+	// replicas.
+	clusterSize := 0
+	for i := 0; i < len(servers); i++ {
+		if util.IsAvailable(&servers[i]) {
+			clusterSize++
+		}
+	}
+	clusterQuorum := int(math.Ceil(float64(clusterSize) / 2))
+
+	nAvailable := 0
+	for i := 0; i < len(serverPods); i++ {
+		if util.IsPodReady(&serverPods[i]) {
+			nAvailable++
+		}
+	}
+
+	// We're Available iff a quorum of server pods are Ready
+	if nAvailable >= clusterQuorum && nAvailable > 0 {
+		util.SetAvailable(cluster)
+	} else {
+		util.UnsetAvailable(cluster)
+	}
+
+	cluster.Status.AvailableServers = nAvailable
+	cluster.Status.ClusterSize = clusterSize
+	cluster.Status.ClusterQuorum = clusterQuorum
+
+	// If any servers have failed, also set failed on the cluster
+	for i := 0; i < len(servers); i++ {
+		var failed []string
+		if util.IsFailed(&servers[i]) {
+			failed = append(failed, servers[i].Name)
+		}
+
+		if len(failed) > 0 {
+			msg := fmt.Sprintf("The following servers have failed to intialize: %s",
+				strings.Join(failed, ", "))
+			util.SetFailed(cluster, ovncentralv1alpha1.OVSDBClusterBootstrap, msg)
+		}
+	}
+
+	// Set ClusterID from server ClusterIDs
+	for _, server := range servers {
+		if cluster.Status.ClusterID == nil {
+			cluster.Status.ClusterID = server.Status.ClusterID
+		} else {
+			if server.Status.ClusterID != nil &&
+				*cluster.Status.ClusterID != *server.Status.ClusterID {
+
+				// N.B. This overwrites a ClusterBootstrap failure. I guess this is
+				// ok, as we can only set 1 failure condition and it's arbitrary
+				// which one.
+				msg := fmt.Sprintf("Server %s has inconsistent ClusterID %s. "+
+					"Expected ClusterID %s",
+					server.Name, *server.Status.ClusterID,
+					*cluster.Status.ClusterID)
+				util.SetFailed(
+					cluster,
+					ovncentralv1alpha1.OVSDBClusterInconsistent, msg)
+			}
+
+		}
+	}
+}
+
+func (r *OVSDBClusterReconciler) updateServers(
+	ctx context.Context,
+	cluster *ovncentralv1alpha1.OVSDBCluster,
+	servers []ovncentralv1alpha1.OVSDBServer,
+) error {
+
+	// A list of all servers we're going to update or add
+	var updateServers []*ovncentralv1alpha1.OVSDBServer
+
+	// Servers to be updated
+	for i := 0; i < len(servers); i++ {
+		server := &servers[i]
+		if !util.IsDeleted(server) {
+			updateServers = append(updateServers, server)
+		}
+	}
+
+	// Create new servers if required
+
+	targetServers := cluster.Spec.Replicas
+	if targetServers == 0 {
+		// The cluster needs at least one server as a datastore, even if it's not running
+		targetServers = 1
+	}
+	if cluster.Status.ClusterID == nil {
+		// Create exactly one server if we're not bootstrapped
+		targetServers = 1
+	}
+
+	for i := len(servers); i < targetServers; i++ {
+		name := nextServerName(cluster, servers)
+		updateServers = append(updateServers, serverShell(cluster, name))
+	}
+
+	for _, server := range updateServers {
+		apply := func() error {
+			serverApply(cluster, server, servers)
+
+			err := controllerutil.SetControllerReference(
+				cluster, server, r.Scheme)
+			if err != nil {
+				return WrapErrorForObject(
+					"Set controller reference for server", server, err)
+			}
+
+			controllerutil.AddFinalizer(server, OVSDBClusterFinalizer)
+
+			return err
+		}
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, server, apply)
+		if err != nil {
+			return err
+		}
+
+		LogForObject(r, "Created/Updated server", server)
+	}
+
+	return nil
+}
+
+func (r *OVSDBClusterReconciler) updateServerPods(
+	ctx context.Context,
+	cluster *ovncentralv1alpha1.OVSDBCluster,
+	servers []ovncentralv1alpha1.OVSDBServer,
+	serverPods []corev1.Pod,
+) error {
+	status := &cluster.Status
+
+	if cluster.Spec.Replicas == 0 {
+		// If we scale down to zero we'll still have 1 server, but we don't want any
+		// running pods.
+		for i := 0; i < len(serverPods); i++ {
+			serverPod := &serverPods[i]
+			if err := r.Delete(ctx, serverPod); err != nil {
+				return WrapErrorForObject("Delete server pod", &serverPods[i], err)
+			}
+			LogForObject(r, "Deleted server pod", serverPod)
+		}
+	} else {
+		for i := 0; i < len(servers); i++ {
+			server := &servers[i]
+
+			// Ignore if server is bootstrapping or deleting
+			if !util.IsAvailable(server) || util.IsDeleted(server) {
+				continue
+			}
+
+			serverPod := findPod(server.Name, serverPods)
+
+			// If the pod already exists, updating could potentially cause an outage of
+			// it, so check we have a super-quorum.
+			if serverPod != nil {
+				// Updating a cluster with less than 3 servers will always cause
+				// loss of quorum, so ignore it.
+				if status.ClusterSize >= 3 && status.AvailableServers <= status.ClusterQuorum {
+					continue
+				}
+			} else {
+				serverPod = dbServerShell(server)
+			}
+
+			apply := func() error {
+				dbServerApply(serverPod, server, cluster)
+
+				if err := controllerutil.SetControllerReference(
+					cluster, serverPod, r.Scheme); err != nil {
+
+					err = WrapErrorForObject(
+						"Set controller reference for server pod",
+						serverPod, err)
+					return err
+				}
+				return nil
+			}
+			op, err := CreateOrDelete(r, ctx, serverPod, apply)
+			if err != nil {
+				err = WrapErrorForObject("Update server pod", serverPod, err)
+				return err
+			}
+			if op != controllerutil.OperationResultNone {
+				status.AvailableServers--
+			}
+		}
+	}
+
+	return nil
+}
+
 func serverShell(
 	cluster *ovncentralv1alpha1.OVSDBCluster,
-	name string) *ovncentralv1alpha1.OVSDBServer {
+	name string,
+) *ovncentralv1alpha1.OVSDBServer {
 
 	server := &ovncentralv1alpha1.OVSDBServer{}
 	server.Name = name
@@ -534,10 +588,13 @@ func serverShell(
 func serverApply(
 	cluster *ovncentralv1alpha1.OVSDBCluster,
 	server *ovncentralv1alpha1.OVSDBServer,
-	allServers []ovncentralv1alpha1.OVSDBServer) {
+	servers []ovncentralv1alpha1.OVSDBServer,
+) {
 
 	var initPeers []string
-	for _, peer := range allServers {
+	for i := 0; i < len(servers); i++ {
+		peer := &servers[i]
+
 		if peer.Name != server.Name && peer.Status.RaftAddress != nil {
 			initPeers = append(initPeers, *peer.Status.RaftAddress)
 		}
