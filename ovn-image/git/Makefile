@@ -12,7 +12,7 @@ gitcache-update:
 .PHONY: scripts
 scripts:
 	mkdir -p scripts
-	cp ../scripts-common/* scripts/
+	cp -a ../scripts-common/* scripts/
 
 .PHONY: build
 build: scripts

@@ -52,5 +52,3 @@ COPY scripts/* /
 VOLUME ["/var/lib/openvswitch", "/ovn-run"]
 
 USER 1000:1000
-
-ENTRYPOINT ["/entrypoint"]
