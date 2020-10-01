@@ -22,21 +22,22 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type DBType string
+
 const (
-	DBTypeNB = "NB"
-	DBTypeSB = "SB"
+	DBTypeNB DBType = "NB"
+	DBTypeSB DBType = "SB"
 )
 
 const (
-	OVSDBClusterInconsistent status.ConditionReason = "InconsistentCluster"
-	OVSDBClusterBootstrap    status.ConditionReason = "BootstrapFailed"
-	OVSDBClusterInvalid      status.ConditionReason = "InvalidState"
+	OVSDBClusterServers status.ConditionReason = "FailedServers"
 )
 
 // OVSDBClusterSpec defines the desired state of OVSDBCluster
 type OVSDBClusterSpec struct {
-	DBType   string `json:"dbType"`
-	Replicas int    `json:"replicas"`
+	DBType       DBType  `json:"dbType"`
+	Replicas     int     `json:"replicas"`
+	ClientConfig *string `json:"clientConfig,omitempty"`
 
 	Image              string            `json:"image"`
 	ServerStorageSize  resource.Quantity `json:"serverStorageSize"`

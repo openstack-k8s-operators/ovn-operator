@@ -18,7 +18,6 @@ package v1alpha1
 
 import (
 	"github.com/operator-framework/operator-lib/status"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -29,15 +28,15 @@ import (
 type OVNCentralSpec struct {
 	// Required properties
 
-	Replicas    int               `json:"replicas"`
+	NBReplicas  int               `json:"nbReplicas"`
+	SBReplicas  int               `json:"sbReplicas"`
 	Image       string            `json:"image"`
 	StorageSize resource.Quantity `json:"storageSize,omitempty"`
 
 	// Required properties with default values
 
-	ConnectionConfig string `json:"connectionConfig,omitempty"`
-	ConnectionCA     string `json:"connectionCA,omitempty"`
-	ConnectionCert   string `json:"connectionCert,omitempty"`
+	NBClientConfig string `json:"nbClientConfig,omitempty"`
+	SBClientConfig string `json:"sbClientConfig,omitempty"`
 
 	// Optional properties
 
@@ -46,14 +45,8 @@ type OVNCentralSpec struct {
 
 // OVNCentralStatus defines the observed state of OVNCentral
 type OVNCentralStatus struct {
-	Conditions status.Conditions             `json:"conditions,omitempty"`
-	Servers    []corev1.LocalObjectReference `json:"servers" patchStrategy:"merge" patchMergeKey:"name"`
+	Conditions status.Conditions `json:"conditions,omitempty"`
 }
-
-const (
-	OVNCentralInconsistentCluster status.ConditionReason = "InconsistentCluster"
-	OVNCentralBootstrapFailed     status.ConditionReason = "BootstrapFailed"
-)
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status

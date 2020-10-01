@@ -5,5 +5,6 @@ metadata:
 spec:
   dbType: NB
   replicas: 3
-  image: quay.io/mbooth/ovn-central:2.11-dev
+  clientConfig: ovsdbcluster-sample
+  image: quay.io/mbooth/ovn-central:trunk
   serverStorageSize: 1G

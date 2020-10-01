@@ -23,6 +23,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -73,6 +74,28 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	}
 
 	//
+	// Snapshot the original status object and ensure we save any changes to it on return
+	//
+
+	origStatus := server.Status.DeepCopy()
+	statusChanged := func() bool {
+		return !equality.Semantic.DeepEqual(&server.Status, origStatus)
+	}
+
+	defer func() {
+		if statusChanged() {
+			if updateErr := r.Client.Status().Update(ctx, server); updateErr != nil {
+				if err == nil {
+					err = WrapErrorForObject(
+						"Update Status", server, updateErr)
+				} else {
+					LogErrorForObject(r, updateErr, "Update status", server)
+				}
+			}
+		}
+	}()
+
+	//
 	// Fetch the cluster object
 	//
 
@@ -85,20 +108,13 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	}
 
 	//
-	// Unset Failed condition unless is re-set explicitly
-	//
-
-	origConditions := util.DeepCopyConditions(server.Status.Conditions)
-	util.UnsetFailed(server)
-	defer CheckConditions(r, ctx, server, origConditions, &err)
-
-	//
 	// Ensure Service exists
 	//
 
 	service := serviceShell(server)
 	op, err := CreateOrDelete(r, ctx, service, func() error {
 		serviceApply(service, server)
+		applyServerLabels(server, service.Labels)
 
 		err := controllerutil.SetOwnerReference(server, service, r.Scheme)
 		if err != nil {
@@ -120,6 +136,7 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	pvc := pvcShell(server)
 	op, err = controllerutil.CreateOrUpdate(ctx, r.Client, pvc, func() error {
 		pvcApply(pvc, server)
+		applyServerLabels(server, pvc.Labels)
 
 		err := controllerutil.SetOwnerReference(server, pvc, r.Scheme)
 		if err != nil {
@@ -142,7 +159,18 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 		return r.bootstrapDB(ctx, server, cluster)
 	}
 
-	util.SetAvailable(server)
+	util.SetInitialized(server)
+
+	if server.Spec.ClusterID != nil && *server.Spec.ClusterID != *server.Status.ClusterID {
+		msg := fmt.Sprintf("Expected ClusterID %s but found %s",
+			*server.Spec.ClusterID, *server.Status.ClusterID)
+		if !util.IsFailed(server) {
+			LogForObject(r, msg, server)
+		}
+		util.SetFailed(server, ovncentralv1alpha1.OVSDBServerInconsistent, msg)
+	} else {
+		util.UnsetFailed(server)
+	}
 
 	// FIN
 	return ctrl.Result{}, nil
@@ -159,14 +187,23 @@ func (r *OVSDBServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *OVSDBServerReconciler) bootstrapDB(
 	ctx context.Context, server *ovncentralv1alpha1.OVSDBServer,
-	cluster *ovncentralv1alpha1.OVSDBCluster) (ctrl.Result, error) {
+	cluster *ovncentralv1alpha1.OVSDBCluster,
+) (ctrl.Result, error) {
+	if server.Spec.ClusterID != nil && len(server.Spec.InitPeers) == 0 {
+		msg := fmt.Sprintf("Unable to bootstrap server %s into cluster %s without InitPeers",
+			server.Name, *server.Spec.ClusterID)
+		if !util.IsFailed(server) {
+			LogForObject(r, msg, server)
+		}
+		util.SetFailed(server, ovncentralv1alpha1.OVSDBServerBootstrapInvalid, msg)
+		return ctrl.Result{}, nil
+	}
 
 	// Ensure the bootstrap pod is running
 	bootstrapPod := bootstrapPodShell(server)
 	_, err := CreateOrDelete(r, ctx, bootstrapPod, func() error {
-		if err := bootstrapPodApply(bootstrapPod, server, cluster); err != nil {
-			return err
-		}
+		bootstrapPodApply(bootstrapPod, server, cluster)
+		applyServerLabels(server, bootstrapPod.Labels)
 
 		err := controllerutil.SetControllerReference(server, bootstrapPod, r.Scheme)
 		if err != nil {
@@ -180,11 +217,14 @@ func (r *OVSDBServerReconciler) bootstrapDB(
 	// Set failed condition if bootstrap failed
 	// XXX: This test doesn't work with RestartPolicyOnFailure
 	if bootstrapPod.Status.Phase == corev1.PodFailed {
-		err := fmt.Errorf("Bootstrap pod %s failed. See pod logs for details",
+		msg := fmt.Sprintf("Bootstrap pod %s failed. See pod logs for details",
 			bootstrapPod.Name)
-		util.SetFailed(server, ovncentralv1alpha1.OVSDBServerBootstrapFailed, err.Error())
+		if !util.IsFailed(server) {
+			LogForObject(r, msg, server)
+		}
+		util.SetFailed(server, ovncentralv1alpha1.OVSDBServerBootstrapFailed, msg)
 
-		return ctrl.Result{}, err
+		return ctrl.Result{}, nil
 	}
 
 	if bootstrapPod.Status.Phase != corev1.PodSucceeded {
@@ -213,7 +253,7 @@ func (r *OVSDBServerReconciler) bootstrapDB(
 		return ctrl.Result{}, err
 	}
 
-	util.SetAvailable(server)
+	util.SetInitialized(server)
 
 	if err := r.Client.Status().Update(ctx, server); err != nil {
 		err = WrapErrorForObject("Update db status", server, err)
@@ -221,4 +261,10 @@ func (r *OVSDBServerReconciler) bootstrapDB(
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func applyServerLabels(server *ovncentralv1alpha1.OVSDBServer, labels map[string]string) {
+	labels[OVNCentralLabel] = server.Labels[OVNCentralLabel]
+	labels[OVSDBClusterLabel] = server.Labels[OVSDBClusterLabel]
+	labels[OVSDBServerLabel] = server.Name
 }

@@ -19,20 +19,31 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
-	"github.com/operator-framework/operator-lib/status"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	ovncentralv1alpha1 "github.com/openstack-k8s-operators/ovn-central-operator/api/v1alpha1"
 	"github.com/openstack-k8s-operators/ovn-central-operator/util"
+)
+
+const (
+	OVNCentralLabel = "ovn-central"
 )
 
 // OVNCentralReconciler reconciles a OVNCentral object
@@ -53,7 +64,7 @@ func (r *OVNCentralReconciler) GetLogger() logr.Logger {
 // +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovncentrals,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovncentrals/status,verbs=get;update;patch
 
-func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (result ctrl.Result, err error) {
 	_ = r.Log.WithValues("ovncentral", req.NamespacedName)
 	ctx := context.Background()
 
@@ -61,9 +72,8 @@ func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 	// Fetch the instance
 	//
 
-	instance := &ovncentralv1alpha1.OVNCentral{}
-	err := r.Client.Get(ctx, req.NamespacedName, instance)
-	if err != nil {
+	central := &ovncentralv1alpha1.OVNCentral{}
+	if err := r.Client.Get(ctx, req.NamespacedName, central); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile
 			// request.  Owned objects are automatically garbage collected.  For
@@ -71,162 +81,284 @@ func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		err = WrapErrorForObject("Get instance", instance, err)
+		err = WrapErrorForObject("Get central", central, err)
 		return ctrl.Result{}, err
 	}
+
+	//
+	// Snapshot the original status object and ensure we save any changes to it on return
+	//
+
+	origStatus := central.Status.DeepCopy()
+	statusChanged := func() bool {
+		return !equality.Semantic.DeepEqual(&central.Status, origStatus)
+	}
+
+	defer func() {
+		if statusChanged() {
+			if updateErr := r.Client.Status().Update(ctx, central); updateErr != nil {
+				if err == nil {
+					err = WrapErrorForObject(
+						"Update Status", central, updateErr)
+				} else {
+					LogErrorForObject(r, updateErr, "Update status", central)
+				}
+			}
+		}
+	}()
 
 	//
 	// Set Default values
 	//
 
-	updatedInstance := r.setDefaultValues(ctx, instance)
-	if updatedInstance {
-		err := r.Client.Update(ctx, instance)
-		if err != nil {
-			err = WrapErrorForObject("Update", instance, err)
+	if updated := r.setDefaultValues(ctx, central); updated {
+		if err := r.Client.Update(ctx, central); err != nil {
+			err = WrapErrorForObject("Update", central, err)
 			return ctrl.Result{}, err
 		}
 
+		LogForObject(r, "Updated default values", central)
 		return ctrl.Result{}, nil
 	}
 
-	//
-	// Create the bootstrap server
-	//
-
-	apply := func(server *ovncentralv1alpha1.OVSDBServer) (*ovncentralv1alpha1.OVSDBServer, error) {
-		fetched := &ovncentralv1alpha1.OVSDBServer{}
-		err := r.Client.Get(ctx,
-			types.NamespacedName{Name: server.Name, Namespace: server.Namespace},
-			fetched)
-		if err != nil {
-			if errors.IsNotFound(err) {
-				err = r.Client.Create(ctx, server)
-				if err != nil {
-					err = WrapErrorForObject("Create", server, err)
-					return nil, err
-				}
-				LogForObject(r, "Create", server)
-
-				return server, nil
-			}
-
-			err = WrapErrorForObject("Get", server, err)
-			return nil, err
-		}
-
-		if !equality.Semantic.DeepDerivative(server, fetched) {
-			server.ResourceVersion = fetched.ResourceVersion
-			err = r.Client.Update(ctx, server)
-			if err != nil {
-				err = WrapErrorForObject("Update", server, err)
-				return nil, err
-			}
-			LogForObject(r, "Update", server)
-			return server, nil
-		}
-
-		return fetched, nil
-	}
-
-	var servers []corev1.LocalObjectReference
-
-	server := r.Server(instance, 0)
-	server, err = apply(server)
+	nbCluster, err := r.clusterApply(ctx, central, ovncentralv1alpha1.DBTypeNB)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	switch {
-	case util.IsFailed(server):
-		err = fmt.Errorf("Bootstrap server %s failed", server.Name)
-		if condErr := r.setFailed(ctx, instance, "BootstrapFailed", err); condErr != nil {
-			return ctrl.Result{}, condErr
-		}
+	sbCluster, err := r.clusterApply(ctx, central, ovncentralv1alpha1.DBTypeSB)
+	if err != nil {
 		return ctrl.Result{}, err
-	case util.IsAvailable(server):
-		// Continue
-	default:
-		// Wait for server to become either Failed or Available
-		return ctrl.Result{}, nil
 	}
 
-	servers = append(servers, corev1.LocalObjectReference{Name: server.Name})
-	instance.Status.Servers = servers
-	err = r.Client.Status().Update(ctx, instance)
+	northd, err := r.northdApply(ctx, central)
 	if err != nil {
-		err = WrapErrorForObject("Update Status", instance, err)
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, err
+	}
+
+	getAvailability := func() bool {
+		if !util.IsAvailable(nbCluster) {
+			return false
+		}
+		if !util.IsAvailable(sbCluster) {
+			return false
+		}
+
+		if northd == nil {
+			return false
+		}
+
+		for i := 0; i < len(northd.Status.Conditions); i++ {
+			cond := &northd.Status.Conditions[i]
+			if cond.Type == appsv1.DeploymentAvailable && cond.Status == corev1.ConditionTrue {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	if getAvailability() {
+		if !util.IsAvailable(central) {
+			LogForObject(r, "OVN Central became available", central)
+		}
+		util.SetAvailable(central)
+	} else {
+		if util.IsAvailable(central) {
+			LogForObject(r, "OVN Central became unavailable", central)
+		}
+		util.UnsetAvailable(central)
 	}
 
 	return ctrl.Result{}, nil
 }
 
 func (r *OVNCentralReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Schedule a reconcile on ovncentral for northd if the client configmap owned by either of
+	// our 2 clusters is updated
+	clusterConfigMapWatcher := &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: handler.ToRequestsFunc(func(source handler.MapObject) []reconcile.Request {
+			labels := source.Meta.GetLabels()
+			cluster, ok := labels[OVNCentralLabel]
+			if !ok {
+				return []reconcile.Request{}
+			}
+
+			return []reconcile.Request{
+				{NamespacedName: types.NamespacedName{
+					Name:      cluster,
+					Namespace: source.Meta.GetNamespace(),
+				}},
+			}
+		}),
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ovncentralv1alpha1.OVNCentral{}).
-		Owns(&corev1.ConfigMap{}).
-		Owns(&corev1.Secret{}).
 		Owns(&ovncentralv1alpha1.OVSDBServer{}).
+		Watches(&source.Kind{Type: &corev1.ConfigMap{}}, clusterConfigMapWatcher).
 		Complete(r)
 }
 
-func (r *OVNCentralReconciler) setDefaultValues(ctx context.Context,
-	instance *ovncentralv1alpha1.OVNCentral) bool {
-
-	logDefault := func(field string, value interface{}) {
-		r.Log.Info(fmt.Sprintf("Defaulting empty %s", field), "value", value)
-	}
-
-	var updatedInstance bool
-	if instance.Spec.ConnectionConfig == "" {
-		instance.Spec.ConnectionConfig = fmt.Sprintf("%s-connection", instance.Name)
-		logDefault("ConnectionConfig", instance.Spec.ConnectionConfig)
-
-		updatedInstance = true
-	}
-	if instance.Spec.ConnectionCA == "" {
-		instance.Spec.ConnectionCA = fmt.Sprintf("%s-ca", instance.Name)
-		logDefault("ConnectionCA", instance.Spec.ConnectionCA)
-		updatedInstance = true
-	}
-	if instance.Spec.ConnectionCert == "" {
-		instance.Spec.ConnectionCert = fmt.Sprintf("%s-cert", instance.Name)
-		logDefault("ConnectionCert", instance.Spec.ConnectionCert)
-		updatedInstance = true
-	}
-
-	return updatedInstance
-}
-
-func (r *OVNCentralReconciler) Server(
+func (r *OVNCentralReconciler) setDefaultValues(
+	ctx context.Context,
 	central *ovncentralv1alpha1.OVNCentral,
-	index int) *ovncentralv1alpha1.OVSDBServer {
-
-	server := &ovncentralv1alpha1.OVSDBServer{}
-	server.Name = fmt.Sprintf("%s-%d", central.Name, index)
-	server.Namespace = central.Namespace
-
-	server.Spec.DBType = ovncentralv1alpha1.DBTypeNB
-	server.Spec.StorageSize = central.Spec.StorageSize
-	server.Spec.StorageClass = central.Spec.StorageClass
-
-	controllerutil.SetControllerReference(central, server, r.Scheme)
-	return server
-}
-
-func (r *OVNCentralReconciler) setFailed(
-	ctx context.Context, instance *ovncentralv1alpha1.OVNCentral,
-	reason status.ConditionReason, conditionErr error) error {
-
-	util.SetFailed(instance, reason, conditionErr.Error())
-	if err := r.Client.Status().Update(ctx, instance); err != nil {
-		err = WrapErrorForObject("Update status", instance, err)
-		return err
+) bool {
+	logDefault := func(field string, value interface{}) {
+		r.Log.Info("Defaulting field", "field", field, "value", value)
 	}
 
-	return nil
+	var updated bool
+	if central.Spec.NBClientConfig == "" {
+		central.Spec.NBClientConfig = fmt.Sprintf("%s-nb", central.Name)
+		logDefault("NBClientConfig", central.Spec.NBClientConfig)
+
+		updated = true
+	}
+	if central.Spec.SBClientConfig == "" {
+		central.Spec.SBClientConfig = fmt.Sprintf("%s-sb", central.Name)
+		logDefault("SBClientConfig", central.Spec.SBClientConfig)
+
+		updated = true
+	}
+
+	return updated
+}
+
+func (r *OVNCentralReconciler) clusterApply(
+	ctx context.Context,
+	central *ovncentralv1alpha1.OVNCentral,
+	dbType ovncentralv1alpha1.DBType,
+) (*ovncentralv1alpha1.OVSDBCluster, error) {
+	cluster := &ovncentralv1alpha1.OVSDBCluster{}
+	cluster.Name = fmt.Sprintf("%s-%s", central.Name, strings.ToLower(string(dbType)))
+	cluster.Namespace = central.Namespace
+
+	apply := func() error {
+		util.InitLabelMap(&cluster.Labels)
+		cluster.Labels[OVNCentralLabel] = central.Name
+
+		cluster.Spec.Image = central.Spec.Image
+		cluster.Spec.ServerStorageSize = central.Spec.StorageSize
+		cluster.Spec.ServerStorageClass = central.Spec.StorageClass
+
+		cluster.Spec.DBType = dbType
+		switch dbType {
+		case ovncentralv1alpha1.DBTypeNB:
+			cluster.Spec.Replicas = central.Spec.NBReplicas
+			cluster.Spec.ClientConfig = &central.Spec.NBClientConfig
+		case ovncentralv1alpha1.DBTypeSB:
+			cluster.Spec.Replicas = central.Spec.SBReplicas
+			cluster.Spec.ClientConfig = &central.Spec.SBClientConfig
+		}
+
+		return controllerutil.SetControllerReference(central, cluster, r.Scheme)
+	}
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, cluster, apply)
+	if err != nil {
+		err = WrapErrorForObject(fmt.Sprintf("Updating %s cluster", string(dbType)), cluster, err)
+		return nil, err
+	}
+
+	if op != controllerutil.OperationResultNone {
+		LogForObject(r, string(op), cluster)
+	}
+	return cluster, nil
 }
 
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;create;update;delete
-// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;create;update;delete
+
+func (r *OVNCentralReconciler) northdApply(
+	ctx context.Context,
+	central *ovncentralv1alpha1.OVNCentral,
+) (*appsv1.Deployment, error) {
+	getClientConfig := func(cmName string) (*string, error) {
+		cm := &corev1.ConfigMap{}
+		namespaced := types.NamespacedName{Name: cmName, Namespace: central.Namespace}
+		if err := r.Client.Get(ctx, namespaced, cm); err != nil {
+			if errors.IsNotFound(err) {
+				r.Log.Info("Cluster client config not found", "configmap", cmName)
+				return nil, nil
+			}
+			return nil, fmt.Errorf("Get ConfigMap %s", cmName)
+		}
+
+		if config, ok := cm.Data["connection"]; ok {
+			return &config, nil
+		}
+
+		LogForObject(r, "ConfigMap does not contain connection", cm)
+		return nil, nil
+	}
+
+	nbConfig, err := getClientConfig(central.Spec.NBClientConfig)
+	if nbConfig == nil {
+		return nil, err
+	}
+	sbConfig, err := getClientConfig(central.Spec.SBClientConfig)
+	if sbConfig == nil {
+		return nil, err
+	}
+
+	northd := &appsv1.Deployment{}
+	northd.Name = fmt.Sprintf("%s-northd", central.Name)
+	northd.Namespace = central.Namespace
+
+	apply := func() error {
+		util.InitLabelMap(&northd.Labels)
+		northd.Labels[OVNCentralLabel] = central.Name
+
+		podLabels := map[string]string{
+			"app":           "ovn-northd",
+			OVNCentralLabel: central.Name,
+		}
+
+		replicas := int32(2)
+		northd.Spec.Replicas = &replicas
+		northd.Spec.Selector = &metav1.LabelSelector{
+			MatchLabels: podLabels,
+		}
+		northd.Spec.Strategy.Type = appsv1.RollingUpdateDeploymentStrategyType
+		maxUnavailable := intstr.FromInt(1)
+		northd.Spec.Strategy.RollingUpdate = &appsv1.RollingUpdateDeployment{
+			MaxUnavailable: &maxUnavailable,
+		}
+
+		template := &northd.Spec.Template
+		util.InitLabelMap(&template.Labels)
+		for k, v := range podLabels {
+			template.Labels[k] = v
+		}
+
+		if len(template.Spec.Containers) != 1 {
+			template.Spec.Containers = make([]corev1.Container, 1)
+		}
+		container := &template.Spec.Containers[0]
+		container.Name = "ovn-northd"
+		container.Image = central.Spec.Image
+		container.Command = []string{"/northd"}
+		container.Resources.Requests = map[corev1.ResourceName]resource.Quantity{
+			corev1.ResourceCPU:    *resource.NewScaledQuantity(10, resource.Milli),
+			corev1.ResourceMemory: *resource.NewScaledQuantity(300, resource.Mega),
+		}
+		container.Env = util.MergeEnvs(container.Env, util.EnvSetterMap{
+			"OVN_LOG_LEVEL": util.EnvValue("info"),
+			"OVN_RUNDIR":    util.EnvValue(ovnRunDir),
+			"OVN_NB_DB":     util.EnvValue(*nbConfig),
+			"OVN_SB_DB":     util.EnvValue(*sbConfig),
+		})
+
+		// XXX: Dev only
+		container.ImagePullPolicy = corev1.PullAlways
+
+		return controllerutil.SetControllerReference(central, northd, r.Scheme)
+	}
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, northd, apply)
+	if err != nil {
+		return nil, WrapErrorForObject("Updating northd deployment", northd, err)
+	}
+	if op != controllerutil.OperationResultNone {
+		LogForObject(r, string(op), northd)
+	}
+	return northd, nil
+}

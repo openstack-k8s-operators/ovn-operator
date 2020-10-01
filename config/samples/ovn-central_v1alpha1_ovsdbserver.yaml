@@ -1,7 +1,8 @@
 apiVersion: ovn-central.openstack.org/v1alpha1
 kind: OVSDBServer
 metadata:
-  name: ovsdbserver-sample
+  name: ovncentral-sample-nb-1
 spec:
-  # Add fields here
-  foo: bar
+  dbType: NB
+  clusterName: ovncentral-sample-nb
+  storageSize: 1G

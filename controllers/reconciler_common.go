@@ -19,21 +19,16 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	"github.com/go-logr/logr"
-	"github.com/go-test/deep"
-	"github.com/operator-framework/operator-lib/status"
+
 	//"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
-	"github.com/openstack-k8s-operators/ovn-central-operator/util"
 )
 
 type ReconcilerCommon interface {
@@ -72,19 +67,6 @@ func LogErrorForObject(r ReconcilerCommon,
 	r.GetLogger().Error(err, msg, params...)
 }
 
-func UpdateStatus(r ReconcilerCommon,
-	ctx context.Context,
-	object runtime.Object,
-	errMsg string,
-	params ...interface{}) (ctrl.Result, error) {
-
-	if err := r.GetClient().Status().Update(ctx, object); err != nil {
-		err = WrapErrorForObject(errMsg, object, err)
-		return ctrl.Result{}, err
-	}
-	return ctrl.Result{}, nil
-}
-
 func DeleteIfExists(r ReconcilerCommon,
 	ctx context.Context, obj runtime.Object) error {
 
@@ -112,42 +94,6 @@ func DeleteIfExists(r ReconcilerCommon,
 	accessor := getAccessorOrDie(obj)
 	LogForObject(r, "Delete", accessor)
 	return nil
-}
-
-func NeedsUpdate(
-	r ReconcilerCommon,
-	ctx context.Context,
-	obj runtime.Object,
-	f controllerutil.MutateFn) (bool, error) {
-
-	key, err := client.ObjectKeyFromObject(obj)
-	if err != nil {
-		err = WrapErrorForObject("ObjectKeyFromObject", obj, err)
-		return false, err
-	}
-
-	if err := r.GetClient().Get(ctx, key, obj); err != nil {
-		if errors.IsNotFound(err) {
-			return true, nil
-		} else {
-			err = WrapErrorForObject("Get", obj, err)
-			return false, err
-		}
-	}
-
-	existing := obj.DeepCopyObject()
-	if err := f(); err != nil {
-		return false, err
-	}
-
-	//return !equality.Semantic.DeepEqual(existing, obj), nil
-	diff := deep.Equal(existing, obj)
-	if diff != nil {
-		r.GetLogger().Info("Objects differ", "diff", diff)
-		return true, nil
-	}
-
-	return false, nil
 }
 
 func CreateOrDelete(
@@ -185,24 +131,4 @@ func getAccessorOrDie(obj runtime.Object) metav1.Object {
 	}
 
 	return accessor
-}
-
-func CheckConditions(
-	r ReconcilerCommon, ctx context.Context,
-	obj util.RuntimeObjectWithConditions, origConditions status.Conditions, err *error) {
-
-	if !reflect.DeepEqual(obj.GetConditions(), &origConditions) {
-		if updateErr := r.GetClient().Status().Update(ctx, obj); updateErr != nil {
-			if *err == nil {
-				// Return the update error if Reconcile() isn't already returning an
-				// error
-				*err = WrapErrorForObject("Update Status", obj, updateErr)
-			} else {
-				// Reconciler() is already returning an error, so log this error but
-				// leave the original unchanged
-				accessor := getAccessorOrDie(obj)
-				LogErrorForObject(r, updateErr, "Update", accessor)
-			}
-		}
-	}
 }

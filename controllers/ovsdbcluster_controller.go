@@ -124,11 +124,6 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 		}
 	}()
 
-	// Unset the Failed condition. This ensures that the Failed condition will be unset
-	// automatically if anything in the cluster is changing, and will only persist if the
-	// Failure condition persists.
-	util.UnsetFailed(cluster)
-
 	//
 	// Get all the OVSDBServers we manage
 	//
@@ -159,7 +154,7 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 	// Update status based on the observed state of servers and pods
 	//
 
-	updateClusterStatus(cluster, servers, serverPods)
+	r.updateClusterStatus(cluster, servers, serverPods)
 	if statusChanged() {
 		// Status will be saved automatically
 		return ctrl.Result{}, nil
@@ -190,6 +185,14 @@ func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result
 			return ctrl.Result{RequeueAfter: time.Second * 10}, nil
 		}
 
+		return ctrl.Result{}, err
+	}
+
+	//
+	// Write ConfigMap
+	//
+
+	if err := r.writeConfigMap(ctx, cluster, servers); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -279,6 +282,7 @@ func (r *OVSDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ovncentralv1alpha1.OVSDBCluster{}).
 		Owns(&ovncentralv1alpha1.OVSDBServer{}).
+		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Pod{}).
 		Complete(r)
 }
@@ -374,7 +378,7 @@ func (r *OVSDBClusterReconciler) finalizeServers(
 	return nil
 }
 
-func updateClusterStatus(
+func (r *OVSDBClusterReconciler) updateClusterStatus(
 	cluster *ovncentralv1alpha1.OVSDBCluster,
 	servers []ovncentralv1alpha1.OVSDBServer,
 	serverPods []corev1.Pod,
@@ -384,7 +388,7 @@ func updateClusterStatus(
 	// replicas.
 	clusterSize := 0
 	for i := 0; i < len(servers); i++ {
-		if util.IsAvailable(&servers[i]) {
+		if util.IsInitialized(&servers[i]) {
 			clusterSize++
 		}
 	}
@@ -408,41 +412,34 @@ func updateClusterStatus(
 	cluster.Status.ClusterSize = clusterSize
 	cluster.Status.ClusterQuorum = clusterQuorum
 
-	// If any servers have failed, also set failed on the cluster
-	for i := 0; i < len(servers); i++ {
-		var failed []string
-		if util.IsFailed(&servers[i]) {
-			failed = append(failed, servers[i].Name)
-		}
-
-		if len(failed) > 0 {
-			msg := fmt.Sprintf("The following servers have failed to intialize: %s",
-				strings.Join(failed, ", "))
-			util.SetFailed(cluster, ovncentralv1alpha1.OVSDBClusterBootstrap, msg)
-		}
-	}
+	// We're failed iff any of our servers have failed
+	var failedServers []string
 
 	// Set ClusterID from server ClusterIDs
-	for _, server := range servers {
+	for i := 0; i < len(servers); i++ {
+		server := &servers[i]
+		if util.IsFailed(server) {
+			failedServers = append(failedServers, server.Name)
+		}
+
 		if cluster.Status.ClusterID == nil {
 			cluster.Status.ClusterID = server.Status.ClusterID
-		} else {
-			if server.Status.ClusterID != nil &&
-				*cluster.Status.ClusterID != *server.Status.ClusterID {
-
-				// N.B. This overwrites a ClusterBootstrap failure. I guess this is
-				// ok, as we can only set 1 failure condition and it's arbitrary
-				// which one.
-				msg := fmt.Sprintf("Server %s has inconsistent ClusterID %s. "+
-					"Expected ClusterID %s",
-					server.Name, *server.Status.ClusterID,
-					*cluster.Status.ClusterID)
-				util.SetFailed(
-					cluster,
-					ovncentralv1alpha1.OVSDBClusterInconsistent, msg)
-			}
-
 		}
+
+		// We will update all servers with this clusterID. If any contain a
+		// different database they will mark themselves failed.
+	}
+
+	// If any servers have failed, also set failed on the cluster
+	if len(failedServers) > 0 {
+		msg := fmt.Sprintf("The following servers have failed to intialize: %s",
+			strings.Join(failedServers, ", "))
+		if !util.IsFailed(cluster) {
+			LogForObject(r, msg, cluster)
+		}
+		util.SetFailed(cluster, ovncentralv1alpha1.OVSDBClusterServers, msg)
+	} else {
+		util.UnsetFailed(cluster)
 	}
 }
 
@@ -483,7 +480,9 @@ func (r *OVSDBClusterReconciler) updateServers(
 	for _, server := range updateServers {
 		apply := func() error {
 			serverApply(cluster, server, servers)
+			applyClusterLabels(cluster, server.Labels)
 
+			controllerutil.AddFinalizer(server, OVSDBClusterFinalizer)
 			err := controllerutil.SetControllerReference(
 				cluster, server, r.Scheme)
 			if err != nil {
@@ -491,16 +490,16 @@ func (r *OVSDBClusterReconciler) updateServers(
 					"Set controller reference for server", server, err)
 			}
 
-			controllerutil.AddFinalizer(server, OVSDBClusterFinalizer)
-
 			return err
 		}
-		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, server, apply)
+		op, err := controllerutil.CreateOrUpdate(ctx, r.Client, server, apply)
 		if err != nil {
 			return err
 		}
 
-		LogForObject(r, "Created/Updated server", server)
+		if op != controllerutil.OperationResultNone {
+			LogForObject(r, "Created/Updated server", server)
+		}
 	}
 
 	return nil
@@ -529,11 +528,25 @@ func (r *OVSDBClusterReconciler) updateServerPods(
 			server := &servers[i]
 
 			// Ignore if server is bootstrapping or deleting
-			if !util.IsAvailable(server) || util.IsDeleted(server) {
+			if !util.IsInitialized(server) || util.IsDeleted(server) {
 				continue
 			}
 
 			serverPod := findPod(server.Name, serverPods)
+
+			// If the server is Failed, ensure that it is not running
+			if util.IsFailed(server) {
+				if serverPod != nil {
+					if err := r.Client.Delete(ctx, serverPod); err != nil {
+						if !errors.IsNotFound(err) {
+							return WrapErrorForObject("Delete pod of failed server", serverPod, err)
+						}
+					}
+					LogForObject(r, "Deleted pod of failed server", serverPod)
+				}
+
+				continue
+			}
 
 			// If the pod already exists, updating could potentially cause an outage of
 			// it, so check we have a super-quorum.
@@ -549,6 +562,7 @@ func (r *OVSDBClusterReconciler) updateServerPods(
 
 			apply := func() error {
 				dbServerApply(serverPod, server, cluster)
+				applyServerLabels(server, serverPod.Labels)
 
 				if err := controllerutil.SetControllerReference(
 					cluster, serverPod, r.Scheme); err != nil {
@@ -567,8 +581,52 @@ func (r *OVSDBClusterReconciler) updateServerPods(
 			}
 			if op != controllerutil.OperationResultNone {
 				status.AvailableServers--
+				LogForObject(r, string(op), serverPod)
 			}
 		}
+	}
+
+	return nil
+}
+
+func (r *OVSDBClusterReconciler) writeConfigMap(
+	ctx context.Context,
+	cluster *ovncentralv1alpha1.OVSDBCluster,
+	servers []ovncentralv1alpha1.OVSDBServer,
+) error {
+	if cluster.Spec.ClientConfig == nil || cluster.Status.ClusterID == nil {
+		return nil
+	}
+
+	configMap := &corev1.ConfigMap{}
+	configMap.Name = *cluster.Spec.ClientConfig
+	configMap.Namespace = cluster.Namespace
+
+	apply := func() error {
+		util.InitLabelMap(&configMap.Labels)
+		applyClusterLabels(cluster, configMap.Labels)
+
+		var methods []string = make([]string, 0, len(servers)+1)
+		methods = append(methods, fmt.Sprintf("cid:%s", *cluster.Status.ClusterID))
+
+		for i := 0; i < len(servers); i++ {
+			server := &servers[i]
+			if util.IsInitialized(server) {
+				methods = append(methods, *server.Status.DBAddress)
+			}
+		}
+
+		util.InitLabelMap(&configMap.Data)
+		configMap.Data["connection"] = strings.Join(methods, ",")
+
+		return controllerutil.SetControllerReference(cluster, configMap, r.Scheme)
+	}
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, configMap, apply)
+	if err != nil {
+		return WrapErrorForObject("Create or update config map", configMap, err)
+	}
+	if op != controllerutil.OperationResultNone {
+		LogForObject(r, string(op), configMap, "cluster", cluster.Name)
 	}
 
 	return nil
@@ -601,7 +659,6 @@ func serverApply(
 	}
 
 	util.InitLabelMap(&server.Labels)
-	server.Labels[OVSDBClusterLabel] = cluster.Name
 
 	server.Spec.DBType = cluster.Spec.DBType
 	server.Spec.ClusterID = cluster.Status.ClusterID
@@ -610,4 +667,9 @@ func serverApply(
 
 	server.Spec.StorageSize = cluster.Spec.ServerStorageSize
 	server.Spec.StorageClass = cluster.Spec.ServerStorageClass
+}
+
+func applyClusterLabels(cluster *ovncentralv1alpha1.OVSDBCluster, labels map[string]string) {
+	labels[OVNCentralLabel] = cluster.Labels[OVNCentralLabel]
+	labels[OVSDBClusterLabel] = cluster.Name
 }

@@ -25,12 +25,13 @@ import (
 const (
 	OVSDBServerBootstrapFailed  status.ConditionReason = "BootstrapFailed"
 	OVSDBServerBootstrapInvalid status.ConditionReason = "BootstrapInvalid"
+	OVSDBServerInconsistent     status.ConditionReason = "InconsistentClusterID"
 )
 
 // OVSDBServerSpec defines the desired state of OVSDBServer
 type OVSDBServerSpec struct {
 	ClusterName string   `json:"clusterName"`
-	DBType      string   `json:"dbType"`
+	DBType      DBType   `json:"dbType"`
 	ClusterID   *string  `json:"clusterID,omitempty"`
 	InitPeers   []string `json:"initPeers,omitempty"`
 

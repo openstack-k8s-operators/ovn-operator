@@ -36,6 +36,8 @@ spec:
         spec:
           description: OVSDBClusterSpec defines the desired state of OVSDBCluster
           properties:
+            clientConfig:
+              type: string
             dbType:
               type: string
             image:

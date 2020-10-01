@@ -57,8 +57,6 @@ func dbServerApply(
 
 	util.InitLabelMap(&pod.Labels)
 	pod.Labels["app"] = OVSDBServerApp
-	pod.Labels[OVSDBClusterLabel] = cluster.Name
-	pod.Labels[OVSDBServerLabel] = server.Name
 
 	pod.Spec.RestartPolicy = corev1.RestartPolicyAlways
 
@@ -105,7 +103,7 @@ func bootstrapPodShell(server *ovncentralv1alpha1.OVSDBServer) *corev1.Pod {
 func bootstrapPodApply(
 	pod *corev1.Pod,
 	server *ovncentralv1alpha1.OVSDBServer,
-	cluster *ovncentralv1alpha1.OVSDBCluster) error {
+	cluster *ovncentralv1alpha1.OVSDBCluster) {
 
 	util.InitLabelMap(&pod.Labels)
 	pod.Labels["app"] = OVSDBServerBootstrapApp
@@ -132,13 +130,6 @@ func bootstrapPodApply(
 	if server.Spec.ClusterID == nil {
 		dbInitContainer.Command = []string{"/cluster-create"}
 	} else {
-		if len(server.Spec.InitPeers) == 0 {
-			err := fmt.Errorf("Unable to bootstrap server %s into cluster %s: "+
-				"no InitPeers defined", server.Name, *server.Spec.ClusterID)
-			util.SetFailed(server,
-				ovncentralv1alpha1.OVSDBServerBootstrapInvalid, err.Error())
-			return err
-		}
 		dbInitContainer.Command = []string{"/cluster-join", *server.Spec.ClusterID}
 		dbInitContainer.Command = append(dbInitContainer.Command, server.Spec.InitPeers...)
 	}
@@ -147,8 +138,6 @@ func bootstrapPodApply(
 		pod.Spec.Containers = make([]corev1.Container, 1)
 	}
 	dbStatusContainerApply(&pod.Spec.Containers[0], server, cluster)
-
-	return nil
 }
 
 func dbPodVolumesApply(volumes *[]corev1.Volume, server *ovncentralv1alpha1.OVSDBServer) {
@@ -184,7 +173,7 @@ func dbContainerVolumeMountsApply(mounts []corev1.VolumeMount) []corev1.VolumeMo
 
 func dbContainerEnvApply(envs []corev1.EnvVar, server *ovncentralv1alpha1.OVSDBServer) []corev1.EnvVar {
 	return util.MergeEnvs(envs, util.EnvSetterMap{
-		"DB_TYPE":       util.EnvValue(server.Spec.DBType),
+		"DB_TYPE":       util.EnvValue(string(server.Spec.DBType)),
 		"SERVER_NAME":   util.EnvValue(serviceName(server)),
 		"OVN_DBDIR":     util.EnvValue(ovnDBDir),
 		"OVN_RUNDIR":    util.EnvValue(ovnRunDir),

@@ -44,12 +44,8 @@ func serviceApply(
 
 	util.InitLabelMap(&service.Labels)
 
-	// XXX: Selector is immutable. If we ever changed common labels
-	// we'd need to delete the Service to update this. Should
-	// probably use a minimal set instead.
 	service.Spec.Selector = make(map[string]string)
 	service.Spec.Selector["app"] = OVSDBServerApp
-	service.Spec.Selector[OVSDBClusterLabel] = server.Spec.ClusterName
 	service.Spec.Selector[OVSDBServerLabel] = server.Name
 
 	makePort := func(name string, port int32) corev1.ServicePort {
