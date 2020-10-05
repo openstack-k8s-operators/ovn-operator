@@ -1,0 +1,16 @@
+DEPLOY_PROJECT ?= $(current_default_namespace)
+IMAGE_REGISTRY_EXT ?= $(shell oc get route -n openshift-image-registry default-route -o json | \
+	jq -re ".spec.host")
+IMAGE_REGISTRY_INT ?= image-registry.openshift-image-registry.svc.cluster.local:5000
+LOGIN_SECRET ?= $(shell oc -n ${DEPLOY_PROJECT} get secret | grep builder-dockercfg | \
+	awk '{print $$1}')
+
+current_context=$(shell oc config current-context)
+current_default_namespace=$(shell oc config get-contexts $(current_context) --no-headers | \
+	awk '{print $$5}')
+
+.PHONY: registry-login
+registry-login:
+	oc -n $(DEPLOY_PROJECT) get secret $(LOGIN_SECRET) -o json | \
+		jq -re '.metadata.annotations["openshift.io/token-secret.value"]' | \
+	buildah login -u $(LOGIN_SECRET) --password-stdin $(IMAGE_REGISTRY_EXT)

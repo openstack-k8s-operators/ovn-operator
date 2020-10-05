@@ -12,7 +12,8 @@ endif
 BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= ovn-central-controller:latest
+
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
@@ -24,6 +25,8 @@ GOBIN=$(shell go env GOBIN)
 endif
 
 all: manager
+
+include Makefile.registry
 
 # Run tests
 test: generate fmt vet manifests
@@ -47,7 +50,7 @@ uninstall: manifests kustomize
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests kustomize
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMAGE_REGISTRY_INT)/$(DEPLOY_PROJECT)/$(IMG)
 	$(KUSTOMIZE) build config/default | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
@@ -66,13 +69,15 @@ vet:
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
-# Build the docker image
-docker-build: test
-	docker build . -t ${IMG}
+# Build the container image
+.PHONY: image-build
+image-build: test
+	buildah bud --layers -t $(IMG) .
 
-# Push the docker image
-docker-push:
-	docker push ${IMG}
+# Push the container image
+.PHONY: image-push
+image-push:
+	buildah push $(IMG) $(IMAGE_REGISTRY_EXT)/$(DEPLOY_PROJECT)/$(IMG)
 
 # find or download controller-gen
 # download controller-gen if necessary
