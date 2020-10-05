@@ -52,6 +52,11 @@ func (r *OVSDBServerReconciler) GetLogger() logr.Logger {
 
 // +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovsdbservers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovsdbservers/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovsdbservers/finalizers,verbs=update
+// +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovsdbclusters,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;delete
+// +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;delete
+// +kubebuilder:rbac:groups=core,resources=pods/log,verbs=get;list
 
 func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, err error) {
 	ctx := context.Background()

@@ -63,6 +63,11 @@ func (r *OVNCentralReconciler) GetLogger() logr.Logger {
 
 // +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovncentrals,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovncentrals/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovncentrals/finalizers,verbs=update
+// +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovsdbclusters,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovsdbclusters/finalizers,verbs=update
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;delete
+// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch
 
 func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (result ctrl.Result, err error) {
 	_ = r.Log.WithValues("ovncentral", req.NamespacedName)
@@ -266,8 +271,6 @@ func (r *OVNCentralReconciler) clusterApply(
 	}
 	return cluster, nil
 }
-
-// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;create;update;delete
 
 func (r *OVNCentralReconciler) northdApply(
 	ctx context.Context,

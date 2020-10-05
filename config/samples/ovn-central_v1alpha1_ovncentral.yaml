@@ -3,7 +3,7 @@ kind: OVNCentral
 metadata:
   name: ovncentral-sample
 spec:
-  nbReplicas: 0
-  sbReplicas: 0
+  nbReplicas: 3
+  sbReplicas: 3
   image: quay.io/mbooth/ovn-central:trunk
   storageSize: 1G
