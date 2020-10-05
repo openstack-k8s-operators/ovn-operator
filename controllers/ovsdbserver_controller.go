@@ -213,6 +213,9 @@ func (r *OVSDBServerReconciler) bootstrapDB(
 		return err
 
 	})
+	if err != nil {
+		return ctrl.Result{}, WrapErrorForObject("Create bootstrap pod", bootstrapPod, err)
+	}
 
 	// Set failed condition if bootstrap failed
 	// XXX: This test doesn't work with RestartPolicyOnFailure
