@@ -11,6 +11,8 @@ BUNDLE_DEFAULT_CHANNEL := --default-channel=$(DEFAULT_CHANNEL)
 endif
 BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 
+ENVTEST_ASSETS_DIR=$(shell pwd)/testbin
+
 # Image URL to use all building/pushing image targets
 IMG ?= ovn-central-controller:latest
 
@@ -30,6 +32,9 @@ include Makefile.registry
 
 # Run tests
 test: generate fmt vet manifests
+	source ./setup-envtest.sh; \
+		fetch_envtest_tools $(ENVTEST_ASSETS_DIR); \
+		setup_envtest_env $(ENVTEST_ASSETS_DIR); \
 	go test ./... -coverprofile cover.out
 
 # Build manager binary
