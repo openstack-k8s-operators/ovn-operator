@@ -197,6 +197,7 @@ func (r *OVNCentralReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&ovncentralv1alpha1.OVNCentral{}).
 		Owns(&ovncentralv1alpha1.OVSDBServer{}).
 		Watches(&source.Kind{Type: &corev1.ConfigMap{}}, clusterConfigMapWatcher).
+		Owns(&appsv1.Deployment{}).
 		Complete(r)
 }
 
