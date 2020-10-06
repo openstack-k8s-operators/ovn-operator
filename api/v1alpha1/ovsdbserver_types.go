@@ -56,7 +56,8 @@ type OVSDBServerStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// OVSDBServer is the Schema for the servers API
+// OVSDBServer represents the storage and network identity of an ovsdb-server in
+// a raft cluster. It is the Schema for the ovsdbservers API.
 type OVSDBServer struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

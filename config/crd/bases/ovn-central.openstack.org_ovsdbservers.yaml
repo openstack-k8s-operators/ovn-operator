@@ -19,7 +19,8 @@ spec:
     status: {}
   validation:
     openAPIV3Schema:
-      description: OVSDBServer is the Schema for the servers API
+      description: OVSDBServer represents the storage and network identity of an ovsdb-server
+        in a raft cluster. It is the Schema for the ovsdbservers API.
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation

@@ -19,7 +19,8 @@ spec:
     status: {}
   validation:
     openAPIV3Schema:
-      description: OVSDBCluster is the Schema for the ovsdbclusters API
+      description: OVSDBCluster represents a raft cluster of OVSDBServers. It is the
+        Schema for the ovsdbclusters API.
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation

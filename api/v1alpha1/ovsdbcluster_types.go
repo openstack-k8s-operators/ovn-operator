@@ -56,7 +56,8 @@ type OVSDBClusterStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// OVSDBCluster is the Schema for the ovsdbclusters API
+// OVSDBCluster represents a raft cluster of OVSDBServers. It is the Schema for
+// the ovsdbclusters API.
 type OVSDBCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
