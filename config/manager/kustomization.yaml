@@ -4,5 +4,5 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
 - name: controller
-  newName: image-registry.openshift-image-registry.svc.cluster.local:5000/openstack/ovn-central-controller
+  newName: ovn-central-controller
   newTag: latest

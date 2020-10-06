@@ -16,6 +16,7 @@ bin
 
 !vendor/**/zz_generated.*
 api/**/zz_generated.*
+/bundle/
 
 # editor and IDE paraphernalia
 .idea

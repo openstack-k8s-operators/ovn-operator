@@ -127,4 +127,4 @@ bundle: manifests
 # Build the bundle image.
 .PHONY: bundle-build
 bundle-build:
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	buildah bud --layers -f bundle.Dockerfile -t $(BUNDLE_IMG) .

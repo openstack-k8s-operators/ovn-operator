@@ -6,11 +6,11 @@ namespace: openstack
 # "wordpress" becomes "alices-wordpress".
 # Note that it should also match with the prefix (text before '-') of the namespace
 # field above.
-namePrefix: openstack-ovn-config-
+namePrefix: openstack-ovncentral-
 
 # Labels to add to all resources and selectors.
-#commonLabels:
-#  someName: someValue
+commonLabels:
+  control-plane: openstack-ovncentral-operator
 
 bases:
 - ../crd

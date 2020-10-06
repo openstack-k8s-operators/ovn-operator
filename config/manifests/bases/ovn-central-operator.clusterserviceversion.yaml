@@ -1,0 +1,61 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+    operators.operatorframework.io/builder: operator-sdk-v1.0.1
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v2
+  name: ovn-central-operator.v0.0.1
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: OVSDBCluster represents a raft cluster of OVSDBServers. It is the Schema for the ovsdbclusters API.
+      displayName: OVSDBCluster
+      kind: OVSDBCluster
+      name: ovsdbclusters.ovn-central.openstack.org
+      version: v1alpha1
+    - description: OVNCentral is the Schema for the ovncentrals API
+      displayName: OVNCentral
+      kind: OVNCentral
+      name: ovncentrals.ovn-central.openstack.org
+      version: v1alpha1
+    - description: OVSDBServer represents the storage and network identity of an ovsdb-server in a raft cluster. It is the Schema for the ovsdbservers API.
+      displayName: OVSDBServer
+      kind: OVSDBServer
+      name: ovsdbservers.ovn-central.openstack.org
+      version: v1alpha1
+  description: Deploy and manage OVN northbound and southbound database clusters, and northd.
+  displayName: OVN Central Operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - ovn
+  - ovs
+  - openstack
+  links:
+  - name: OVN-Central Operator
+    url: https://ovn-central-operator.domain
+  maintainers:
+  - email: mbooth@redhat.com
+    name: Matthew Booth
+  maturity: alpha
+  provider:
+    name: Red Hat
+  version: 0.0.1
