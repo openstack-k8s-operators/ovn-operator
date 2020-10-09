@@ -6,21 +6,21 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
-  name: ovsdbclusters.ovn-central.openstack.org
+  name: ovsdbservers.ovn.openstack.org
 spec:
-  group: ovn-central.openstack.org
+  group: ovn.openstack.org
   names:
-    kind: OVSDBCluster
-    listKind: OVSDBClusterList
-    plural: ovsdbclusters
-    singular: ovsdbcluster
+    kind: OVSDBServer
+    listKind: OVSDBServerList
+    plural: ovsdbservers
+    singular: ovsdbserver
   scope: Namespaced
   subresources:
     status: {}
   validation:
     openAPIV3Schema:
-      description: OVSDBCluster represents a raft cluster of OVSDBServers. It is the
-        Schema for the ovsdbclusters API.
+      description: OVSDBServer represents the storage and network identity of an ovsdb-server
+        in a raft cluster. It is the Schema for the ovsdbservers API.
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -35,41 +35,34 @@ spec:
         metadata:
           type: object
         spec:
-          description: OVSDBClusterSpec defines the desired state of OVSDBCluster
+          description: OVSDBServerSpec defines the desired state of OVSDBServer
           properties:
-            clientConfig:
+            clusterID:
+              type: string
+            clusterName:
               type: string
             dbType:
               type: string
-            image:
+            initPeers:
+              items:
+                type: string
+              type: array
+            storageClass:
               type: string
-            replicas:
-              type: integer
-            serverStorageClass:
-              type: string
-            serverStorageSize:
+            storageSize:
               anyOf:
               - type: integer
               - type: string
               pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
               x-kubernetes-int-or-string: true
           required:
+          - clusterName
           - dbType
-          - image
-          - replicas
-          - serverStorageSize
+          - storageSize
           type: object
         status:
-          description: OVSDBClusterStatus defines the observed state of OVSDBCluster
+          description: OVSDBServerStatus defines the observed state of OVSDBServer
           properties:
-            availableServers:
-              type: integer
-            clusterID:
-              type: string
-            clusterQuorum:
-              type: integer
-            clusterSize:
-              type: integer
             conditions:
               description: Conditions is a set of Condition instances.
               items:
@@ -110,10 +103,19 @@ spec:
                 - type
                 type: object
               type: array
-          required:
-          - availableServers
-          - clusterQuorum
-          - clusterSize
+            databaseStatus:
+              properties:
+                clusterID:
+                  type: string
+                dbAddress:
+                  type: string
+                name:
+                  type: string
+                raftAddress:
+                  type: string
+                serverID:
+                  type: string
+              type: object
           type: object
       type: object
   version: v1alpha1

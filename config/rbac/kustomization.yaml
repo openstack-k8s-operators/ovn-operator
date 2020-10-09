@@ -11,4 +11,4 @@ resources:
 - auth_proxy_role_binding.yaml
 - auth_proxy_client_clusterrole.yaml
 # Service Accounts
-- ovncentral_operator_serviceaccount.yaml
+- ovn_operator_serviceaccount.yaml

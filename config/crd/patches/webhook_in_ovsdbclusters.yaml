@@ -3,7 +3,7 @@
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
-  name: ovsdbclusters.ovn-central.openstack.org
+  name: ovsdbclusters.ovn.openstack.org
 spec:
   conversion:
     strategy: Webhook

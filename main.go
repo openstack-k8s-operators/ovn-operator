@@ -27,8 +27,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	ovncentralv1alpha1 "github.com/openstack-k8s-operators/ovn-central-operator/api/v1alpha1"
-	"github.com/openstack-k8s-operators/ovn-central-operator/controllers"
+	ovnv1alpha1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
+	"github.com/openstack-k8s-operators/ovn-operator/controllers"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -40,7 +40,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(ovncentralv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(ovnv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 

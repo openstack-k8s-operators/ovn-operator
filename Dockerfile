@@ -50,20 +50,20 @@ RUN make bundle
 FROM ${OPERATOR_BASE_IMAGE}
 
 ENV USER_UID=1001 \
-    OPERATOR_BUNDLE=/usr/share/ovn-central-operator/bundle/
-ENV BASE_CSV=${OPERATOR_BUNDLE}/ovn-central-operator.clusterserviceversion.yaml
+    OPERATOR_BUNDLE=/usr/share/ovn-operator/bundle/
+ENV BASE_CSV=${OPERATOR_BUNDLE}/ovn-operator.clusterserviceversion.yaml
 
 WORKDIR /
 COPY --from=builder /workspace/manager .
 COPY --from=builder /workspace/csv-generator /usr/local/bin/
 COPY --from=builder /workspace/bundle/manifests/ ${OPERATOR_BUNDLE}/
 
-LABEL   com.redhat.component="ovn-central-operator-container" \
-        name="ovn-central-operator" \
+LABEL   com.redhat.component="ovn-operator-container" \
+        name="ovn-operator" \
         version="0.1" \
-        summary="OVN Central Operator" \
-        io.k8s.name="ovn-central-operator" \
-        io.k8s.description="This image includes the ovn-central operator"
+        summary="OVN Operator" \
+        io.k8s.name="ovn-operator" \
+        io.k8s.description="This image includes the OVN operator"
 
 USER ${USER_UID}
 

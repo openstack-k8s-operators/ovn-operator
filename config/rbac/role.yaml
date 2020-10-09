@@ -69,7 +69,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ovn-central.openstack.org
+  - ovn.openstack.org
   resources:
   - ovncentrals
   verbs:
@@ -81,13 +81,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ovn-central.openstack.org
+  - ovn.openstack.org
   resources:
   - ovncentrals/finalizers
   verbs:
   - update
 - apiGroups:
-  - ovn-central.openstack.org
+  - ovn.openstack.org
   resources:
   - ovncentrals/status
   verbs:
@@ -95,7 +95,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - ovn-central.openstack.org
+  - ovn.openstack.org
   resources:
   - ovsdbclusters
   verbs:
@@ -107,13 +107,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ovn-central.openstack.org
+  - ovn.openstack.org
   resources:
   - ovsdbclusters/finalizers
   verbs:
   - update
 - apiGroups:
-  - ovn-central.openstack.org
+  - ovn.openstack.org
   resources:
   - ovsdbclusters/status
   verbs:
@@ -121,7 +121,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - ovn-central.openstack.org
+  - ovn.openstack.org
   resources:
   - ovsdbservers
   verbs:
@@ -133,13 +133,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ovn-central.openstack.org
+  - ovn.openstack.org
   resources:
   - ovsdbservers/finalizers
   verbs:
   - update
 - apiGroups:
-  - ovn-central.openstack.org
+  - ovn.openstack.org
   resources:
   - ovsdbservers/status
   verbs:

@@ -5,7 +5,7 @@ metadata:
   name: ovsdbcluster-viewer-role
 rules:
 - apiGroups:
-  - ovn-central.openstack.org
+  - ovn.openstack.org
   resources:
   - ovsdbclusters
   verbs:
@@ -13,7 +13,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - ovn-central.openstack.org
+  - ovn.openstack.org
   resources:
   - ovsdbclusters/status
   verbs:

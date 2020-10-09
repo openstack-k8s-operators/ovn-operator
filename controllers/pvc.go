@@ -19,15 +19,15 @@ package controllers
 import (
 	corev1 "k8s.io/api/core/v1"
 
-	ovncentralv1alpha1 "github.com/openstack-k8s-operators/ovn-central-operator/api/v1alpha1"
-	"github.com/openstack-k8s-operators/ovn-central-operator/util"
+	ovnv1alpha1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
+	"github.com/openstack-k8s-operators/ovn-operator/util"
 )
 
-func pvcName(server *ovncentralv1alpha1.OVSDBServer) string {
+func pvcName(server *ovnv1alpha1.OVSDBServer) string {
 	return server.Name
 }
 
-func pvcShell(server *ovncentralv1alpha1.OVSDBServer) *corev1.PersistentVolumeClaim {
+func pvcShell(server *ovnv1alpha1.OVSDBServer) *corev1.PersistentVolumeClaim {
 
 	pvc := &corev1.PersistentVolumeClaim{}
 	pvc.Name = pvcName(server)
@@ -36,7 +36,7 @@ func pvcShell(server *ovncentralv1alpha1.OVSDBServer) *corev1.PersistentVolumeCl
 	return pvc
 }
 
-func pvcApply(pvc *corev1.PersistentVolumeClaim, server *ovncentralv1alpha1.OVSDBServer) {
+func pvcApply(pvc *corev1.PersistentVolumeClaim, server *ovnv1alpha1.OVSDBServer) {
 	util.InitLabelMap(&pvc.Labels)
 
 	pvc.Spec.Resources.Requests = corev1.ResourceList{

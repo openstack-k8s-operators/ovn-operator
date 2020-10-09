@@ -38,8 +38,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	ovncentralv1alpha1 "github.com/openstack-k8s-operators/ovn-central-operator/api/v1alpha1"
-	"github.com/openstack-k8s-operators/ovn-central-operator/util"
+	ovnv1alpha1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
+	"github.com/openstack-k8s-operators/ovn-operator/util"
 )
 
 const (
@@ -61,11 +61,11 @@ func (r *OVNCentralReconciler) GetLogger() logr.Logger {
 	return r.Log
 }
 
-// +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovncentrals,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovncentrals/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovncentrals/finalizers,verbs=update
-// +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovsdbclusters,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=ovn-central.openstack.org,resources=ovsdbclusters/finalizers,verbs=update
+// +kubebuilder:rbac:groups=ovn.openstack.org,resources=ovncentrals,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=ovn.openstack.org,resources=ovncentrals/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=ovn.openstack.org,resources=ovncentrals/finalizers,verbs=update
+// +kubebuilder:rbac:groups=ovn.openstack.org,resources=ovsdbclusters,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=ovn.openstack.org,resources=ovsdbclusters/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch
 
@@ -77,7 +77,7 @@ func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (result ctrl.Result, 
 	// Fetch the instance
 	//
 
-	central := &ovncentralv1alpha1.OVNCentral{}
+	central := &ovnv1alpha1.OVNCentral{}
 	if err := r.Client.Get(ctx, req.NamespacedName, central); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile
@@ -126,12 +126,12 @@ func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (result ctrl.Result, 
 		return ctrl.Result{}, nil
 	}
 
-	nbCluster, err := r.clusterApply(ctx, central, ovncentralv1alpha1.DBTypeNB)
+	nbCluster, err := r.clusterApply(ctx, central, ovnv1alpha1.DBTypeNB)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	sbCluster, err := r.clusterApply(ctx, central, ovncentralv1alpha1.DBTypeSB)
+	sbCluster, err := r.clusterApply(ctx, central, ovnv1alpha1.DBTypeSB)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -199,8 +199,8 @@ func (r *OVNCentralReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&ovncentralv1alpha1.OVNCentral{}).
-		Owns(&ovncentralv1alpha1.OVSDBServer{}).
+		For(&ovnv1alpha1.OVNCentral{}).
+		Owns(&ovnv1alpha1.OVSDBServer{}).
 		Watches(&source.Kind{Type: &corev1.ConfigMap{}}, clusterConfigMapWatcher).
 		Owns(&appsv1.Deployment{}).
 		Complete(r)
@@ -208,7 +208,7 @@ func (r *OVNCentralReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *OVNCentralReconciler) setDefaultValues(
 	ctx context.Context,
-	central *ovncentralv1alpha1.OVNCentral,
+	central *ovnv1alpha1.OVNCentral,
 ) bool {
 	logDefault := func(field string, value interface{}) {
 		r.Log.Info("Defaulting field", "field", field, "value", value)
@@ -233,10 +233,10 @@ func (r *OVNCentralReconciler) setDefaultValues(
 
 func (r *OVNCentralReconciler) clusterApply(
 	ctx context.Context,
-	central *ovncentralv1alpha1.OVNCentral,
-	dbType ovncentralv1alpha1.DBType,
-) (*ovncentralv1alpha1.OVSDBCluster, error) {
-	cluster := &ovncentralv1alpha1.OVSDBCluster{}
+	central *ovnv1alpha1.OVNCentral,
+	dbType ovnv1alpha1.DBType,
+) (*ovnv1alpha1.OVSDBCluster, error) {
+	cluster := &ovnv1alpha1.OVSDBCluster{}
 	cluster.Name = fmt.Sprintf("%s-%s", central.Name, strings.ToLower(string(dbType)))
 	cluster.Namespace = central.Namespace
 
@@ -250,10 +250,10 @@ func (r *OVNCentralReconciler) clusterApply(
 
 		cluster.Spec.DBType = dbType
 		switch dbType {
-		case ovncentralv1alpha1.DBTypeNB:
+		case ovnv1alpha1.DBTypeNB:
 			cluster.Spec.Replicas = central.Spec.NBReplicas
 			cluster.Spec.ClientConfig = &central.Spec.NBClientConfig
-		case ovncentralv1alpha1.DBTypeSB:
+		case ovnv1alpha1.DBTypeSB:
 			cluster.Spec.Replicas = central.Spec.SBReplicas
 			cluster.Spec.ClientConfig = &central.Spec.SBClientConfig
 		}
@@ -274,7 +274,7 @@ func (r *OVNCentralReconciler) clusterApply(
 
 func (r *OVNCentralReconciler) northdApply(
 	ctx context.Context,
-	central *ovncentralv1alpha1.OVNCentral,
+	central *ovnv1alpha1.OVNCentral,
 ) (*appsv1.Deployment, error) {
 	getClientConfig := func(cmName string) (*string, error) {
 		cm := &corev1.ConfigMap{}

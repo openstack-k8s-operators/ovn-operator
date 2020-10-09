@@ -5,7 +5,7 @@ metadata:
   name: ovncentral-editor-role
 rules:
 - apiGroups:
-  - ovn-central.openstack.org
+  - ovn.openstack.org
   resources:
   - ovncentrals
   verbs:
@@ -17,7 +17,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ovn-central.openstack.org
+  - ovn.openstack.org
   resources:
   - ovncentrals/status
   verbs:

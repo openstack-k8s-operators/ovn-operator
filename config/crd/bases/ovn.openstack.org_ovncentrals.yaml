@@ -6,21 +6,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
-  name: ovsdbservers.ovn-central.openstack.org
+  name: ovncentrals.ovn.openstack.org
 spec:
-  group: ovn-central.openstack.org
+  group: ovn.openstack.org
   names:
-    kind: OVSDBServer
-    listKind: OVSDBServerList
-    plural: ovsdbservers
-    singular: ovsdbserver
+    kind: OVNCentral
+    listKind: OVNCentralList
+    plural: ovncentrals
+    singular: ovncentral
   scope: Namespaced
   subresources:
     status: {}
   validation:
     openAPIV3Schema:
-      description: OVSDBServer represents the storage and network identity of an ovsdb-server
-        in a raft cluster. It is the Schema for the ovsdbservers API.
+      description: OVNCentral is the Schema for the ovncentrals API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -35,18 +34,18 @@ spec:
         metadata:
           type: object
         spec:
-          description: OVSDBServerSpec defines the desired state of OVSDBServer
+          description: OVNCentralSpec defines the desired state of OVNCentral
           properties:
-            clusterID:
+            image:
               type: string
-            clusterName:
+            nbClientConfig:
               type: string
-            dbType:
+            nbReplicas:
+              type: integer
+            sbClientConfig:
               type: string
-            initPeers:
-              items:
-                type: string
-              type: array
+            sbReplicas:
+              type: integer
             storageClass:
               type: string
             storageSize:
@@ -56,12 +55,12 @@ spec:
               pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
               x-kubernetes-int-or-string: true
           required:
-          - clusterName
-          - dbType
-          - storageSize
+          - image
+          - nbReplicas
+          - sbReplicas
           type: object
         status:
-          description: OVSDBServerStatus defines the observed state of OVSDBServer
+          description: OVNCentralStatus defines the observed state of OVNCentral
           properties:
             conditions:
               description: Conditions is a set of Condition instances.
@@ -103,19 +102,6 @@ spec:
                 - type
                 type: object
               type: array
-            databaseStatus:
-              properties:
-                clusterID:
-                  type: string
-                dbAddress:
-                  type: string
-                name:
-                  type: string
-                raftAddress:
-                  type: string
-                serverID:
-                  type: string
-              type: object
           type: object
       type: object
   version: v1alpha1

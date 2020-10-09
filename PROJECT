@@ -1,15 +1,15 @@
 domain: openstack.org
 layout: go.kubebuilder.io/v2
-projectName: ovn-central-operator
-repo: github.com/openstack-k8s-operators/ovn-central-operator
+projectName: ovn-operator
+repo: github.com/openstack-k8s-operators/ovn-operator
 resources:
-- group: ovn-central
+- group: ovn
   kind: OVNCentral
   version: v1alpha1
-- group: ovn-central
+- group: ovn
   kind: OVSDBServer
   version: v1alpha1
-- group: ovn-central
+- group: ovn
   kind: OVSDBCluster
   version: v1alpha1
 version: 3-alpha
