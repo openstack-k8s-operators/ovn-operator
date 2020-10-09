@@ -79,7 +79,7 @@ generate: controller-gen
 
 # Build the container image
 .PHONY: image-build
-image-build: test
+image-build:
 	buildah bud --layers -t $(IMG) .
 
 # Push the container image
