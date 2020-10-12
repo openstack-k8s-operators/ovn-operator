@@ -1,8 +1,0 @@
-#!/bin/bash
-
-set -ex -o pipefail
-
-. /env.sh
-
-[ -f $db ] && exit 0
-exec ovsdb-tool create-cluster "$db" "$schema" "$raft_address"
