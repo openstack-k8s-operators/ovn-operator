@@ -17,6 +17,8 @@ bin
 !vendor/**/zz_generated.*
 api/**/zz_generated.*
 /bundle/
+bundle.Dockerfile
+config/manager/kustomization.yaml
 
 # editor and IDE paraphernalia
 .idea
@@ -24,3 +26,6 @@ api/**/zz_generated.*
 *.swo
 *~
 __debug_bin
+
+# Common CI tools repository
+CI_TOOLS_REPO
