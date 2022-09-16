@@ -1,0 +1,6 @@
+apiVersion: ovn.openstack.org/v1alpha1
+kind: OVSDBServer
+metadata:
+  name: ovsdbserver-sample
+spec:
+  # TODO(user): Add fields here

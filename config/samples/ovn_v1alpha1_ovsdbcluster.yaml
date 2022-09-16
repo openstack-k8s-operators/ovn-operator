@@ -1,0 +1,6 @@
+apiVersion: ovn.openstack.org/v1alpha1
+kind: OVSDBCluster
+metadata:
+  name: ovsdbcluster-sample
+spec:
+  # TODO(user): Add fields here

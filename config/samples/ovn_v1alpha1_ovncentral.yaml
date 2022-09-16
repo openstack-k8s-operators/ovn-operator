@@ -1,0 +1,6 @@
+apiVersion: ovn.openstack.org/v1alpha1
+kind: OVNCentral
+metadata:
+  name: ovncentral-sample
+spec:
+  # TODO(user): Add fields here

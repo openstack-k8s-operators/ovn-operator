@@ -1,0 +1,24 @@
+# permissions for end users to edit ovsdbservers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ovsdbserver-editor-role
+rules:
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovsdbservers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovsdbservers/status
+  verbs:
+  - get
