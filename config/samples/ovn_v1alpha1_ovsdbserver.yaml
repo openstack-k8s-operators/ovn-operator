@@ -1,8 +1,0 @@
-apiVersion: ovn.openstack.org/v1alpha1
-kind: OVSDBServer
-metadata:
-  name: ovncentral-sample-nb-1
-spec:
-  dbType: NB
-  clusterName: ovncentral-sample-nb
-  storageSize: 1G

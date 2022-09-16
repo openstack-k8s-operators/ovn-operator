@@ -1,6 +1,0 @@
-# This file is manually edited due to:
-# https://github.com/operator-framework/operator-sdk/issues/3979
-bases:
-- ../default
-- ../samples
-#- ../scorecard

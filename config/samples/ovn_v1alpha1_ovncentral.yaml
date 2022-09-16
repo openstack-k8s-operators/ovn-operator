@@ -1,9 +1,0 @@
-apiVersion: ovn.openstack.org/v1alpha1
-kind: OVNCentral
-metadata:
-  name: ovncentral-sample
-spec:
-  nbReplicas: 3
-  sbReplicas: 3
-  image: quay.io/mbooth/ovn:trunk
-  storageSize: 1G

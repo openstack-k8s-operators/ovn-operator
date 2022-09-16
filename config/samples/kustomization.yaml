@@ -1,6 +1,0 @@
-## Append samples you want in your CSV to this file as resources ##
-resources:
-- ovn_v1alpha1_ovncentral.yaml
-- ovn_v1alpha1_ovsdbserver.yaml
-- ovn_v1alpha1_ovsdbcluster.yaml
-# +kubebuilder:scaffold:manifestskustomizesamples
