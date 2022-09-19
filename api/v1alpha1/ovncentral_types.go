@@ -1,5 +1,5 @@
 /*
-Copyright 2022.
+Copyright 2020 Red Hat
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,29 +17,39 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// Important: Run "make" to regenerate code after modifying this file
 
 // OVNCentralSpec defines the desired state of OVNCentral
 type OVNCentralSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Required properties
 
-	// Foo is an example field of OVNCentral. Edit ovncentral_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	NBReplicas  int               `json:"nbReplicas"`
+	SBReplicas  int               `json:"sbReplicas"`
+	Image       string            `json:"image"`
+	StorageSize resource.Quantity `json:"storageSize,omitempty"`
+
+	// Required properties with default values
+
+	NBClientConfig string `json:"nbClientConfig,omitempty"`
+	SBClientConfig string `json:"sbClientConfig,omitempty"`
+
+	// Optional properties
+
+	StorageClass *string `json:"storageClass,omitempty"`
 }
 
 // OVNCentralStatus defines the observed state of OVNCentral
 type OVNCentralStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Conditions condition.Conditions `json:"conditions,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // OVNCentral is the Schema for the ovncentrals API
 type OVNCentral struct {
@@ -50,7 +60,7 @@ type OVNCentral struct {
 	Status OVNCentralStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 
 // OVNCentralList contains a list of OVNCentral
 type OVNCentralList struct {
@@ -61,4 +71,10 @@ type OVNCentralList struct {
 
 func init() {
 	SchemeBuilder.Register(&OVNCentral{}, &OVNCentralList{})
+}
+
+// ObjectWithConditions
+
+func (cluster *OVNCentral) GetConditions() *condition.Conditions {
+	return &cluster.Status.Conditions
 }

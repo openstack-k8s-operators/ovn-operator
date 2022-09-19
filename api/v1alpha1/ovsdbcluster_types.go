@@ -1,5 +1,5 @@
 /*
-Copyright 2022.
+Copyright 2020 Red Hat
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,31 +17,47 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+type DBType string
+
+const (
+	DBTypeNB DBType = "NB"
+	DBTypeSB DBType = "SB"
+)
+
+const (
+	OVSDBClusterServers condition.Reason = "FailedServers"
+)
 
 // OVSDBClusterSpec defines the desired state of OVSDBCluster
 type OVSDBClusterSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	DBType       DBType  `json:"dbType"`
+	Replicas     int     `json:"replicas"`
+	ClientConfig *string `json:"clientConfig,omitempty"`
 
-	// Foo is an example field of OVSDBCluster. Edit ovsdbcluster_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Image              string            `json:"image"`
+	ServerStorageSize  resource.Quantity `json:"serverStorageSize"`
+	ServerStorageClass *string           `json:"serverStorageClass,omitempty"`
 }
 
 // OVSDBClusterStatus defines the observed state of OVSDBCluster
 type OVSDBClusterStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Conditions       condition.Conditions `json:"conditions,omitempty"`
+	ClusterID        *string              `json:"clusterID,omitempty"`
+	AvailableServers int                  `json:"availableServers"`
+	ClusterSize      int                  `json:"clusterSize"`
+	ClusterQuorum    int                  `json:"clusterQuorum"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
-// OVSDBCluster is the Schema for the ovsdbclusters API
+// OVSDBCluster represents a raft cluster of OVSDBServers. It is the Schema for
+// the ovsdbclusters API.
 type OVSDBCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -50,7 +66,7 @@ type OVSDBCluster struct {
 	Status OVSDBClusterStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 
 // OVSDBClusterList contains a list of OVSDBCluster
 type OVSDBClusterList struct {
@@ -61,4 +77,10 @@ type OVSDBClusterList struct {
 
 func init() {
 	SchemeBuilder.Register(&OVSDBCluster{}, &OVSDBClusterList{})
+}
+
+// ObjectWithConditions
+
+func (cluster *OVSDBCluster) GetConditions() *condition.Conditions {
+	return &cluster.Status.Conditions
 }

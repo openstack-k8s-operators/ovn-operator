@@ -1,5 +1,5 @@
 /*
-Copyright 2022.
+Copyright 2020 Red Hat
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,31 +17,47 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+const (
+	OVSDBServerBootstrapFailed  condition.Reason = "BootstrapFailed"
+	OVSDBServerBootstrapInvalid condition.Reason = "BootstrapInvalid"
+	OVSDBServerInconsistent     condition.Reason = "InconsistentClusterID"
+)
 
 // OVSDBServerSpec defines the desired state of OVSDBServer
 type OVSDBServerSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	ClusterName string   `json:"clusterName"`
+	DBType      DBType   `json:"dbType"`
+	ClusterID   *string  `json:"clusterID,omitempty"`
+	InitPeers   []string `json:"initPeers,omitempty"`
 
-	// Foo is an example field of OVSDBServer. Edit ovsdbserver_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	StorageSize  resource.Quantity `json:"storageSize"`
+	StorageClass *string           `json:"storageClass,omitempty"`
+}
+
+type DatabaseStatus struct {
+	ClusterID   *string `json:"clusterID,omitempty"`
+	ServerID    *string `json:"serverID,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	RaftAddress *string `json:"raftAddress,omitempty"`
+	DBAddress   *string `json:"dbAddress,omitempty"`
 }
 
 // OVSDBServerStatus defines the observed state of OVSDBServer
 type OVSDBServerStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Conditions     condition.Conditions `json:"conditions,omitempty"`
+	DatabaseStatus `json:"databaseStatus,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
-// OVSDBServer is the Schema for the ovsdbservers API
+// OVSDBServer represents the storage and network identity of an ovsdb-server in
+// a raft cluster. It is the Schema for the ovsdbservers API.
 type OVSDBServer struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -50,7 +66,7 @@ type OVSDBServer struct {
 	Status OVSDBServerStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 
 // OVSDBServerList contains a list of OVSDBServer
 type OVSDBServerList struct {
@@ -61,4 +77,10 @@ type OVSDBServerList struct {
 
 func init() {
 	SchemeBuilder.Register(&OVSDBServer{}, &OVSDBServerList{})
+}
+
+// ObjectWithConditions
+
+func (server *OVSDBServer) GetConditions() *condition.Conditions {
+	return &server.Status.Conditions
 }
