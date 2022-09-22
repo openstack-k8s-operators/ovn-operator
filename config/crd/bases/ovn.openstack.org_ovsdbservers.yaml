@@ -41,6 +41,7 @@ spec:
               clusterName:
                 type: string
               dbType:
+                description: DBType - DB Type
                 type: string
               initPeers:
                 items:
@@ -107,6 +108,7 @@ spec:
                   type: object
                 type: array
               databaseStatus:
+                description: DatabaseStatus defines the status of OVSDBServer
                 properties:
                   clusterID:
                     type: string

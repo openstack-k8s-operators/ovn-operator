@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ovnv1alpha1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
-	"github.com/openstack-k8s-operators/ovn-operator/util"
+	util "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 )
 
 // OVSDBServerReconciler reconciles a OVSDBServer object
@@ -42,10 +42,12 @@ type OVSDBServerReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+// GetClient -
 func (r *OVSDBServerReconciler) GetClient() client.Client {
 	return r.Client
 }
 
+// GetLogger -
 func (r *OVSDBServerReconciler) GetLogger() logr.Logger {
 	return r.Log
 }
@@ -58,8 +60,9 @@ func (r *OVSDBServerReconciler) GetLogger() logr.Logger {
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;delete
 // +kubebuilder:rbac:groups=core,resources=pods/log,verbs=get;list
 
-func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, err error) {
-	ctx := context.Background()
+// Reconcile reconcile OVSDBServer API requests
+func (r *OVSDBServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
+	_ = context.Background()
 	_ = r.Log.WithValues("ovsdbserver", req.NamespacedName)
 
 	//
@@ -117,7 +120,7 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	//
 
 	service := serviceShell(server)
-	op, err := CreateOrDelete(r, ctx, service, func() error {
+	op, err := CreateOrDelete(ctx, r, service, func() error {
 		serviceApply(service, server)
 		applyServerLabels(server, service.Labels)
 
@@ -181,6 +184,7 @@ func (r *OVSDBServerReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, er
 	return ctrl.Result{}, nil
 }
 
+// SetupWithManager -
 func (r *OVSDBServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ovnv1alpha1.OVSDBServer{}).
@@ -206,7 +210,7 @@ func (r *OVSDBServerReconciler) bootstrapDB(
 
 	// Ensure the bootstrap pod is running
 	bootstrapPod := bootstrapPodShell(server)
-	_, err := CreateOrDelete(r, ctx, bootstrapPod, func() error {
+	_, err := CreateOrDelete(ctx, r, bootstrapPod, func() error {
 		bootstrapPodApply(bootstrapPod, server, cluster)
 		applyServerLabels(server, bootstrapPod.Labels)
 

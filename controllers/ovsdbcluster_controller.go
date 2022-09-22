@@ -35,7 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ovnv1alpha1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
-	"github.com/openstack-k8s-operators/ovn-operator/util"
+	util "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 )
 
 // OVSDBClusterReconciler reconciles a OVSDBCluster object
@@ -47,18 +47,23 @@ type OVSDBClusterReconciler struct {
 
 // ReconcilerCommon
 
+// GetClient -
 func (r *OVSDBClusterReconciler) GetClient() client.Client {
 	return r.Client
 }
 
+// GetLogger -
 func (r *OVSDBClusterReconciler) GetLogger() logr.Logger {
 	return r.Log
 }
 
 const (
+	// OVSDBClusterLabel - cluster label
 	OVSDBClusterLabel = "ovsdb-cluster"
-	OVSDBServerLabel  = "ovsdb-server"
+	// OVSDBServerLabel - server label
+	OVSDBServerLabel = "ovsdb-server"
 
+	// OVSDBClusterFinalizer - cluster finalizer
 	OVSDBClusterFinalizer = "ovsdbcluster.ovn.openstack.org"
 )
 
@@ -72,8 +77,9 @@ func (e clusterKickError) Error() string { return "" }
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;delete
 
-func (r *OVSDBClusterReconciler) Reconcile(req ctrl.Request) (result ctrl.Result, err error) {
-	ctx := context.Background()
+// Reconcile reconcile OVSDBCluster API requests
+func (r *OVSDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
+	_ = context.Background()
 	_ = r.Log.WithValues("ovsdbcluster", req.NamespacedName)
 
 	//
@@ -281,6 +287,7 @@ func (r *OVSDBClusterReconciler) getServerPods(
 	return pods, nil
 }
 
+// SetupWithManager -
 func (r *OVSDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ovnv1alpha1.OVSDBCluster{}).
@@ -475,7 +482,7 @@ func (r *OVSDBClusterReconciler) updateServers(
 		targetServers = 1
 	}
 
-	for i := len(servers); i < targetServers; i++ {
+	for i := len(servers); int32(i) < targetServers; i++ {
 		name := nextServerName(cluster, servers)
 		updateServers = append(updateServers, serverShell(cluster, name))
 	}
@@ -577,7 +584,7 @@ func (r *OVSDBClusterReconciler) updateServerPods(
 				}
 				return nil
 			}
-			op, err := CreateOrDelete(r, ctx, serverPod, apply)
+			op, err := CreateOrDelete(ctx, r, serverPod, apply)
 			if err != nil {
 				err = WrapErrorForObject("Update server pod", serverPod, err)
 				return err

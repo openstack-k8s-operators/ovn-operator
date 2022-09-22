@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package util
+package common
 
 import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
@@ -22,21 +22,27 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+// ObjectWithConditions -
 type ObjectWithConditions interface {
 	GetConditions() *condition.Conditions
 }
 
+// RuntimeObjectWithConditions -
 type RuntimeObjectWithConditions interface {
 	ObjectWithConditions
 	runtime.Object
 }
 
 const (
-	ConditionAvailable   condition.Type = "Available"
-	ConditionFailed      condition.Type = "Failed"
+	// ConditionAvailable - Available Condition
+	ConditionAvailable condition.Type = "Available"
+	// ConditionFailed - Failed Condition
+	ConditionFailed condition.Type = "Failed"
+	// ConditionInitialized - Initialized Condition
 	ConditionInitialized condition.Type = "Initialized"
 )
 
+// SetAvailable - Set Available
 func SetAvailable(obj ObjectWithConditions) {
 	condition := condition.Condition{
 		Type:   ConditionAvailable,
@@ -46,14 +52,17 @@ func SetAvailable(obj ObjectWithConditions) {
 	obj.GetConditions().Set(&condition)
 }
 
+// UnsetAvailable - Unset Available
 func UnsetAvailable(obj ObjectWithConditions) {
-	//	obj.GetConditions().Set(ConditionAvailable)
+	obj.GetConditions().MarkUnknown(ConditionAvailable, condition.InitReason, "UnsetAvailable")
 }
 
+// IsAvailable - Check if is Available
 func IsAvailable(obj ObjectWithConditions) bool {
 	return obj.GetConditions().IsTrue(ConditionAvailable)
 }
 
+// SetFailed - Set Failed
 func SetFailed(obj ObjectWithConditions, reason condition.Reason, msg string) {
 	condition := condition.Condition{
 		Type:    ConditionFailed,
@@ -65,14 +74,17 @@ func SetFailed(obj ObjectWithConditions, reason condition.Reason, msg string) {
 	obj.GetConditions().Set(&condition)
 }
 
+// UnsetFailed - Unset Failed
 func UnsetFailed(obj ObjectWithConditions) {
-	//	obj.GetConditions().Set(ConditionFailed)
+	obj.GetConditions().MarkUnknown(ConditionFailed, condition.InitReason, "UnsetFailed")
 }
 
+// IsFailed - Check if is failed
 func IsFailed(obj ObjectWithConditions) bool {
 	return obj.GetConditions().IsTrue(ConditionFailed)
 }
 
+// SetInitialized - Set Initialized
 func SetInitialized(obj ObjectWithConditions) {
 	condition := condition.Condition{
 		Type:   ConditionInitialized,
@@ -82,14 +94,17 @@ func SetInitialized(obj ObjectWithConditions) {
 	obj.GetConditions().Set(&condition)
 }
 
+// UnsetInitialized - Unset Initialized
 func UnsetInitialized(obj ObjectWithConditions) {
-	//	obj.GetConditions().Set(ConditionInitialized)
+	obj.GetConditions().MarkUnknown(ConditionInitialized, condition.InitReason, "UnsetInitialized")
 }
 
+// IsInitialized - Check is Initialized
 func IsInitialized(obj ObjectWithConditions) bool {
 	return obj.GetConditions().IsTrue(ConditionInitialized)
 }
 
+// DeepCopyConditions -
 func DeepCopyConditions(conditions condition.Conditions) condition.Conditions {
 	cp := make(condition.Conditions, len(conditions))
 	for i, condition := range conditions {

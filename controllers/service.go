@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	ovnv1alpha1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
-	"github.com/openstack-k8s-operators/ovn-operator/util"
+	util "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 )
 
 func serviceName(server *ovnv1alpha1.OVSDBServer) string {

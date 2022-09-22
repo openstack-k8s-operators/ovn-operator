@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package util
+package common
 
 import (
 	"bufio"
@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
+// ExecResult -
 type ExecResult struct {
 	Stdout     *bufio.Reader
 	Stderr     *bufio.Reader
@@ -44,6 +45,7 @@ func init() {
 	restConfig = config.GetConfigOrDie()
 }
 
+// GetLogStream -
 func GetLogStream(ctx context.Context,
 	pod *corev1.Pod,
 	container string,
@@ -62,6 +64,7 @@ func GetLogStream(ctx context.Context,
 	return req.Stream(ctx)
 }
 
+// IsPodConditionSet - Check if Pod condition is set
 func IsPodConditionSet(conditionType corev1.PodConditionType, pod *corev1.Pod) bool {
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == conditionType {
@@ -71,14 +74,17 @@ func IsPodConditionSet(conditionType corev1.PodConditionType, pod *corev1.Pod) b
 	return false
 }
 
+// IsPodInitialized - Check if Pod is initialized
 func IsPodInitialized(pod *corev1.Pod) bool {
 	return IsPodConditionSet(corev1.PodInitialized, pod)
 }
 
+// IsPodReady - Check if Pod is Ready
 func IsPodReady(pod *corev1.Pod) bool {
 	return IsPodConditionSet(corev1.PodReady, pod)
 }
 
+// PodExec -
 func PodExec(
 	pod *corev1.Pod, containerName string, command []string, output bool) (*ExecResult, error) {
 

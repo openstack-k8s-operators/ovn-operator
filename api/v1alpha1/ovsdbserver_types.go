@@ -23,9 +23,12 @@ import (
 )
 
 const (
-	OVSDBServerBootstrapFailed  condition.Reason = "BootstrapFailed"
+	// OVSDBServerBootstrapFailed - Bootstrap failed condition
+	OVSDBServerBootstrapFailed condition.Reason = "BootstrapFailed"
+	// OVSDBServerBootstrapInvalid - Bootstrap Invalid condition
 	OVSDBServerBootstrapInvalid condition.Reason = "BootstrapInvalid"
-	OVSDBServerInconsistent     condition.Reason = "InconsistentClusterID"
+	// OVSDBServerInconsistent - Inconsistent ClusterID condition
+	OVSDBServerInconsistent condition.Reason = "InconsistentClusterID"
 )
 
 // OVSDBServerSpec defines the desired state of OVSDBServer
@@ -39,6 +42,7 @@ type OVSDBServerSpec struct {
 	StorageClass *string           `json:"storageClass,omitempty"`
 }
 
+// DatabaseStatus defines the status of OVSDBServer
 type DatabaseStatus struct {
 	ClusterID   *string `json:"clusterID,omitempty"`
 	ServerID    *string `json:"serverID,omitempty"`
@@ -79,8 +83,7 @@ func init() {
 	SchemeBuilder.Register(&OVSDBServer{}, &OVSDBServerList{})
 }
 
-// ObjectWithConditions
-
+// GetConditions - returns the conditions of the OVSDB Server object
 func (server *OVSDBServer) GetConditions() *condition.Conditions {
 	return &server.Status.Conditions
 }

@@ -1,4 +1,4 @@
-name: Neutron Operator image builder
+name: OVN Operator image builder
 
 on:
   push:

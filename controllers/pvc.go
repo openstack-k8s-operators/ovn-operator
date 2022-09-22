@@ -20,7 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	ovnv1alpha1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
-	"github.com/openstack-k8s-operators/ovn-operator/util"
+	util "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 )
 
 func pvcName(server *ovnv1alpha1.OVSDBServer) string {

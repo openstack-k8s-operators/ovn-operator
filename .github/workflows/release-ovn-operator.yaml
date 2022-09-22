@@ -1,4 +1,4 @@
-name: Release Neutron Operator
+name: Release OVN Operator
 
 on:
   release:

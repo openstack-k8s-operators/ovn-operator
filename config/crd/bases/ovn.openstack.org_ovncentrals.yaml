@@ -40,10 +40,15 @@ spec:
               nbClientConfig:
                 type: string
               nbReplicas:
+                format: int32
+                type: integer
+              replicas:
+                format: int32
                 type: integer
               sbClientConfig:
                 type: string
               sbReplicas:
+                format: int32
                 type: integer
               storageClass:
                 type: string
@@ -56,6 +61,7 @@ spec:
             required:
             - image
             - nbReplicas
+            - replicas
             - sbReplicas
             type: object
           status:

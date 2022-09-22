@@ -28,8 +28,9 @@ import (
 type OVNCentralSpec struct {
 	// Required properties
 
-	NBReplicas  int               `json:"nbReplicas"`
-	SBReplicas  int               `json:"sbReplicas"`
+	Replicas    int32             `json:"replicas"`
+	NBReplicas  int32             `json:"nbReplicas"`
+	SBReplicas  int32             `json:"sbReplicas"`
 	Image       string            `json:"image"`
 	StorageSize resource.Quantity `json:"storageSize,omitempty"`
 
@@ -73,8 +74,7 @@ func init() {
 	SchemeBuilder.Register(&OVNCentral{}, &OVNCentralList{})
 }
 
-// ObjectWithConditions
-
+// GetConditions - returns the conditions of the OVN Central object
 func (cluster *OVNCentral) GetConditions() *condition.Conditions {
 	return &cluster.Status.Conditions
 }

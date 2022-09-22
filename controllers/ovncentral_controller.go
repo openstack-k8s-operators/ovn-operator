@@ -38,11 +38,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	ovnv1alpha1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
-	"github.com/openstack-k8s-operators/ovn-operator/util"
+	util "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 )
 
 const (
+	// OVNCentralLabel - ovn central label
 	OVNCentralLabel = "ovn-central"
 )
 
@@ -53,10 +55,12 @@ type OVNCentralReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+// GetClient -
 func (r *OVNCentralReconciler) GetClient() client.Client {
 	return r.Client
 }
 
+// GetLogger -
 func (r *OVNCentralReconciler) GetLogger() logr.Logger {
 	return r.Log
 }
@@ -69,9 +73,10 @@ func (r *OVNCentralReconciler) GetLogger() logr.Logger {
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch
 
-func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (result ctrl.Result, err error) {
+// Reconcile - reconcile OVN Central API requests
+func (r *OVNCentralReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	_ = r.Log.WithValues("ovncentral", req.NamespacedName)
-	ctx := context.Background()
+	_ = context.Background()
 
 	//
 	// Fetch the instance
@@ -178,25 +183,24 @@ func (r *OVNCentralReconciler) Reconcile(req ctrl.Request) (result ctrl.Result, 
 	return ctrl.Result{}, nil
 }
 
+// SetupWithManager -
 func (r *OVNCentralReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Schedule a reconcile on ovncentral for northd if the client configmap owned by either of
 	// our 2 clusters is updated
-	clusterConfigMapWatcher := &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: handler.ToRequestsFunc(func(source handler.MapObject) []reconcile.Request {
-			labels := source.Meta.GetLabels()
-			cluster, ok := labels[OVNCentralLabel]
-			if !ok {
-				return []reconcile.Request{}
-			}
+	clusterConfigMapWatcher := handler.EnqueueRequestsFromMapFunc(func(source client.Object) []reconcile.Request {
+		labels := source.GetLabels()
+		cluster, ok := labels[OVNCentralLabel]
+		if !ok {
+			return []reconcile.Request{}
+		}
 
-			return []reconcile.Request{
-				{NamespacedName: types.NamespacedName{
-					Name:      cluster,
-					Namespace: source.Meta.GetNamespace(),
-				}},
-			}
-		}),
-	}
+		return []reconcile.Request{
+			{NamespacedName: types.NamespacedName{
+				Name:      cluster,
+				Namespace: source.GetNamespace(),
+			}},
+		}
+	})
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ovnv1alpha1.OVNCentral{}).
@@ -317,8 +321,7 @@ func (r *OVNCentralReconciler) northdApply(
 			OVNCentralLabel: central.Name,
 		}
 
-		replicas := int32(2)
-		northd.Spec.Replicas = &replicas
+		northd.Spec.Replicas = &central.Spec.Replicas
 		northd.Spec.Selector = &metav1.LabelSelector{
 			MatchLabels: podLabels,
 		}
@@ -345,12 +348,12 @@ func (r *OVNCentralReconciler) northdApply(
 			corev1.ResourceCPU:    *resource.NewScaledQuantity(10, resource.Milli),
 			corev1.ResourceMemory: *resource.NewScaledQuantity(300, resource.Mega),
 		}
-		container.Env = util.MergeEnvs(container.Env, util.EnvSetterMap{
-			"OVN_LOG_LEVEL": util.EnvValue("info"),
-			"OVN_RUNDIR":    util.EnvValue(ovnRunDir),
-			"OVN_NB_DB":     util.EnvValue(*nbConfig),
-			"OVN_SB_DB":     util.EnvValue(*sbConfig),
-		})
+		envVars := map[string]env.Setter{}
+		envVars["OVN_LOG_LEVEL"] = env.SetValue("info")
+		envVars["OVN_RUNDIR"] = env.SetValue(ovnRunDir)
+		envVars["OVN_NB_DB"] = env.SetValue(*nbConfig)
+		envVars["OVN_SB_DB"] = env.SetValue(*sbConfig)
+		container.Env = env.MergeEnvs(container.Env, envVars)
 
 		// XXX: Dev only
 		container.ImagePullPolicy = corev1.PullAlways

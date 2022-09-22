@@ -39,10 +39,12 @@ spec:
               clientConfig:
                 type: string
               dbType:
+                description: DBType - DB Type
                 type: string
               image:
                 type: string
               replicas:
+                format: int32
                 type: integer
               serverStorageClass:
                 type: string

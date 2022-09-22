@@ -22,21 +22,26 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// DBType - DB Type
 type DBType string
 
 const (
+	// DBTypeNB - NB DBType
 	DBTypeNB DBType = "NB"
+
+	// DBTypeSB - SB DBType
 	DBTypeSB DBType = "SB"
 )
 
 const (
+	// OVSDBClusterServers Defines condition reason
 	OVSDBClusterServers condition.Reason = "FailedServers"
 )
 
 // OVSDBClusterSpec defines the desired state of OVSDBCluster
 type OVSDBClusterSpec struct {
 	DBType       DBType  `json:"dbType"`
-	Replicas     int     `json:"replicas"`
+	Replicas     int32   `json:"replicas"`
 	ClientConfig *string `json:"clientConfig,omitempty"`
 
 	Image              string            `json:"image"`
@@ -79,8 +84,7 @@ func init() {
 	SchemeBuilder.Register(&OVSDBCluster{}, &OVSDBClusterList{})
 }
 
-// ObjectWithConditions
-
+// GetConditions - returns the conditions of the OVSDB Cluster object
 func (cluster *OVSDBCluster) GetConditions() *condition.Conditions {
 	return &cluster.Status.Conditions
 }

@@ -3,4 +3,8 @@ kind: OVSDBCluster
 metadata:
   name: ovsdbcluster-sample
 spec:
-  # TODO(user): Add fields here
+  dbType: NB
+  replicas: 1
+  clientConfig: ovsdbcluster-sample
+  image: quay.io/mbooth/ovn-central:trunk
+  serverStorageSize: 10Gi
