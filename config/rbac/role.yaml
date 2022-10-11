@@ -14,6 +14,7 @@ rules:
   - delete
   - get
   - list
+  - patch
   - update
   - watch
 - apiGroups:
@@ -25,6 +26,7 @@ rules:
   - delete
   - get
   - list
+  - patch
   - update
   - watch
 - apiGroups:
@@ -89,6 +91,32 @@ rules:
   - ovn.openstack.org
   resources:
   - ovncentrals/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovnnorthds
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovnnorthds/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovnnorthds/status
   verbs:
   - get
   - patch

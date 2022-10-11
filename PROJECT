@@ -34,4 +34,13 @@ resources:
   kind: OVSDBCluster
   path: github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openstack.org
+  group: ovn
+  kind: OVNNorthd
+  path: github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"
