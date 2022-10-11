@@ -23,23 +23,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Hash - struct to add hashes to status
-type Hash struct {
-	// Name of hash referencing the parameter
-	Name string `json:"name,omitempty"`
-	// Hash
-	Hash string `json:"hash,omitempty"`
-}
-
-// OVNNorthdSpec defines the desired state of OVNNorthd
-type OVNNorthdSpec struct {
+// OVNDBClusterSpec defines the desired state of OVNDBCluster
+type OVNDBClusterSpec struct {
 	ContainerImage string `json:"containerImage,omitempty"`
+
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern="^NB|SB$"
+	// DBType - NB or SB
+	DBType string `json:"dbType"`
 
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=1
-	// +kubebuilder:validation:Maximum=32
+	// +kubebuilder:validation:Maximum=1
 	// +kubebuilder:validation:Minimum=0
-	// Replicas of OVN Northd to run
+	// Replicas of OVN DBCluster to run
 	Replicas int32 `json:"replicas"`
 
 	// +kubebuilder:validation:Optional
@@ -61,11 +58,19 @@ type OVNNorthdSpec struct {
 	// Resources - Compute Resources required by this service (Limits/Requests).
 	// ovn-connection configmap which holds NBConnection and SBConnection string
 	OVNConnectionConfigMap string `json:"ovnConnectionConfigMap,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// StorageClass
+	StorageClass string `json:"storageClass,omitempty"`
+
+	// +kubebuilder:validation:Required
+	// StorageRequest
+	StorageRequest string `json:"storageRequest"`
 }
 
-// OVNNorthdStatus defines the observed state of OVNNorthd
-type OVNNorthdStatus struct {
-	// ReadyCount of OVN Northd instances
+// OVNDBClusterStatus defines the observed state of OVNDBCluster
+type OVNDBClusterStatus struct {
+	// ReadyCount of OVN DBCluster instances
 	ReadyCount int32 `json:"readyCount,omitempty"`
 
 	// Map of hashes to track e.g. job status
@@ -73,6 +78,12 @@ type OVNNorthdStatus struct {
 
 	// Conditions
 	Conditions condition.Conditions `json:"conditions,omitempty" optional:"true"`
+
+	// RaftAddress -
+	RaftAddress *string `json:"raftAddress,omitempty"`
+
+	// DBAddress -
+	DBAddress *string `json:"dbAddress,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -80,31 +91,31 @@ type OVNNorthdStatus struct {
 //+kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[0].status",description="Status"
 //+kubebuilder:printcolumn:name="Message",type="string",JSONPath=".status.conditions[0].message",description="Message"
 
-// OVNNorthd is the Schema for the ovnnorthds API
-type OVNNorthd struct {
+// OVNDBCluster is the Schema for the ovndbclusters API
+type OVNDBCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   OVNNorthdSpec   `json:"spec,omitempty"`
-	Status OVNNorthdStatus `json:"status,omitempty"`
+	Spec   OVNDBClusterSpec   `json:"spec,omitempty"`
+	Status OVNDBClusterStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// OVNNorthdList contains a list of OVNNorthd
-type OVNNorthdList struct {
+// OVNDBClusterList contains a list of OVNDBCluster
+type OVNDBClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []OVNNorthd `json:"items"`
+	Items           []OVNDBCluster `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&OVNNorthd{}, &OVNNorthdList{})
+	SchemeBuilder.Register(&OVNDBCluster{}, &OVNDBClusterList{})
 }
 
 // IsReady - returns true if service is ready to server requests
-func (instance OVNNorthd) IsReady() bool {
+func (instance OVNDBCluster) IsReady() bool {
 	// Ready when:
-	// there is at least a single pod to serve the OVN Northd service
+	// there is at least a single pod to serve the OVN DBCluster
 	return instance.Status.ReadyCount >= 1
 }

@@ -15,6 +15,16 @@ spec:
       kind: OVNCentral
       name: ovncentrals.ovn.openstack.org
       version: v1alpha1
+    - description: OVNDBCluster is the Schema for the ovndbclusters API
+      displayName: OVNDBCluster
+      kind: OVNDBCluster
+      name: ovndbclusters.ovn.openstack.org
+      version: v1alpha1
+    - description: OVNNorthd is the Schema for the ovnnorthds API
+      displayName: OVNNorthd
+      kind: OVNNorthd
+      name: ovnnorthds.ovn.openstack.org
+      version: v1alpha1
     - description: OVSDBCluster represents a raft cluster of OVSDBServers. It is the
         Schema for the ovsdbclusters API.
       displayName: OVSDBCluster

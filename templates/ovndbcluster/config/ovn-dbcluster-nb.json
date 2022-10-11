@@ -1,0 +1,3 @@
+{
+  "command": "/usr/local/bin/start-nb-db-server --db-nb-create-insecure-remote=yes --db-nb-election-timer=10000 --db-nb-cluster-local-proto=tcp --db-nb-cluster-local-addr=0.0.0.0 --db-nb-cluster-local-port=6643 --db-nb-addr=0.0.0.0 --db-nb-port=6641"
+}

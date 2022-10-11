@@ -18,6 +18,18 @@ rules:
   - update
   - watch
 - apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - ""
   resources:
   - configmaps
@@ -91,6 +103,32 @@ rules:
   - ovn.openstack.org
   resources:
   - ovncentrals/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovndbclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovndbclusters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovndbclusters/status
   verbs:
   - get
   - patch

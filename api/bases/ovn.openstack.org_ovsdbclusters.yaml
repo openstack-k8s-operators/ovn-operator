@@ -5,29 +5,21 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.9.2
   creationTimestamp: null
-  name: ovnnorthds.ovn.openstack.org
+  name: ovsdbclusters.ovn.openstack.org
 spec:
   group: ovn.openstack.org
   names:
-    kind: OVNNorthd
-    listKind: OVNNorthdList
-    plural: ovnnorthds
-    singular: ovnnorthd
+    kind: OVSDBCluster
+    listKind: OVSDBClusterList
+    plural: ovsdbclusters
+    singular: ovsdbcluster
   scope: Namespaced
   versions:
-  - additionalPrinterColumns:
-    - description: Status
-      jsonPath: .status.conditions[0].status
-      name: Status
-      type: string
-    - description: Message
-      jsonPath: .status.conditions[0].message
-      name: Message
-      type: string
-    name: v1alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: OVNNorthd is the Schema for the ovnnorthds API
+        description: OVSDBCluster represents a raft cluster of OVSDBServers. It is
+          the Schema for the ovsdbclusters API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -42,66 +34,46 @@ spec:
           metadata:
             type: object
           spec:
-            description: OVNNorthdSpec defines the desired state of OVNNorthd
+            description: OVSDBClusterSpec defines the desired state of OVSDBCluster
             properties:
-              containerImage:
+              clientConfig:
                 type: string
-              logLevel:
-                default: info
-                description: LogLevel - Set log level info, dbg, emer etc
+              dbType:
+                description: DBType - DB Type
                 type: string
-              nodeSelector:
-                additionalProperties:
-                  type: string
-                description: NodeSelector to target subset of worker nodes running
-                  this service
-                type: object
-              ovnConnectionConfigMap:
-                default: ovn-connection
-                description: Resources - Compute Resources required by this service
-                  (Limits/Requests). ovn-connection configmap which holds NBConnection
-                  and SBConnection string
+              image:
                 type: string
               replicas:
-                default: 1
-                description: Replicas of OVN Northd to run
                 format: int32
-                maximum: 32
-                minimum: 0
                 type: integer
-              resources:
-                description: Resources - Compute Resources required by this service
-                  (Limits/Requests). https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-                properties:
-                  limits:
-                    additionalProperties:
-                      anyOf:
-                      - type: integer
-                      - type: string
-                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                      x-kubernetes-int-or-string: true
-                    description: 'Limits describes the maximum amount of compute resources
-                      allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
-                    type: object
-                  requests:
-                    additionalProperties:
-                      anyOf:
-                      - type: integer
-                      - type: string
-                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                      x-kubernetes-int-or-string: true
-                    description: 'Requests describes the minimum amount of compute
-                      resources required. If Requests is omitted for a container,
-                      it defaults to Limits if that is explicitly specified, otherwise
-                      to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
-                    type: object
-                type: object
+              serverStorageClass:
+                type: string
+              serverStorageSize:
+                anyOf:
+                - type: integer
+                - type: string
+                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                x-kubernetes-int-or-string: true
+            required:
+            - dbType
+            - image
+            - replicas
+            - serverStorageSize
             type: object
           status:
-            description: OVNNorthdStatus defines the observed state of OVNNorthd
+            description: OVSDBClusterStatus defines the observed state of OVSDBCluster
             properties:
+              availableServers:
+                type: integer
+              clusterID:
+                type: string
+              clusterQuorum:
+                type: integer
+              clusterSize:
+                type: integer
               conditions:
-                description: Conditions
+                description: Conditions provide observations of the operational state
+                  of a API resource.
                 items:
                   description: Condition defines an observation of a API resource
                     operational state.
@@ -143,15 +115,10 @@ spec:
                   - type
                   type: object
                 type: array
-              hash:
-                additionalProperties:
-                  type: string
-                description: Map of hashes to track e.g. job status
-                type: object
-              readyCount:
-                description: ReadyCount of OVN Northd instances
-                format: int32
-                type: integer
+            required:
+            - availableServers
+            - clusterQuorum
+            - clusterSize
             type: object
         type: object
     served: true
