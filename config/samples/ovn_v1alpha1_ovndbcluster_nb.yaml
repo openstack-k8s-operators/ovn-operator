@@ -5,7 +5,6 @@ metadata:
 spec:
   replicas: 1
   containerImage: quay.io/tripleomastercentos9/openstack-ovn-nb-db-server:current-tripleo
-  ovnConnectionConfigMap: ovn-connection
   logLevel: info
   storageRequest: 10G
   storageClass: local-storage

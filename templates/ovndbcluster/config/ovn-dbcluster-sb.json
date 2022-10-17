@@ -1,3 +1,3 @@
 {
-  "command": "/usr/local/bin/start-sb-db-server --db-sb-create-insecure-remote=yes --db-sb-election-timer=10000 --db-sb-cluster-local-proto=tcp --db-sb-cluster-local-addr=0.0.0.0 --db-sb-cluster-local-port=6644 --db-sb-addr=0.0.0.0 --db-sb-port=6642"
+  "command": "/usr/local/bin/start-sb-db-server --db-sb-create-insecure-remote=yes --db-sb-election-timer=10000 --db-sb-cluster-local-proto=tcp --db-sb-cluster-local-addr=0.0.0.0 --db-sb-cluster-local-port=6644 --db-sb-addr=0.0.0.0 --db-sb-port=6642 --ovn-sb-log=-vfile:{{ .OVN_LOG_LEVEL }}"
 }

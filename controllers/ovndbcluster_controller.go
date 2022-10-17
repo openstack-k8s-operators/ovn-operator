@@ -33,6 +33,7 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/service"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/statefulset"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
@@ -53,6 +54,11 @@ type OVNDBClusterReconciler struct {
 // GetClient -
 func (r *OVNDBClusterReconciler) GetClient() client.Client {
 	return r.Client
+}
+
+// GetKClient -
+func (r *OVNDBClusterReconciler) GetKClient() kubernetes.Interface {
+	return r.Kclient
 }
 
 // GetLogger -
@@ -205,20 +211,12 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		return ctrl.Result{}, err
 	}
 
-	// Service
-	service := ovndbcluster.Service(instance, r.Scheme)
-
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, service, func() error {
-		err := controllerutil.SetControllerReference(instance, service, r.Scheme)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-
-	if err != nil {
-		// FIXME: add error condition
-		return ctrl.Result{}, err
+	serviceName := ovndbcluster.ServiceNameNB
+	if instance.Spec.DBType == "SB" {
+		serviceName = ovndbcluster.ServiceNameSB
+	}
+	serviceLabels := map[string]string{
+		common.AppSelector: serviceName,
 	}
 
 	// ConfigMap
@@ -232,11 +230,9 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 
 	//
 	// create Configmap required for dbcluster input
-	// - %-scripts configmap holding scripts to e.g. bootstrap the service
-	// - %-config configmap holding minimal dbcluster config required to get the service up, user can add additional files to be added to the service
-	// - parameters which has passwords gets added from the OpenStack secret via the init container
+	// - %-config configmap holding minimal dbcluster config required to get the service up
 	//
-	err = r.generateServiceConfigMaps(ctx, helper, instance, &configMapVars, service)
+	err := r.generateServiceConfigMaps(ctx, helper, instance, &configMapVars, serviceName)
 	if err != nil {
 		instance.Status.Conditions.Set(condition.FalseCondition(
 			condition.ServiceConfigReadyCondition,
@@ -268,14 +264,6 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	//
 	// TODO check when/if Init, Update, or Upgrade should/could be skipped
 	//
-
-	serviceName := ovndbcluster.ServiceNameNB
-	if instance.Spec.DBType == "SB" {
-		serviceName = ovndbcluster.ServiceNameSB
-	}
-	serviceLabels := map[string]string{
-		common.AppSelector: serviceName,
-	}
 
 	// Handle service update
 	ctrlResult, err := r.reconcileUpdate(ctx, instance, helper)
@@ -318,33 +306,80 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 
 	instance.Status.ReadyCount = sfset.GetStatefulSet().Status.ReadyReplicas
 
-	if instance.Status.ReadyCount > 0 {
-		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
-	}
 	// create Statefulset - end
-
+	// Handle service init
+	ctrlResult, err = r.reconcileServices(ctx, instance, helper, serviceLabels, serviceName)
+	if err != nil {
+		return ctrlResult, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
+	}
+	svcList, err := service.GetServicesListWithLabel(
+		ctx,
+		helper,
+		helper.GetBeforeObject().GetNamespace(),
+		serviceLabels,
+	)
+	if err == nil && instance.Status.ReadyCount > 0 && len(svcList.Items) > 0 {
+		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
+		// Set DBAddress
+		instance.Status.DBAddress = fmt.Sprintf("tcp:%s:%d", svcList.Items[0].Spec.ClusterIP, svcList.Items[0].Spec.Ports[0].Port)
+		// Set RaftAddress
+		instance.Status.RaftAddress = fmt.Sprintf("tcp:%s:%d", svcList.Items[0].Spec.ClusterIP, svcList.Items[0].Spec.Ports[1].Port)
+	}
 	r.Log.Info("Reconciled Service successfully")
 	return ctrl.Result{}, nil
 }
 
+func (r *OVNDBClusterReconciler) reconcileServices(
+	ctx context.Context,
+	instance *ovnv1.OVNDBCluster,
+	helper *helper.Helper,
+	serviceLabels map[string]string,
+	serviceName string,
+) (ctrl.Result, error) {
+	r.Log.Info("Reconciling OVN DB Cluster Service")
+
+	podList, err := ovndbcluster.OVNDBPods(ctx, instance, helper, serviceLabels)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	for _, ovnPod := range podList.Items {
+		//
+		// Create the conductor pod service if none exists
+		//
+		ovndbServiceLabels := map[string]string{
+			common.AppSelector: serviceName,
+		}
+		svc := service.NewService(
+			ovndbcluster.Service(ovnPod.Name, instance, ovndbServiceLabels),
+			ovndbServiceLabels,
+			5,
+		)
+		ctrlResult, err := svc.CreateOrPatch(ctx, helper)
+		if err != nil {
+			return ctrl.Result{}, err
+		} else if (ctrlResult != ctrl.Result{}) {
+			return ctrl.Result{}, nil
+		}
+		// create service - end
+	}
+
+	r.Log.Info("Reconciled OVN DB Cluster Service successfully")
+	return ctrl.Result{}, nil
+}
+
 //
-// generateServiceConfigMaps - create create configmaps which hold scripts and service configuration
-// TODO add DefaultConfigOverwrite
+// generateServiceConfigMaps - create create configmaps which hold service configuration
 //
 func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 	ctx context.Context,
 	h *helper.Helper,
 	instance *ovnv1.OVNDBCluster,
 	envVars *map[string]env.Setter,
-	service *corev1.Service,
+	serviceName string,
 ) error {
-	customData := make(map[string]string)
-	serviceName := ovndbcluster.ServiceNameNB
-	connectionName := "NBConnection"
-	if instance.Spec.DBType == "SB" {
-		serviceName = ovndbcluster.ServiceNameSB
-		connectionName = "SBConnection"
-	}
 	// Create/update configmaps from templates
 	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(serviceName), map[string]string{})
 
@@ -352,29 +387,7 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 
 	templateParameters["OVN_LOG_LEVEL"] = instance.Spec.LogLevel
 
-	customData[connectionName] = fmt.Sprintf("tcp:%s:%d", service.Spec.ClusterIP, service.Spec.Ports[0].Port)
-
-	// use data from already existing custom configmap
-	ovnConnection, _, err := configmap.GetConfigMapAndHashWithName(ctx, h, instance.Spec.OVNConnectionConfigMap, instance.Namespace)
-	if err == nil {
-		h.GetLogger().Info(fmt.Sprintf("Found ConfigMap %s in namespace %s, merging data", instance.Spec.OVNConnectionConfigMap, instance.Namespace))
-		customData = MergeStringMaps(ovnConnection.Data, customData)
-		// TODO(ykarel) - Without explicit call ConfigMap doesn't get updated with data from new CR, data from initial CR persists
-		// Move the required Data to CR Status and use the Status into other places where this data is required
-		err = h.GetClient().Update(ctx, ovnConnection)
-		if err != nil {
-			return err
-		}
-	}
 	cms := []util.Template{
-		// ScriptsConfigMap
-		{
-			Name:         fmt.Sprintf("%s-scripts", instance.Name),
-			Namespace:    instance.Namespace,
-			Type:         util.TemplateTypeScripts,
-			InstanceType: instance.Kind,
-			Labels:       cmLabels,
-		},
 		// ConfigMap
 		{
 			Name:          fmt.Sprintf("%s-config-data", instance.Name),
@@ -384,44 +397,13 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 			Labels:        cmLabels,
 			ConfigOptions: templateParameters,
 		},
-		// ConfigMap
-		{
-			Name:         instance.Spec.OVNConnectionConfigMap,
-			Namespace:    instance.Namespace,
-			Type:         util.TemplateTypeNone,
-			InstanceType: instance.Kind,
-			Labels:       cmLabels,
-			CustomData:   customData,
-			// TODO (ykarel) - With SkipSetOwner: true controller-manager stuck into loop
-			//	SkipSetOwner: true,
-		},
 	}
-	err = configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
+	err := configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
 	if err != nil {
 		return nil
 	}
 
 	return nil
-}
-
-// MergeStringMaps - merge two or more string->map maps
-func MergeStringMaps(baseMap map[string]string, extraMaps ...map[string]string) map[string]string {
-	InitMap(&baseMap)
-
-	for _, extraMap := range extraMaps {
-		for key, value := range extraMap {
-			baseMap[key] = value
-		}
-	}
-
-	return baseMap
-}
-
-// InitMap - Inititialise a map to an empty map if it is nil.
-func InitMap(m *map[string]string) {
-	if *m == nil {
-		*m = make(map[string]string)
-	}
 }
 
 //

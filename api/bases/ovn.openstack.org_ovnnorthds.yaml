@@ -56,12 +56,6 @@ spec:
                 description: NodeSelector to target subset of worker nodes running
                   this service
                 type: object
-              ovnConnectionConfigMap:
-                default: ovn-connection
-                description: Resources - Compute Resources required by this service
-                  (Limits/Requests). ovn-connection configmap which holds NBConnection
-                  and SBConnection string
-                type: string
               replicas:
                 default: 1
                 description: Replicas of OVN Northd to run

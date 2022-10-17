@@ -6,7 +6,6 @@ import corev1 "k8s.io/api/core/v1"
 // TODO: merge to GetVolumes when other controllers also switched to current config
 //       mechanism.
 func GetDBClusterVolumes(name string) []corev1.Volume {
-	var scriptsVolumeDefaultMode int32 = 0755
 	var config0640AccessMode int32 = 0640
 
 	return []corev1.Volume{
@@ -23,17 +22,6 @@ func GetDBClusterVolumes(name string) []corev1.Volume {
 			VolumeSource: corev1.VolumeSource{
 				HostPath: &corev1.HostPathVolumeSource{
 					Path: "/etc/localtime",
-				},
-			},
-		},
-		{
-			Name: "scripts",
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					DefaultMode: &scriptsVolumeDefaultMode,
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: name + "-scripts",
-					},
 				},
 			},
 		},
@@ -63,11 +51,6 @@ func GetDBClusterVolumeMounts() []corev1.VolumeMount {
 		{
 			Name:      "etc-localtime",
 			MountPath: "/etc/localtime",
-			ReadOnly:  true,
-		},
-		{
-			Name:      "scripts",
-			MountPath: "/usr/local/bin/container-scripts",
 			ReadOnly:  true,
 		},
 		{

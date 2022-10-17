@@ -17,11 +17,60 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"context"
+	"fmt"
 
+	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+//
+// GetDBEndpoints - get DB Endpoints
+//
+func GetDBEndpoints(
+	ctx context.Context,
+	h *helper.Helper,
+	namespace string,
+	labelSelector map[string]string,
+) (map[string]string, error) {
+	ovnDBList := &OVNDBClusterList{}
+
+	listOpts := []client.ListOption{
+		client.InNamespace(namespace),
+	}
+
+	if len(labelSelector) > 0 {
+		labels := client.MatchingLabels(labelSelector)
+		listOpts = append(listOpts, labels)
+	}
+
+	err := h.GetClient().List(ctx, ovnDBList, listOpts...)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(ovnDBList.Items) > 2 {
+		return nil, fmt.Errorf("more then two OVNDBCluster object found in namespace %s", namespace)
+	}
+
+	if len(ovnDBList.Items) == 0 {
+		return nil, k8s_errors.NewNotFound(
+			appsv1.Resource("OVNDBCluster"),
+			fmt.Sprintf("No OVNDBCluster object found in namespace %s", namespace),
+		)
+	}
+	DBEndpointsMap := make(map[string]string)
+	for _, ovndb := range ovnDBList.Items {
+		DBEndpointsMap[ovndb.Spec.DBType] = ovndb.Status.DBAddress
+	}
+	return DBEndpointsMap, nil
+}
 
 // OVNDBClusterSpec defines the desired state of OVNDBCluster
 type OVNDBClusterSpec struct {
@@ -54,12 +103,6 @@ type OVNDBClusterSpec struct {
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=ovn-connection
-	// Resources - Compute Resources required by this service (Limits/Requests).
-	// ovn-connection configmap which holds NBConnection and SBConnection string
-	OVNConnectionConfigMap string `json:"ovnConnectionConfigMap,omitempty"`
-
-	// +kubebuilder:validation:Optional
 	// StorageClass
 	StorageClass string `json:"storageClass,omitempty"`
 
@@ -80,10 +123,10 @@ type OVNDBClusterStatus struct {
 	Conditions condition.Conditions `json:"conditions,omitempty" optional:"true"`
 
 	// RaftAddress -
-	RaftAddress *string `json:"raftAddress,omitempty"`
+	RaftAddress string `json:"raftAddress,omitempty"`
 
 	// DBAddress -
-	DBAddress *string `json:"dbAddress,omitempty"`
+	DBAddress string `json:"dbAddress,omitempty"`
 }
 
 //+kubebuilder:object:root=true
