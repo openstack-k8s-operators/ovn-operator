@@ -35,8 +35,8 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
-	ovndbv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
+	ovndbclient "github.com/openstack-k8s-operators/ovn-operator/pkg/ovndbcluster/client"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovnnorthd"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -196,13 +196,15 @@ func (r *OVNNorthdReconciler) reconcileUpgrade(ctx context.Context, instance *ov
 func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovnv1.OVNNorthd, helper *helper.Helper) (ctrl.Result, error) {
 	r.Log.Info("Reconciling Service")
 
-	// If the service object doesn't have our finalizer, add it.
-	controllerutil.AddFinalizer(instance, helper.GetFinalizer())
-	// Register the finalizer immediately to avoid orphaning resources on delete
-	//if err := patchHelper.Patch(ctx, openStackCluster); err != nil {
-	if err := r.Update(ctx, instance); err != nil {
+	if !controllerutil.ContainsFinalizer(instance, helper.GetFinalizer()) {
+		// If the service object doesn't have our finalizer, add it.
+		controllerutil.AddFinalizer(instance, helper.GetFinalizer())
+		// Register the finalizer immediately to avoid orphaning resources on delete
+		err := r.Update(ctx, instance)
+
 		return ctrl.Result{}, err
 	}
+
 	// ConfigMap
 	configMapVars := make(map[string]env.Setter)
 
@@ -318,7 +320,7 @@ func (r *OVNNorthdReconciler) generateServiceConfigMaps(
 ) error {
 	// Create/update configmaps from templates
 	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnnorthd.ServiceName), map[string]string{})
-	dbmap, err := ovndbv1.GetDBEndpoints(ctx, h, instance.Namespace, map[string]string{})
+	dbmap, err := ovndbclient.GetDBEndpoints(ctx, h, instance.Namespace, map[string]string{})
 	if err != nil {
 		return err
 	}

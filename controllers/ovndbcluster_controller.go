@@ -76,7 +76,7 @@ func (r *OVNDBClusterReconciler) GetScheme() *runtime.Scheme {
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovndbclusters/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;patch;update;delete;
-//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;delete;
+//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;patch;update;delete;
 
 // Reconcile - OVN DBCluster
 func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -203,11 +203,12 @@ func (r *OVNDBClusterReconciler) reconcileUpgrade(ctx context.Context, instance 
 func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *ovnv1.OVNDBCluster, helper *helper.Helper) (ctrl.Result, error) {
 	r.Log.Info("Reconciling Service")
 
-	// If the service object doesn't have our finalizer, add it.
-	controllerutil.AddFinalizer(instance, helper.GetFinalizer())
-	// Register the finalizer immediately to avoid orphaning resources on delete
-	//if err := patchHelper.Patch(ctx, openStackCluster); err != nil {
-	if err := r.Update(ctx, instance); err != nil {
+	if !controllerutil.ContainsFinalizer(instance, helper.GetFinalizer()) {
+		// If the service object doesn't have our finalizer, add it.
+		controllerutil.AddFinalizer(instance, helper.GetFinalizer())
+		// Register the finalizer immediately to avoid orphaning resources on delete
+		err := r.Update(ctx, instance)
+
 		return ctrl.Result{}, err
 	}
 
