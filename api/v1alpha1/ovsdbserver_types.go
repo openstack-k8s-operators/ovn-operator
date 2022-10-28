@@ -17,15 +17,18 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"github.com/operator-framework/operator-lib/status"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	OVSDBServerBootstrapFailed  status.ConditionReason = "BootstrapFailed"
-	OVSDBServerBootstrapInvalid status.ConditionReason = "BootstrapInvalid"
-	OVSDBServerInconsistent     status.ConditionReason = "InconsistentClusterID"
+	// OVSDBServerBootstrapFailed - Bootstrap failed condition
+	OVSDBServerBootstrapFailed condition.Reason = "BootstrapFailed"
+	// OVSDBServerBootstrapInvalid - Bootstrap Invalid condition
+	OVSDBServerBootstrapInvalid condition.Reason = "BootstrapInvalid"
+	// OVSDBServerInconsistent - Inconsistent ClusterID condition
+	OVSDBServerInconsistent condition.Reason = "InconsistentClusterID"
 )
 
 // OVSDBServerSpec defines the desired state of OVSDBServer
@@ -39,6 +42,7 @@ type OVSDBServerSpec struct {
 	StorageClass *string           `json:"storageClass,omitempty"`
 }
 
+// DatabaseStatus defines the status of OVSDBServer
 type DatabaseStatus struct {
 	ClusterID   *string `json:"clusterID,omitempty"`
 	ServerID    *string `json:"serverID,omitempty"`
@@ -49,7 +53,7 @@ type DatabaseStatus struct {
 
 // OVSDBServerStatus defines the observed state of OVSDBServer
 type OVSDBServerStatus struct {
-	Conditions     status.Conditions `json:"conditions,omitempty"`
+	Conditions     condition.Conditions `json:"conditions,omitempty"`
 	DatabaseStatus `json:"databaseStatus,omitempty"`
 }
 
@@ -79,8 +83,7 @@ func init() {
 	SchemeBuilder.Register(&OVSDBServer{}, &OVSDBServerList{})
 }
 
-// ObjectWithConditions
-
-func (server *OVSDBServer) GetConditions() *status.Conditions {
+// GetConditions - returns the conditions of the OVSDB Server object
+func (server *OVSDBServer) GetConditions() *condition.Conditions {
 	return &server.Status.Conditions
 }

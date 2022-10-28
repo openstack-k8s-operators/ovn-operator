@@ -1,3 +1,4 @@
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
@@ -5,6 +6,7 @@
 *.so
 *.dylib
 bin
+testbin/*
 
 # Test binary, build with `go test -c`
 *.test
@@ -15,12 +17,17 @@ bin
 # Kubernetes Generated files - skip generated files, except for vendored files
 
 !vendor/**/zz_generated.*
-api/**/zz_generated.*
+
+#Operator SDK generated files
 /bundle/
+bundle.Dockerfile
+config/manager/kustomization.yaml
 
 # editor and IDE paraphernalia
 .idea
 *.swp
 *.swo
+
+# Common CI tools repository
+CI_TOOLS_REPO
 *~
-__debug_bin

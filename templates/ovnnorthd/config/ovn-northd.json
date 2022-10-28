@@ -1,0 +1,3 @@
+{
+  "command": "/usr/bin/ovn-northd --no-chdir -vconsole:{{ .OVN_LOG_LEVEL }} -vfile:off --pidfile=/run/ovn-northd.pid --ovnnb-db={{ .NBConnection }} --ovnsb-db={{ .SBConnection }}"
+}

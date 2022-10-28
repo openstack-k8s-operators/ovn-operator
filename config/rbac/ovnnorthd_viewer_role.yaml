@@ -1,0 +1,20 @@
+# permissions for end users to view ovnnorthds.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ovnnorthd-viewer-role
+rules:
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovnnorthds
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovnnorthds/status
+  verbs:
+  - get

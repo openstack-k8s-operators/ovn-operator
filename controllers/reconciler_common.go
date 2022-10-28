@@ -31,16 +31,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
+// ReconcilerCommon -
 type ReconcilerCommon interface {
 	GetClient() client.Client
 	GetLogger() logr.Logger
 }
 
-func WrapErrorForObject(msg string, object runtime.Object, err error) error {
-	key, keyErr := client.ObjectKeyFromObject(object)
-	if keyErr != nil {
-		return fmt.Errorf("ObjectKeyFromObject %v: %w", object, keyErr)
-	}
+// WrapErrorForObject -
+func WrapErrorForObject(msg string, object client.Object, err error) error {
+	key := client.ObjectKeyFromObject(object)
 
 	return fmt.Errorf("%s %T %v: %w",
 		msg, object, key, err)
@@ -53,6 +52,7 @@ func logObjectParams(object metav1.Object) []interface{} {
 		"ObjectName", object.GetName()}
 }
 
+// LogForObject -
 func LogForObject(r ReconcilerCommon,
 	msg string, object metav1.Object, params ...interface{}) {
 
@@ -60,6 +60,7 @@ func LogForObject(r ReconcilerCommon,
 	r.GetLogger().Info(msg, params...)
 }
 
+// LogErrorForObject -
 func LogErrorForObject(r ReconcilerCommon,
 	err error, msg string, object metav1.Object, params ...interface{}) {
 
@@ -67,39 +68,11 @@ func LogErrorForObject(r ReconcilerCommon,
 	r.GetLogger().Error(err, msg, params...)
 }
 
-func DeleteIfExists(r ReconcilerCommon,
-	ctx context.Context, obj runtime.Object) error {
-
-	key, err := client.ObjectKeyFromObject(obj)
-	if err != nil {
-		err = WrapErrorForObject("ObjectKeyFromObject", obj, err)
-		return err
-	}
-
-	err = r.GetClient().Get(ctx, key, obj)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil
-		}
-		err = WrapErrorForObject("Get", obj, err)
-		return err
-	}
-
-	err = r.GetClient().Delete(ctx, obj)
-	if err != nil {
-		err = WrapErrorForObject("Delete", obj, err)
-		return err
-	}
-
-	accessor := getAccessorOrDie(obj)
-	LogForObject(r, "Delete", accessor)
-	return nil
-}
-
+// CreateOrDelete -
 func CreateOrDelete(
-	r ReconcilerCommon,
 	ctx context.Context,
-	obj runtime.Object,
+	r ReconcilerCommon,
+	obj client.Object,
 	f controllerutil.MutateFn) (controllerutil.OperationResult, error) {
 
 	accessor := getAccessorOrDie(obj)

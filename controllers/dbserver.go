@@ -21,12 +21,15 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
+	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	ovnv1alpha1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
-	"github.com/openstack-k8s-operators/ovn-operator/util"
+	util "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 )
 
 const (
-	OVSDBServerApp          = "ovsdb-server"
+	// OVSDBServerApp - App name
+	OVSDBServerApp = "ovsdb-server"
+	// OVSDBServerBootstrapApp - Bootstrap App name
 	OVSDBServerBootstrapApp = "ovsdb-server-bootstrap"
 )
 
@@ -39,6 +42,7 @@ const (
 	ovnRunDir = "/ovn-run"
 
 	dbStatusContainerName = "dbstatus"
+	// DBServerContainerName - DBServer container name
 	DBServerContainerName = "ovsdb-server"
 )
 
@@ -172,13 +176,13 @@ func dbContainerVolumeMountsApply(mounts []corev1.VolumeMount) []corev1.VolumeMo
 }
 
 func dbContainerEnvApply(envs []corev1.EnvVar, server *ovnv1alpha1.OVSDBServer) []corev1.EnvVar {
-	return util.MergeEnvs(envs, util.EnvSetterMap{
-		"DB_TYPE":       util.EnvValue(string(server.Spec.DBType)),
-		"SERVER_NAME":   util.EnvValue(serviceName(server)),
-		"OVN_DBDIR":     util.EnvValue(ovnDBDir),
-		"OVN_RUNDIR":    util.EnvValue(ovnRunDir),
-		"OVN_LOG_LEVEL": util.EnvValue("info"),
-	})
+	envVars := map[string]env.Setter{}
+	envVars["OVN_LOG_LEVEL"] = env.SetValue("info")
+	envVars["OVN_RUNDIR"] = env.SetValue(ovnRunDir)
+	envVars["OVN_DBDIR"] = env.SetValue(ovnDBDir)
+	envVars["DB_TYPE"] = env.SetValue(string(server.Spec.DBType))
+	envVars["SERVER_NAME"] = env.SetValue(serviceName(server))
+	return env.MergeEnvs(envs, envVars)
 }
 
 // Define a local entry for the service in /hosts pointing to the pod IP. This
@@ -200,11 +204,11 @@ func hostsInitContainerApply(
 	container.VolumeMounts = util.MergeVolumeMounts(container.VolumeMounts, util.MountSetterMap{
 		hostsVolumeName: util.VolumeMount(hostsTmpMount),
 	})
-	container.Env = util.MergeEnvs(container.Env, util.EnvSetterMap{
-		"POD_IP":       util.EnvDownwardAPI("status.podIP"),
-		"SERVER_NAME":  util.EnvValue(serviceName(server)),
-		"HOSTS_VOLUME": util.EnvValue(hostsTmpMount),
-	})
+	envVars := map[string]env.Setter{}
+	envVars["HOSTS_VOLUME"] = env.SetValue(hostsTmpMount)
+	envVars["POD_IP"] = util.EnvDownwardAPI("status.podIP")
+	envVars["SERVER_NAME"] = env.SetValue(serviceName(server))
+	container.Env = env.MergeEnvs(container.Env, envVars)
 
 	// XXX: Dev only. Both pods use this container, so this ensures we
 	// always pull the latest image.

@@ -17,26 +17,31 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"github.com/operator-framework/operator-lib/status"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// DBType - DB Type
 type DBType string
 
 const (
+	// DBTypeNB - NB DBType
 	DBTypeNB DBType = "NB"
+
+	// DBTypeSB - SB DBType
 	DBTypeSB DBType = "SB"
 )
 
 const (
-	OVSDBClusterServers status.ConditionReason = "FailedServers"
+	// OVSDBClusterServers Defines condition reason
+	OVSDBClusterServers condition.Reason = "FailedServers"
 )
 
 // OVSDBClusterSpec defines the desired state of OVSDBCluster
 type OVSDBClusterSpec struct {
 	DBType       DBType  `json:"dbType"`
-	Replicas     int     `json:"replicas"`
+	Replicas     int32   `json:"replicas"`
 	ClientConfig *string `json:"clientConfig,omitempty"`
 
 	Image              string            `json:"image"`
@@ -46,11 +51,11 @@ type OVSDBClusterSpec struct {
 
 // OVSDBClusterStatus defines the observed state of OVSDBCluster
 type OVSDBClusterStatus struct {
-	Conditions       status.Conditions `json:"conditions,omitempty"`
-	ClusterID        *string           `json:"clusterID,omitempty"`
-	AvailableServers int               `json:"availableServers"`
-	ClusterSize      int               `json:"clusterSize"`
-	ClusterQuorum    int               `json:"clusterQuorum"`
+	Conditions       condition.Conditions `json:"conditions,omitempty"`
+	ClusterID        *string              `json:"clusterID,omitempty"`
+	AvailableServers int                  `json:"availableServers"`
+	ClusterSize      int                  `json:"clusterSize"`
+	ClusterQuorum    int                  `json:"clusterQuorum"`
 }
 
 // +kubebuilder:object:root=true
@@ -79,8 +84,7 @@ func init() {
 	SchemeBuilder.Register(&OVSDBCluster{}, &OVSDBClusterList{})
 }
 
-// ObjectWithConditions
-
-func (cluster *OVSDBCluster) GetConditions() *status.Conditions {
+// GetConditions - returns the conditions of the OVSDB Cluster object
+func (cluster *OVSDBCluster) GetConditions() *condition.Conditions {
 	return &cluster.Status.Conditions
 }

@@ -1,70 +1,75 @@
-# golang-builder is used in OSBS build
-ARG GOLANG_BUILDER=golang:1.13
-ARG OPERATOR_BASE_IMAGE=registry.access.redhat.com/ubi8/ubi-minimal:latest
+# Build the manager binary
+ARG GOLANG_BUILDER=golang:1.18
+ARG OPERATOR_BASE_IMAGE=gcr.io/distroless/static:nonroot
 
-FROM ${GOLANG_BUILDER} as builder
+FROM $GOLANG_BUILDER AS builder
+
+#Arguments required by OSBS build system
+ARG CACHITO_ENV_FILE=/remote-source/cachito.env
 
 ARG REMOTE_SOURCE=.
-ARG GO_BUILD_EXTRA_ARGS="-v"
-ARG OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/v1.0.1/operator-sdk-v1.0.1-x86_64-linux-gnu
+ARG REMOTE_SOURCE_DIR=/remote-source
+ARG REMOTE_SOURCE_SUBDIR=
+ARG DEST_ROOT=/dest-root
 
-WORKDIR /workspace
+ARG GO_BUILD_EXTRA_ARGS=
 
-# Download operator-sdk
-ADD ${OPERATOR_SDK_URL} /usr/local/bin/operator-sdk
-RUN chmod 755 /usr/local/bin/operator-sdk
+COPY $REMOTE_SOURCE $REMOTE_SOURCE_DIR
+WORKDIR $REMOTE_SOURCE_DIR/$REMOTE_SOURCE_SUBDIR
 
-# Copy the Go Modules manifests
-COPY ${REMOTE_SOURCE}/go.mod go.mod
-COPY ${REMOTE_SOURCE}/go.sum go.sum
-# cache deps before building and copying source so that we don't need to
-# re-download as much and so that source changes don't invalidate our
-# downloaded layer
-RUN go mod download
+RUN mkdir -p ${DEST_ROOT}/usr/local/bin/
 
-# Copy only sufficient dependencies to build kustomize and controller-gen so
-# they are cached.
-COPY ${REMOTE_SOURCE}/Makefile .
-COPY ${REMOTE_SOURCE}/Makefile.registry .
+# cache deps before building and copying source so that we don't need to re-download as much
+# and so that source changes don't invalidate our downloaded layer
+RUN if [ ! -f $CACHITO_ENV_FILE ]; then go mod download ; fi
 
-RUN make kustomize controller-gen
+# Build manager
+RUN if [ -f $CACHITO_ENV_FILE ] ; then source $CACHITO_ENV_FILE ; fi ; CGO_ENABLED=0  GO111MODULE=on go build ${GO_BUILD_EXTRA_ARGS} -a -o ${DEST_ROOT}/manager main.go
 
-# Copy the rest of the source
-COPY ${REMOTE_SOURCE}/PROJECT ./
-COPY ${REMOTE_SOURCE}/main.go ./
-COPY ${REMOTE_SOURCE}/controllers/ controllers/
-COPY ${REMOTE_SOURCE}/util/ util/
-COPY ${REMOTE_SOURCE}/tools/ tools/
-COPY ${REMOTE_SOURCE}/config/ config/
-# zz_generated.deepcopy.go is automatically generated, which can
-# invalidate this cache layer even when the source hasn't changed.
-COPY ${REMOTE_SOURCE}/api/ api/
+RUN cp -r templates ${DEST_ROOT}/templates
 
-# Build
-RUN CGO_ENABLED=0 GO111MODULE=on go build ${GO_BUILD_EXTRA_ARGS} -a -o manager main.go
-RUN CGO_ENABLED=0 GO111MODULE=on go build ${GO_BUILD_EXTRA_ARGS} -a -o csv-generator tools/csv-generator.go
+# Use distroless as minimal base image to package the manager binary
+# Refer to https://github.com/GoogleContainerTools/distroless for more details
+FROM $OPERATOR_BASE_IMAGE
 
-# Builds CRDs and base CSV
-RUN make bundle
+ARG DEST_ROOT=/dest-root
+# NONROOT default id https://github.com/GoogleContainerTools/distroless/blob/main/base/base.bzl#L8=
+ARG USER_ID=65532
 
-FROM ${OPERATOR_BASE_IMAGE}
+ARG IMAGE_COMPONENT="ovn-operator-container"
+ARG IMAGE_NAME="ovn-operator"
+ARG IMAGE_VERSION="1.0.0"
+ARG IMAGE_SUMMARY="Ovn Operator"
+ARG IMAGE_DESC="This image includes the ovn-operator"
+ARG IMAGE_TAGS="cn-openstack openstack"
 
-ENV USER_UID=1001 \
-    OPERATOR_BUNDLE=/usr/share/ovn-operator/bundle/
-ENV BASE_CSV=${OPERATOR_BUNDLE}/ovn-operator.clusterserviceversion.yaml
+### DO NOT EDIT LINES BELOW
+# Auto generated using CI tools from
+# https://github.com/openstack-k8s-operators/openstack-k8s-operators-ci
+
+# Labels required by upstream and osbs build system
+LABEL com.redhat.component="${IMAGE_COMPONENT}" \
+      name="${IMAGE_NAME}" \
+      version="${IMAGE_VERSION}" \
+      summary="${IMAGE_SUMMARY}" \
+      io.k8s.name="${IMAGE_NAME}" \
+      io.k8s.description="${IMAGE_DESC}" \
+      io.openshift.tags="${IMAGE_TAGS}"
+### DO NOT EDIT LINES ABOVE
+
+ENV USER_UID=$USER_ID \
+    OPERATOR_TEMPLATES=/usr/share/ovn-operator/templates/
 
 WORKDIR /
-COPY --from=builder /workspace/manager .
-COPY --from=builder /workspace/csv-generator /usr/local/bin/
-COPY --from=builder /workspace/bundle/manifests/ ${OPERATOR_BUNDLE}/
 
-LABEL   com.redhat.component="ovn-operator-container" \
-        name="ovn-operator" \
-        version="0.1" \
-        summary="OVN Operator" \
-        io.k8s.name="ovn-operator" \
-        io.k8s.description="This image includes the OVN operator"
+# Install operator binary to WORKDIR
+COPY --from=builder ${DEST_ROOT}/manager .
 
-USER ${USER_UID}
+# Install templates
+COPY --from=builder ${DEST_ROOT}/templates ${OPERATOR_TEMPLATES}
+
+USER $USER_ID
+
+ENV PATH="/:${PATH}"
 
 ENTRYPOINT ["/manager"]

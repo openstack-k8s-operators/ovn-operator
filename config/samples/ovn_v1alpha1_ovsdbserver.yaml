@@ -5,4 +5,4 @@ metadata:
 spec:
   dbType: NB
   clusterName: ovncentral-sample-nb
-  storageSize: 1G
+  storageSize: 10Gi

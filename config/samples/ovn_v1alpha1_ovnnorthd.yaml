@@ -1,0 +1,8 @@
+apiVersion: ovn.openstack.org/v1alpha1
+kind: OVNNorthd
+metadata:
+  name: ovnnorthd-sample
+spec:
+  replicas: 1
+  containerImage: quay.io/tripleomastercentos9/openstack-ovn-northd:current-tripleo
+  logLevel: info

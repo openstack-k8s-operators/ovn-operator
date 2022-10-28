@@ -1,17 +1,55 @@
 domain: openstack.org
-layout: go.kubebuilder.io/v2
+layout:
+- go.kubebuilder.io/v3
+plugins:
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}
 projectName: ovn-operator
 repo: github.com/openstack-k8s-operators/ovn-operator
 resources:
-- group: ovn
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openstack.org
+  group: ovn
   kind: OVNCentral
+  path: github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1
   version: v1alpha1
-- group: ovn
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openstack.org
+  group: ovn
   kind: OVSDBServer
+  path: github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1
   version: v1alpha1
-- group: ovn
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openstack.org
+  group: ovn
   kind: OVSDBCluster
+  path: github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1
   version: v1alpha1
-version: 3-alpha
-plugins:
-  go.sdk.operatorframework.io/v2-alpha: {}
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openstack.org
+  group: ovn
+  kind: OVNNorthd
+  path: github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openstack.org
+  group: ovn
+  kind: OVNDBCluster
+  path: github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1
+  version: v1alpha1
+version: "3"

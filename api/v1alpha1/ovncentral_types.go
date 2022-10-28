@@ -17,7 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"github.com/operator-framework/operator-lib/status"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -28,8 +28,9 @@ import (
 type OVNCentralSpec struct {
 	// Required properties
 
-	NBReplicas  int               `json:"nbReplicas"`
-	SBReplicas  int               `json:"sbReplicas"`
+	Replicas    int32             `json:"replicas"`
+	NBReplicas  int32             `json:"nbReplicas"`
+	SBReplicas  int32             `json:"sbReplicas"`
 	Image       string            `json:"image"`
 	StorageSize resource.Quantity `json:"storageSize,omitempty"`
 
@@ -45,7 +46,7 @@ type OVNCentralSpec struct {
 
 // OVNCentralStatus defines the observed state of OVNCentral
 type OVNCentralStatus struct {
-	Conditions status.Conditions `json:"conditions,omitempty"`
+	Conditions condition.Conditions `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -73,8 +74,7 @@ func init() {
 	SchemeBuilder.Register(&OVNCentral{}, &OVNCentralList{})
 }
 
-// ObjectWithConditions
-
-func (cluster *OVNCentral) GetConditions() *status.Conditions {
+// GetConditions - returns the conditions of the OVN Central object
+func (cluster *OVNCentral) GetConditions() *condition.Conditions {
 	return &cluster.Status.Conditions
 }
