@@ -14,14 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package client
+package v1alpha1
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
-	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -37,7 +36,7 @@ func GetDBEndpoints(
 	namespace string,
 	labelSelector map[string]string,
 ) (map[string]string, error) {
-	ovnDBList := &ovnv1.OVNDBClusterList{}
+	ovnDBList := &OVNDBClusterList{}
 
 	listOpts := []client.ListOption{
 		client.InNamespace(namespace),
