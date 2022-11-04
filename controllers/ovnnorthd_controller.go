@@ -36,7 +36,6 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
-	ovndbclient "github.com/openstack-k8s-operators/ovn-operator/pkg/ovndbcluster/client"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovnnorthd"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -320,7 +319,7 @@ func (r *OVNNorthdReconciler) generateServiceConfigMaps(
 ) error {
 	// Create/update configmaps from templates
 	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnnorthd.ServiceName), map[string]string{})
-	dbmap, err := ovndbclient.GetDBEndpoints(ctx, h, instance.Namespace, map[string]string{})
+	dbmap, err := ovnv1.GetDBEndpoints(ctx, h, instance.Namespace, map[string]string{})
 	if err != nil {
 		return err
 	}
