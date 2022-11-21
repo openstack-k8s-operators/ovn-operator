@@ -15,7 +15,7 @@ spec:
     singular: ovsdbcluster
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - name: v1beta1
     schema:
       openAPIV3Schema:
         description: OVSDBCluster represents a raft cluster of OVSDBServers. It is

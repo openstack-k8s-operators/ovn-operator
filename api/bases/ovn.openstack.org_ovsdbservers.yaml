@@ -15,7 +15,7 @@ spec:
     singular: ovsdbserver
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - name: v1beta1
     schema:
       openAPIV3Schema:
         description: OVSDBServer represents the storage and network identity of an

@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	ovnv1alpha1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
+	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	util "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 )
 
@@ -86,7 +86,7 @@ func (r *OVSDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// Fetch the cluster object
 	//
 
-	cluster := &ovnv1alpha1.OVSDBCluster{}
+	cluster := &ovnv1.OVSDBCluster{}
 	if err := r.Client.Get(ctx, req.NamespacedName, cluster); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after
@@ -209,7 +209,7 @@ func (r *OVSDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return ctrl.Result{}, nil
 }
 
-func findServer(name string, servers []ovnv1alpha1.OVSDBServer) *ovnv1alpha1.OVSDBServer {
+func findServer(name string, servers []ovnv1.OVSDBServer) *ovnv1.OVSDBServer {
 	for i := 0; i < len(servers); i++ {
 		if servers[i].Name == name {
 			return &servers[i]
@@ -228,8 +228,8 @@ func findPod(name string, serverPods []corev1.Pod) *corev1.Pod {
 }
 
 func nextServerName(
-	cluster *ovnv1alpha1.OVSDBCluster,
-	servers []ovnv1alpha1.OVSDBServer,
+	cluster *ovnv1.OVSDBCluster,
+	servers []ovnv1.OVSDBServer,
 ) string {
 
 	for i := 0; ; i++ {
@@ -242,10 +242,10 @@ func nextServerName(
 
 func (r *OVSDBClusterReconciler) getServers(
 	ctx context.Context,
-	cluster *ovnv1alpha1.OVSDBCluster,
-) ([]ovnv1alpha1.OVSDBServer, error) {
+	cluster *ovnv1.OVSDBCluster,
+) ([]ovnv1.OVSDBServer, error) {
 
-	serverList := &ovnv1alpha1.OVSDBServerList{}
+	serverList := &ovnv1.OVSDBServerList{}
 	serverListOpts := &client.ListOptions{Namespace: cluster.Namespace}
 	client.MatchingLabels{
 		OVSDBClusterLabel: cluster.Name,
@@ -265,7 +265,7 @@ func (r *OVSDBClusterReconciler) getServers(
 
 func (r *OVSDBClusterReconciler) getServerPods(
 	ctx context.Context,
-	cluster *ovnv1alpha1.OVSDBCluster,
+	cluster *ovnv1.OVSDBCluster,
 ) ([]corev1.Pod, error) {
 
 	podList := &corev1.PodList{}
@@ -290,8 +290,8 @@ func (r *OVSDBClusterReconciler) getServerPods(
 // SetupWithManager -
 func (r *OVSDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&ovnv1alpha1.OVSDBCluster{}).
-		Owns(&ovnv1alpha1.OVSDBServer{}).
+		For(&ovnv1.OVSDBCluster{}).
+		Owns(&ovnv1.OVSDBServer{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Pod{}).
 		Complete(r)
@@ -299,8 +299,8 @@ func (r *OVSDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *OVSDBClusterReconciler) finalizeCluster(
 	ctx context.Context,
-	cluster *ovnv1alpha1.OVSDBCluster,
-	servers []ovnv1alpha1.OVSDBServer,
+	cluster *ovnv1.OVSDBCluster,
+	servers []ovnv1.OVSDBServer,
 ) (ctrl.Result, error) {
 	// Remove finalizer from all managed servers
 	for i := 0; i < len(servers); i++ {
@@ -330,8 +330,8 @@ func (r *OVSDBClusterReconciler) finalizeCluster(
 
 func (r *OVSDBClusterReconciler) finalizeServers(
 	ctx context.Context,
-	cluster *ovnv1alpha1.OVSDBCluster,
-	servers []ovnv1alpha1.OVSDBServer,
+	cluster *ovnv1.OVSDBCluster,
+	servers []ovnv1.OVSDBServer,
 	serverPods []corev1.Pod,
 ) error {
 	for i := 0; i < len(servers); i++ {
@@ -389,8 +389,8 @@ func (r *OVSDBClusterReconciler) finalizeServers(
 }
 
 func (r *OVSDBClusterReconciler) updateClusterStatus(
-	cluster *ovnv1alpha1.OVSDBCluster,
-	servers []ovnv1alpha1.OVSDBServer,
+	cluster *ovnv1.OVSDBCluster,
+	servers []ovnv1.OVSDBServer,
 	serverPods []corev1.Pod,
 ) {
 	// Cluster size is the basis of the quorum calculation. It is the number of
@@ -447,7 +447,7 @@ func (r *OVSDBClusterReconciler) updateClusterStatus(
 		if !util.IsFailed(cluster) {
 			LogForObject(r, msg, cluster)
 		}
-		util.SetFailed(cluster, ovnv1alpha1.OVSDBClusterServers, msg)
+		util.SetFailed(cluster, ovnv1.OVSDBClusterServers, msg)
 	} else {
 		util.UnsetFailed(cluster)
 	}
@@ -455,12 +455,12 @@ func (r *OVSDBClusterReconciler) updateClusterStatus(
 
 func (r *OVSDBClusterReconciler) updateServers(
 	ctx context.Context,
-	cluster *ovnv1alpha1.OVSDBCluster,
-	servers []ovnv1alpha1.OVSDBServer,
+	cluster *ovnv1.OVSDBCluster,
+	servers []ovnv1.OVSDBServer,
 ) error {
 
 	// A list of all servers we're going to update or add
-	var updateServers []*ovnv1alpha1.OVSDBServer
+	var updateServers []*ovnv1.OVSDBServer
 
 	// Servers to be updated
 	for i := 0; i < len(servers); i++ {
@@ -517,8 +517,8 @@ func (r *OVSDBClusterReconciler) updateServers(
 
 func (r *OVSDBClusterReconciler) updateServerPods(
 	ctx context.Context,
-	cluster *ovnv1alpha1.OVSDBCluster,
-	servers []ovnv1alpha1.OVSDBServer,
+	cluster *ovnv1.OVSDBCluster,
+	servers []ovnv1.OVSDBServer,
 	serverPods []corev1.Pod,
 ) error {
 	status := &cluster.Status
@@ -601,8 +601,8 @@ func (r *OVSDBClusterReconciler) updateServerPods(
 
 func (r *OVSDBClusterReconciler) writeConfigMap(
 	ctx context.Context,
-	cluster *ovnv1alpha1.OVSDBCluster,
-	servers []ovnv1alpha1.OVSDBServer,
+	cluster *ovnv1.OVSDBCluster,
+	servers []ovnv1.OVSDBServer,
 ) error {
 	if cluster.Spec.ClientConfig == nil || cluster.Status.ClusterID == nil {
 		return nil
@@ -643,20 +643,20 @@ func (r *OVSDBClusterReconciler) writeConfigMap(
 }
 
 func serverShell(
-	cluster *ovnv1alpha1.OVSDBCluster,
+	cluster *ovnv1.OVSDBCluster,
 	name string,
-) *ovnv1alpha1.OVSDBServer {
+) *ovnv1.OVSDBServer {
 
-	server := &ovnv1alpha1.OVSDBServer{}
+	server := &ovnv1.OVSDBServer{}
 	server.Name = name
 	server.Namespace = cluster.Namespace
 	return server
 }
 
 func serverApply(
-	cluster *ovnv1alpha1.OVSDBCluster,
-	server *ovnv1alpha1.OVSDBServer,
-	servers []ovnv1alpha1.OVSDBServer,
+	cluster *ovnv1.OVSDBCluster,
+	server *ovnv1.OVSDBServer,
+	servers []ovnv1.OVSDBServer,
 ) {
 
 	var initPeers []string
@@ -679,7 +679,7 @@ func serverApply(
 	server.Spec.StorageClass = cluster.Spec.ServerStorageClass
 }
 
-func applyClusterLabels(cluster *ovnv1alpha1.OVSDBCluster, labels map[string]string) {
+func applyClusterLabels(cluster *ovnv1.OVSDBCluster, labels map[string]string) {
 	labels[OVNCentralLabel] = cluster.Labels[OVNCentralLabel]
 	labels[OVSDBClusterLabel] = cluster.Name
 }

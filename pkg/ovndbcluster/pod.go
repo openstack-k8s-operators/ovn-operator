@@ -23,7 +23,7 @@ import (
 	k8s_labels "k8s.io/apimachinery/pkg/labels"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
-	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
+	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 )
 
 // OVNDBPods - Query current running ovn db pods managed by the statefulset
