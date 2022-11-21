@@ -22,7 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
-	ovnv1alpha1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
+	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	util "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 )
 
@@ -46,7 +46,7 @@ const (
 	DBServerContainerName = "ovsdb-server"
 )
 
-func dbServerShell(server *ovnv1alpha1.OVSDBServer) *corev1.Pod {
+func dbServerShell(server *ovnv1.OVSDBServer) *corev1.Pod {
 	pod := &corev1.Pod{}
 	pod.Name = server.Name
 	pod.Namespace = server.Namespace
@@ -56,8 +56,8 @@ func dbServerShell(server *ovnv1alpha1.OVSDBServer) *corev1.Pod {
 
 func dbServerApply(
 	pod *corev1.Pod,
-	server *ovnv1alpha1.OVSDBServer,
-	cluster *ovnv1alpha1.OVSDBCluster) {
+	server *ovnv1.OVSDBServer,
+	cluster *ovnv1.OVSDBCluster) {
 
 	util.InitLabelMap(&pod.Labels)
 	pod.Labels["app"] = OVSDBServerApp
@@ -96,7 +96,7 @@ func dbServerApply(
 	dbContainer.LivenessProbe.TimeoutSeconds = 10
 }
 
-func bootstrapPodShell(server *ovnv1alpha1.OVSDBServer) *corev1.Pod {
+func bootstrapPodShell(server *ovnv1.OVSDBServer) *corev1.Pod {
 	pod := &corev1.Pod{}
 	pod.Name = fmt.Sprintf("%s-bootstrap", server.Name)
 	pod.Namespace = server.Namespace
@@ -106,8 +106,8 @@ func bootstrapPodShell(server *ovnv1alpha1.OVSDBServer) *corev1.Pod {
 
 func bootstrapPodApply(
 	pod *corev1.Pod,
-	server *ovnv1alpha1.OVSDBServer,
-	cluster *ovnv1alpha1.OVSDBCluster) {
+	server *ovnv1.OVSDBServer,
+	cluster *ovnv1.OVSDBCluster) {
 
 	util.InitLabelMap(&pod.Labels)
 	pod.Labels["app"] = OVSDBServerBootstrapApp
@@ -144,7 +144,7 @@ func bootstrapPodApply(
 	dbStatusContainerApply(&pod.Spec.Containers[0], server, cluster)
 }
 
-func dbPodVolumesApply(volumes *[]corev1.Volume, server *ovnv1alpha1.OVSDBServer) {
+func dbPodVolumesApply(volumes *[]corev1.Volume, server *ovnv1.OVSDBServer) {
 	for _, vol := range []corev1.Volume{
 		{Name: dataVolumeName, VolumeSource: corev1.VolumeSource{
 			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
@@ -175,7 +175,7 @@ func dbContainerVolumeMountsApply(mounts []corev1.VolumeMount) []corev1.VolumeMo
 	})
 }
 
-func dbContainerEnvApply(envs []corev1.EnvVar, server *ovnv1alpha1.OVSDBServer) []corev1.EnvVar {
+func dbContainerEnvApply(envs []corev1.EnvVar, server *ovnv1.OVSDBServer) []corev1.EnvVar {
 	envVars := map[string]env.Setter{}
 	envVars["OVN_LOG_LEVEL"] = env.SetValue("info")
 	envVars["OVN_RUNDIR"] = env.SetValue(ovnRunDir)
@@ -189,8 +189,8 @@ func dbContainerEnvApply(envs []corev1.EnvVar, server *ovnv1alpha1.OVSDBServer) 
 // allows ovsdb-server to bind to the 'service ip' on startup.
 func hostsInitContainerApply(
 	container *corev1.Container,
-	server *ovnv1alpha1.OVSDBServer,
-	cluster *ovnv1alpha1.OVSDBCluster) {
+	server *ovnv1.OVSDBServer,
+	cluster *ovnv1.OVSDBCluster) {
 
 	const hostsTmpMount = "/hosts-new"
 	container.Name = "override-local-service-ip"
@@ -217,8 +217,8 @@ func hostsInitContainerApply(
 
 func dbStatusContainerApply(
 	container *corev1.Container,
-	server *ovnv1alpha1.OVSDBServer,
-	cluster *ovnv1alpha1.OVSDBCluster) {
+	server *ovnv1.OVSDBServer,
+	cluster *ovnv1.OVSDBCluster) {
 
 	container.Name = dbStatusContainerName
 	container.Image = cluster.Spec.Image
@@ -229,8 +229,8 @@ func dbStatusContainerApply(
 
 func dbServerContainerApply(
 	container *corev1.Container,
-	server *ovnv1alpha1.OVSDBServer,
-	cluster *ovnv1alpha1.OVSDBCluster) {
+	server *ovnv1.OVSDBServer,
+	cluster *ovnv1.OVSDBCluster) {
 
 	container.Name = DBServerContainerName
 	container.Image = cluster.Spec.Image

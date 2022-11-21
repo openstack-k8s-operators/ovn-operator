@@ -1,4 +1,4 @@
-apiVersion: ovn.openstack.org/v1alpha1
+apiVersion: ovn.openstack.org/v1beta1
 kind: OVNDBCluster
 metadata:
   name: ovndbcluster-nb-sample
@@ -10,7 +10,7 @@ spec:
   storageClass: local-storage
   dbType: NB
 ---
-apiVersion: ovn.openstack.org/v1alpha1
+apiVersion: ovn.openstack.org/v1beta1
 kind: OVNDBCluster
 metadata:
   name: ovndbcluster-sb-sample

@@ -22,15 +22,15 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	ovnv1alpha1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
+	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	util "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 )
 
-func serviceName(server *ovnv1alpha1.OVSDBServer) string {
+func serviceName(server *ovnv1.OVSDBServer) string {
 	return fmt.Sprintf("%s.%s.svc.cluster.local", server.Name, server.Namespace)
 }
 
-func serviceShell(server *ovnv1alpha1.OVSDBServer) *corev1.Service {
+func serviceShell(server *ovnv1.OVSDBServer) *corev1.Service {
 	service := &corev1.Service{}
 	service.Name = server.Name
 	service.Namespace = server.Namespace
@@ -40,7 +40,7 @@ func serviceShell(server *ovnv1alpha1.OVSDBServer) *corev1.Service {
 
 func serviceApply(
 	service *corev1.Service,
-	server *ovnv1alpha1.OVSDBServer) {
+	server *ovnv1.OVSDBServer) {
 
 	util.InitLabelMap(&service.Labels)
 

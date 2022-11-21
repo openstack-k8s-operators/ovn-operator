@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	ovnv1alpha1 "github.com/openstack-k8s-operators/ovn-operator/api/v1alpha1"
+	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	util "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 )
 
@@ -69,7 +69,7 @@ func (r *OVSDBServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// Fetch the server object
 	//
 
-	server := &ovnv1alpha1.OVSDBServer{}
+	server := &ovnv1.OVSDBServer{}
 	if err = r.Client.Get(ctx, req.NamespacedName, server); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile
@@ -107,7 +107,7 @@ func (r *OVSDBServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// Fetch the cluster object
 	//
 
-	cluster := &ovnv1alpha1.OVSDBCluster{}
+	cluster := &ovnv1.OVSDBCluster{}
 	err = r.Client.Get(ctx,
 		types.NamespacedName{Name: server.Spec.ClusterName, Namespace: server.Namespace}, cluster)
 	if err != nil {
@@ -175,7 +175,7 @@ func (r *OVSDBServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if !util.IsFailed(server) {
 			LogForObject(r, msg, server)
 		}
-		util.SetFailed(server, ovnv1alpha1.OVSDBServerInconsistent, msg)
+		util.SetFailed(server, ovnv1.OVSDBServerInconsistent, msg)
 	} else {
 		util.UnsetFailed(server)
 	}
@@ -187,7 +187,7 @@ func (r *OVSDBServerReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // SetupWithManager -
 func (r *OVSDBServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&ovnv1alpha1.OVSDBServer{}).
+		For(&ovnv1.OVSDBServer{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.PersistentVolumeClaim{}).
 		Owns(&corev1.Pod{}).
@@ -195,8 +195,8 @@ func (r *OVSDBServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *OVSDBServerReconciler) bootstrapDB(
-	ctx context.Context, server *ovnv1alpha1.OVSDBServer,
-	cluster *ovnv1alpha1.OVSDBCluster,
+	ctx context.Context, server *ovnv1.OVSDBServer,
+	cluster *ovnv1.OVSDBCluster,
 ) (ctrl.Result, error) {
 	if server.Spec.ClusterID != nil && len(server.Spec.InitPeers) == 0 {
 		msg := fmt.Sprintf("Unable to bootstrap server %s into cluster %s without InitPeers",
@@ -204,7 +204,7 @@ func (r *OVSDBServerReconciler) bootstrapDB(
 		if !util.IsFailed(server) {
 			LogForObject(r, msg, server)
 		}
-		util.SetFailed(server, ovnv1alpha1.OVSDBServerBootstrapInvalid, msg)
+		util.SetFailed(server, ovnv1.OVSDBServerBootstrapInvalid, msg)
 		return ctrl.Result{}, nil
 	}
 
@@ -234,7 +234,7 @@ func (r *OVSDBServerReconciler) bootstrapDB(
 		if !util.IsFailed(server) {
 			LogForObject(r, msg, server)
 		}
-		util.SetFailed(server, ovnv1alpha1.OVSDBServerBootstrapFailed, msg)
+		util.SetFailed(server, ovnv1.OVSDBServerBootstrapFailed, msg)
 
 		return ctrl.Result{}, nil
 	}
@@ -275,7 +275,7 @@ func (r *OVSDBServerReconciler) bootstrapDB(
 	return ctrl.Result{}, nil
 }
 
-func applyServerLabels(server *ovnv1alpha1.OVSDBServer, labels map[string]string) {
+func applyServerLabels(server *ovnv1.OVSDBServer, labels map[string]string) {
 	labels[OVNCentralLabel] = server.Labels[OVNCentralLabel]
 	labels[OVSDBClusterLabel] = server.Labels[OVSDBClusterLabel]
 	labels[OVSDBServerLabel] = server.Name
