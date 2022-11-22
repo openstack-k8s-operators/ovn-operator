@@ -64,7 +64,11 @@ func GetDBEndpoints(
 	}
 	DBEndpointsMap := make(map[string]string)
 	for _, ovndb := range ovnDBList.Items {
-		DBEndpointsMap[ovndb.Spec.DBType] = ovndb.Status.DBAddress
+		if  ovndb.Status.DBAddress != "" {
+			DBEndpointsMap[ovndb.Spec.DBType] = ovndb.Status.DBAddress
+		} else {
+			return DBEndpointsMap, fmt.Errorf("DBEndpoint not ready yet for %s", ovndb.Spec.DBType)
+		}
 	}
 	return DBEndpointsMap, nil
 }
