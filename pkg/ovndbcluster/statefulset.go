@@ -17,6 +17,7 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/affinity"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -26,6 +27,9 @@ import (
 const (
 	// ServiceCommand -
 	ServiceCommand = "/usr/local/bin/kolla_set_configs && /usr/local/bin/kolla_start"
+
+	// PvcSuffixEtcOvn -
+	PvcSuffixEtcOvn = "-etc-ovn"
 )
 
 // StatefulSet func
@@ -103,7 +107,7 @@ func StatefulSet(
 								RunAsUser: &runAsUser,
 							},
 							Env:            env.MergeEnvs([]corev1.EnvVar{}, envVars),
-							VolumeMounts:   GetDBClusterVolumeMounts(),
+							VolumeMounts:   GetDBClusterVolumeMounts(instance.Name + PvcSuffixEtcOvn),
 							Resources:      instance.Spec.Resources,
 							ReadinessProbe: readinessProbe,
 							LivenessProbe:  livenessProbe,
@@ -113,6 +117,32 @@ func StatefulSet(
 			},
 		},
 	}
+	// https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#persistentvolumeclaim-retention
+	statefulset.Spec.PersistentVolumeClaimRetentionPolicy = &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+		WhenDeleted: appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+		WhenScaled:  appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+	}
+	statefulset.Spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{
+		corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      instance.Name + PvcSuffixEtcOvn,
+				Namespace: instance.Namespace,
+				Labels:    labels,
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
+				},
+				StorageClassName: &instance.Spec.StorageClass,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse(instance.Spec.StorageRequest),
+					},
+				},
+			},
+		},
+	}
+
 	statefulset.Spec.Template.Spec.Volumes = GetDBClusterVolumes(instance.Name)
 	// If possible two pods of the same service should not
 	// run on the same worker node. If this is not possible

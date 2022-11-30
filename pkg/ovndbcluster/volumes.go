@@ -41,7 +41,7 @@ func GetDBClusterVolumes(name string) []corev1.Volume {
 }
 
 // GetDBClusterVolumeMounts - OVN DBCluster VolumeMounts
-func GetDBClusterVolumeMounts() []corev1.VolumeMount {
+func GetDBClusterVolumeMounts(name string) []corev1.VolumeMount {
 	return []corev1.VolumeMount{
 		{
 			Name:      "etc-machine-id",
@@ -56,6 +56,11 @@ func GetDBClusterVolumeMounts() []corev1.VolumeMount {
 		{
 			Name:      "config-data",
 			MountPath: "/var/lib/config-data",
+			ReadOnly:  false,
+		},
+		{
+			Name:      name,
+			MountPath: "/etc/ovn",
 			ReadOnly:  false,
 		},
 	}
