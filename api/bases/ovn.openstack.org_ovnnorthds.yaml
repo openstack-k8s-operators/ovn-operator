@@ -45,6 +45,7 @@ spec:
             description: OVNNorthdSpec defines the desired state of OVNNorthd
             properties:
               containerImage:
+                default: quay.io/tripleozedcentos9/openstack-ovn-northd:current-tripleo
                 type: string
               logLevel:
                 default: info
