@@ -25,9 +25,13 @@ import (
 
 // OVNDBClusterSpec defines the desired state of OVNDBCluster
 type OVNDBClusterSpec struct {
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default="quay.io/tripleozedcentos9/openstack-ovn-nb-db-server:current-tripleo"
 	ContainerImage string `json:"containerImage,omitempty"`
 
 	// +kubebuilder:validation:Required
+	// +kubebuilder:default="NB"
 	// +kubebuilder:validation:Pattern="^NB|SB$"
 	// DBType - NB or SB
 	DBType string `json:"dbType"`
