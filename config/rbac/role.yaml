@@ -132,8 +132,10 @@ rules:
   - ovndbclusters/status
   verbs:
   - get
+  - list
   - patch
   - update
+  - watch
 - apiGroups:
   - ovn.openstack.org
   resources:

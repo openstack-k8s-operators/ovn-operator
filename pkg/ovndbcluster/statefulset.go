@@ -65,15 +65,21 @@ func StatefulSet(
 	}
 	readinessProbe.Exec = livenessProbe.Exec
 
+	lifecycle := &corev1.Lifecycle{
+		PreStop: &corev1.LifecycleHandler{
+			Exec: &corev1.ExecAction{
+				Command: []string{
+					"/usr/local/bin/container-scripts/cleanup.sh",
+				},
+			},
+		},
+	}
 	serviceName := ServiceNameNB
-	envVars := map[string]env.Setter{}
-	switch instance.Spec.DBType {
-	case "NB":
-		envVars["KOLLA_CONFIG_FILE"] = env.SetValue(KollaConfigOVNDBClusterNB)
-	case "SB":
-		envVars["KOLLA_CONFIG_FILE"] = env.SetValue(KollaConfigOVNDBClusterSB)
+	if instance.Spec.DBType == "SB" {
 		serviceName = ServiceNameSB
 	}
+	envVars := map[string]env.Setter{}
+	envVars["KOLLA_CONFIG_FILE"] = env.SetValue(KollaConfigOVNDBCluster)
 	envVars["KOLLA_CONFIG_STRATEGY"] = env.SetValue("COPY_ALWAYS")
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 	// TODO: Make confs customizable
@@ -88,7 +94,8 @@ func StatefulSet(
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
-			Replicas: &instance.Spec.Replicas,
+			ServiceName: serviceName,
+			Replicas:    &instance.Spec.Replicas,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
@@ -111,6 +118,7 @@ func StatefulSet(
 							Resources:      instance.Spec.Resources,
 							ReadinessProbe: readinessProbe,
 							LivenessProbe:  livenessProbe,
+							Lifecycle:      lifecycle,
 						},
 					},
 				},
@@ -147,7 +155,6 @@ func StatefulSet(
 			},
 		},
 	}
-
 	statefulset.Spec.Template.Spec.Volumes = GetDBClusterVolumes(instance.Name)
 	// If possible two pods of the same service should not
 	// run on the same worker node. If this is not possible

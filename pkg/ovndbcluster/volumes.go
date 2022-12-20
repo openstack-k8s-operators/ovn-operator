@@ -7,6 +7,7 @@ import corev1 "k8s.io/api/core/v1"
 //       mechanism.
 func GetDBClusterVolumes(name string) []corev1.Volume {
 	var config0640AccessMode int32 = 0640
+	var scriptsVolumeDefaultMode int32 = 0755
 
 	return []corev1.Volume{
 		{
@@ -22,6 +23,17 @@ func GetDBClusterVolumes(name string) []corev1.Volume {
 			VolumeSource: corev1.VolumeSource{
 				HostPath: &corev1.HostPathVolumeSource{
 					Path: "/etc/localtime",
+				},
+			},
+		},
+		{
+			Name: "scripts",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					DefaultMode: &scriptsVolumeDefaultMode,
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: name + "-scripts",
+					},
 				},
 			},
 		},
@@ -51,6 +63,11 @@ func GetDBClusterVolumeMounts(name string) []corev1.VolumeMount {
 		{
 			Name:      "etc-localtime",
 			MountPath: "/etc/localtime",
+			ReadOnly:  true,
+		},
+		{
+			Name:      "scripts",
+			MountPath: "/usr/local/bin/container-scripts",
 			ReadOnly:  true,
 		},
 		{

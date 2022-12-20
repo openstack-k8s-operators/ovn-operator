@@ -20,8 +20,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/go-logr/logr"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	appsv1 "k8s.io/api/apps/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
@@ -64,11 +67,45 @@ func GetDBEndpoints(
 	}
 	DBEndpointsMap := make(map[string]string)
 	for _, ovndb := range ovnDBList.Items {
-		if  ovndb.Status.DBAddress != "" {
+		if ovndb.Status.DBAddress != "" {
 			DBEndpointsMap[ovndb.Spec.DBType] = ovndb.Status.DBAddress
 		} else {
 			return DBEndpointsMap, fmt.Errorf("DBEndpoint not ready yet for %s", ovndb.Spec.DBType)
 		}
 	}
 	return DBEndpointsMap, nil
+}
+
+//
+// OVNDBClusterNamespaceMapFunc - DBCluster Watch Function
+//
+func OVNDBClusterNamespaceMapFunc(reader client.Reader, log logr.Logger) handler.MapFunc {
+	return func(obj client.Object) []reconcile.Request {
+		result := []reconcile.Request{}
+
+		// get all CRs from the same namespace, right now there should only be one
+		crs := &OVNNorthdList{}
+		listOpts := []client.ListOption{
+			client.InNamespace(obj.GetNamespace()),
+		}
+		if err := reader.List(context.Background(), crs, listOpts...); err != nil {
+			log.Error(err, "Unable to retrieve OVNNorthd CRs %v")
+			return nil
+		}
+
+		for _, cr := range crs.Items {
+			if obj.GetNamespace() == cr.Namespace {
+				// return namespace and Name of CR
+				name := client.ObjectKey{
+					Namespace: cr.Namespace,
+					Name:      cr.Name,
+				}
+				result = append(result, reconcile.Request{NamespacedName: name})
+			}
+		}
+		if len(result) > 0 {
+			return result
+		}
+		return nil
+	}
 }

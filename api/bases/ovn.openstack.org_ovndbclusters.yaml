@@ -64,7 +64,7 @@ spec:
                 default: 1
                 description: Replicas of OVN DBCluster to run
                 format: int32
-                maximum: 1
+                maximum: 32
                 minimum: 0
                 type: integer
               resources:

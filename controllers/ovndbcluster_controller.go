@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -211,7 +212,6 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 
 		return ctrl.Result{}, err
 	}
-
 	serviceName := ovndbcluster.ServiceNameNB
 	if instance.Spec.DBType == "SB" {
 		serviceName = ovndbcluster.ServiceNameSB
@@ -323,10 +323,19 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	)
 	if err == nil && instance.Status.ReadyCount > 0 && len(svcList.Items) > 0 {
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
+		dbAddress := []string{}
+		raftAddress := []string{}
+		for _, svc := range svcList.Items {
+			// Filter out headless services
+			if svc.Spec.ClusterIP != "None" {
+				dbAddress = append(dbAddress, fmt.Sprintf("tcp:%s:%d", svc.Spec.ClusterIP, svc.Spec.Ports[0].Port))
+				raftAddress = append(raftAddress, fmt.Sprintf("tcp:%s:%d", svc.Spec.ClusterIP, svc.Spec.Ports[1].Port))
+			}
+		}
 		// Set DBAddress
-		instance.Status.DBAddress = fmt.Sprintf("tcp:%s:%d", svcList.Items[0].Spec.ClusterIP, svcList.Items[0].Spec.Ports[0].Port)
+		instance.Status.DBAddress = strings.Join(dbAddress, ",")
 		// Set RaftAddress
-		instance.Status.RaftAddress = fmt.Sprintf("tcp:%s:%d", svcList.Items[0].Spec.ClusterIP, svcList.Items[0].Spec.Ports[1].Port)
+		instance.Status.RaftAddress = strings.Join(raftAddress, ",")
 	}
 	r.Log.Info("Reconciled Service successfully")
 	return ctrl.Result{}, nil
@@ -341,6 +350,23 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 ) (ctrl.Result, error) {
 	r.Log.Info("Reconciling OVN DB Cluster Service")
 
+	//
+	// Ensure the ovndbcluster headless service Exists
+	//
+
+	headlesssvc := service.NewService(
+		ovndbcluster.HeadlessService(serviceName, instance, serviceLabels),
+		serviceLabels,
+		5,
+	)
+
+	ctrlResult, err := headlesssvc.CreateOrPatch(ctx, helper)
+	if err != nil {
+		return ctrl.Result{}, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		return ctrl.Result{}, nil
+	}
+
 	podList, err := ovndbcluster.OVNDBPods(ctx, instance, helper, serviceLabels)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -348,10 +374,11 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 
 	for _, ovnPod := range podList.Items {
 		//
-		// Create the conductor pod service if none exists
+		// Create the ovndbcluster pod service if none exists
 		//
 		ovndbServiceLabels := map[string]string{
-			common.AppSelector: serviceName,
+			common.AppSelector:                   serviceName,
+			"statefulset.kubernetes.io/pod-name": ovnPod.Name,
 		}
 		svc := service.NewService(
 			ovndbcluster.Service(ovnPod.Name, instance, ovndbServiceLabels),
@@ -367,6 +394,30 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 		// create service - end
 	}
 
+	// Delete any extra services left after scale down
+	svcList, err := service.GetServicesListWithLabel(
+		ctx,
+		helper,
+		helper.GetBeforeObject().GetNamespace(),
+		serviceLabels,
+	)
+	if err == nil && len(svcList.Items) > int(instance.Spec.Replicas) {
+		for i := len(svcList.Items) - 1; i >= int(instance.Spec.Replicas); i-- {
+			svcLabels := map[string]string{
+				common.AppSelector:                   serviceName,
+				"statefulset.kubernetes.io/pod-name": serviceName + fmt.Sprintf("-%d", i),
+			}
+			err = service.DeleteServicesWithLabel(
+				ctx,
+				helper,
+				instance,
+				svcLabels,
+			)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	}
 	r.Log.Info("Reconciled OVN DB Cluster Service successfully")
 	return ctrl.Result{}, nil
 }
@@ -387,8 +438,24 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 	templateParameters := make(map[string]interface{})
 
 	templateParameters["OVN_LOG_LEVEL"] = instance.Spec.LogLevel
-
+	templateParameters["SERVICE_NAME"] = serviceName
+	templateParameters["DB_TYPE"] = strings.ToLower(instance.Spec.DBType)
+	templateParameters["DB_PORT"] = 6641
+	templateParameters["RAFT_PORT"] = 6643
+	if instance.Spec.DBType == "SB" {
+		templateParameters["DB_PORT"] = 6642
+		templateParameters["RAFT_PORT"] = 6644
+	}
 	cms := []util.Template{
+		// ScriptsConfigMap
+		{
+			Name:          fmt.Sprintf("%s-scripts", instance.Name),
+			Namespace:     instance.Namespace,
+			Type:          util.TemplateTypeScripts,
+			InstanceType:  instance.Kind,
+			Labels:        cmLabels,
+			ConfigOptions: templateParameters,
+		},
 		// ConfigMap
 		{
 			Name:          fmt.Sprintf("%s-config-data", instance.Name),

@@ -6,7 +6,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Service - Service for conductor pod services
+// Service - Service for ovndbcluster per pod
 func Service(
 	serviceName string,
 	instance *ovnv1.OVNDBCluster,
@@ -42,6 +42,38 @@ func Service(
 					Protocol: corev1.ProtocolTCP,
 				},
 			},
+		},
+	}
+}
+
+// HeadlessService - Headless Service for ovndbcluster pods to get DNS names in pods
+func HeadlessService(
+	serviceName string,
+	instance *ovnv1.OVNDBCluster,
+	serviceLabels map[string]string,
+) *corev1.Service {
+	raftPortName := "north-raft"
+	var raftPort int32 = 6643
+	if instance.Spec.DBType == "SB" {
+		raftPortName = "south-raft"
+		raftPort = 6644
+	}
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: instance.Namespace,
+			Labels:    serviceLabels,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: serviceLabels,
+			Ports: []corev1.ServicePort{
+				{
+					Name:     raftPortName,
+					Port:     raftPort,
+					Protocol: corev1.ProtocolTCP,
+				},
+			},
+			ClusterIP: "None",
 		},
 	}
 }
