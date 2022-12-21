@@ -156,11 +156,12 @@ func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OVNNorthdReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	crs := &ovnv1.OVNNorthdList{}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ovnv1.OVNNorthd{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&appsv1.Deployment{}).
-		Watches(&source.Kind{Type: &ovnv1.OVNDBCluster{}}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNDBClusterNamespaceMapFunc(mgr.GetClient(), r.Log))).
+		Watches(&source.Kind{Type: &ovnv1.OVNDBCluster{}}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), r.Log))).
 		Complete(r)
 }
 

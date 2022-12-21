@@ -19,6 +19,7 @@ package v1beta1
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/go-logr/logr"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
@@ -76,29 +77,42 @@ func GetDBEndpoints(
 	return DBEndpointsMap, nil
 }
 
+func getItems(list client.ObjectList) []client.Object {
+	items := []client.Object{}
+	values := reflect.ValueOf(list).Elem().FieldByName("Items")
+	for i := 0; i < values.Len(); i++ {
+		item := values.Index(i)
+		if item.Kind() == reflect.Pointer {
+			items = append(items, item.Interface().(client.Object))
+		} else {
+			items = append(items, item.Addr().Interface().(client.Object))
+		}
+	}
+
+	return items
+}
+
 //
 // OVNDBClusterNamespaceMapFunc - DBCluster Watch Function
 //
-func OVNDBClusterNamespaceMapFunc(reader client.Reader, log logr.Logger) handler.MapFunc {
+func OVNDBClusterNamespaceMapFunc(crs client.ObjectList, reader client.Reader, log logr.Logger) handler.MapFunc {
 	return func(obj client.Object) []reconcile.Request {
 		result := []reconcile.Request{}
 
 		// get all CRs from the same namespace, right now there should only be one
-		crs := &OVNNorthdList{}
 		listOpts := []client.ListOption{
 			client.InNamespace(obj.GetNamespace()),
 		}
 		if err := reader.List(context.Background(), crs, listOpts...); err != nil {
-			log.Error(err, "Unable to retrieve OVNNorthd CRs %v")
+			log.Error(err, "Unable to retrieve self CRs %v")
 			return nil
 		}
-
-		for _, cr := range crs.Items {
-			if obj.GetNamespace() == cr.Namespace {
+		for _, cr := range getItems(crs) {
+			if obj.GetNamespace() == cr.GetNamespace() {
 				// return namespace and Name of CR
 				name := client.ObjectKey{
-					Namespace: cr.Namespace,
-					Name:      cr.Name,
+					Namespace: cr.GetNamespace(),
+					Name:      cr.GetName(),
 				}
 				result = append(result, reconcile.Request{NamespacedName: name})
 			}
