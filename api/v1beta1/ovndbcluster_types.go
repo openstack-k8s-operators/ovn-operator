@@ -53,6 +53,16 @@ type OVNDBClusterSpec struct {
 	LogLevel string `json:"logLevel"`
 
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=10000
+	// OVN Northbound and Southbound RAFT db election timer to use on db creation (in milliseconds)
+	ElectionTimer int32 `json:"electionTimer"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=60000
+	// Active probe interval from standby to active ovsdb-server remote
+	ProbeIntervalToActive int32 `json:"probeIntervalToActive"`
+
+	// +kubebuilder:validation:Optional
 	// Resources - Compute Resources required by this service (Limits/Requests).
 	// https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
