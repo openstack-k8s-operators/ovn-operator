@@ -37,6 +37,7 @@ func StatefulSet(
 	instance *ovnv1.OVNDBCluster,
 	configHash string,
 	labels map[string]string,
+	annotations map[string]string,
 ) *appsv1.StatefulSet {
 	runAsUser := int64(0)
 
@@ -98,7 +99,8 @@ func StatefulSet(
 			Replicas:    &instance.Spec.Replicas,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
+					Annotations: annotations,
+					Labels:      labels,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: ServiceAccountName,
@@ -126,6 +128,7 @@ func StatefulSet(
 			},
 		},
 	}
+
 	// https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#persistentvolumeclaim-retention
 	statefulset.Spec.PersistentVolumeClaimRetentionPolicy = &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
 		WhenDeleted: appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
