@@ -4,7 +4,7 @@ import corev1 "k8s.io/api/core/v1"
 
 // GetDBClusterVolumes -
 // TODO: merge to GetVolumes when other controllers also switched to current config
-//       mechanism.
+// mechanism.
 func GetDBClusterVolumes(name string) []corev1.Volume {
 	var config0640AccessMode int32 = 0640
 	var scriptsVolumeDefaultMode int32 = 0755
