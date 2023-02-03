@@ -31,9 +31,7 @@ import (
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 )
 
-//
 // GetDBEndpoints - get DB Endpoints
-//
 func GetDBEndpoints(
 	ctx context.Context,
 	h *helper.Helper,
@@ -92,9 +90,7 @@ func getItems(list client.ObjectList) []client.Object {
 	return items
 }
 
-//
 // OVNDBClusterNamespaceMapFunc - DBCluster Watch Function
-//
 func OVNDBClusterNamespaceMapFunc(crs client.ObjectList, reader client.Reader, log logr.Logger) handler.MapFunc {
 	return func(obj client.Object) []reconcile.Request {
 		result := []reconcile.Request{}

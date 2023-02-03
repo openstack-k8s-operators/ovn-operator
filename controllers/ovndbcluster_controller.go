@@ -422,9 +422,7 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 	return ctrl.Result{}, nil
 }
 
-//
 // generateServiceConfigMaps - create create configmaps which hold service configuration
-//
 func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 	ctx context.Context,
 	h *helper.Helper,
@@ -476,10 +474,8 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 	return nil
 }
 
-//
 // createHashOfInputHashes - creates a hash of hashes which gets added to the resources which requires a restart
 // if any of the input resources change, like configs, passwords, ...
-//
 func (r *OVNDBClusterReconciler) createHashOfInputHashes(
 	ctx context.Context,
 	instance *ovnv1.OVNDBCluster,
