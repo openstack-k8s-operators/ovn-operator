@@ -28,7 +28,7 @@ type OVNDBClusterSpec struct {
 
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default="quay.io/tripleozedcentos9/openstack-ovn-nb-db-server:current-tripleo"
-	ContainerImage string `json:"containerImage,omitempty"`
+	ContainerImage string `json:"containerImage"`
 
 	// +kubebuilder:validation:Required
 	// +kubebuilder:default="NB"

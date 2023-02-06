@@ -21,5 +21,5 @@ if [[ "${DB_TYPE}" == "sb" ]]; then
     DB_NAME="OVN_Southbound"
 fi
 if [[ "$(hostname)" != "{{ .SERVICE_NAME }}-0" ]]; then
-  ovs-appctl -t /tmp/ovn${DB_TYPE}_db.ctl cluster/leave ${DB_NAME}
+    ovs-appctl -t /tmp/ovn${DB_TYPE}_db.ctl cluster/leave ${DB_NAME}
 fi
