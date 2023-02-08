@@ -1,0 +1,93 @@
+#
+# Check for:
+#
+# No OVNNorthd CR
+# No OVNDBCluster CR
+# No Deployment for OVNNorthd CR
+# No Pods in ovn Deployment
+# No OVN Services
+#
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNNorthd
+metadata:
+  finalizers:
+  - OVNNorthd
+  name: ovnnorthd-sample
+  namespace: openstack
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  finalizers:
+  - OVNDBCluster
+  name: ovndbcluster-nb-sample
+  namespace: openstack
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  finalizers:
+  - OVNDBCluster
+  name: ovndbcluster-sb-sample
+  namespace: openstack
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ovn-northd
+  namespace: openstack
+---
+# the openshift annotations can't be checked through the deployment above
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    service: ovn-northd
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    service: ovsdbserver-nb
+  name: ovsdbserver-nb-0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    service: ovsdbserver-sb
+  name: ovsdbserver-sb-0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: ovsdbserver-nb
+  name: ovsdbserver-nb
+  namespace: openstack
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: ovsdbserver-nb
+    statefulset.kubernetes.io/pod-name: ovsdbserver-nb-0
+  name: ovsdbserver-nb-0
+  namespace: openstack
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: ovsdbserver-sb
+  name: ovsdbserver-sb
+  namespace: openstack
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: ovsdbserver-sb
+    statefulset.kubernetes.io/pod-name: ovsdbserver-sb-0
+  name: ovsdbserver-sb-0
+  namespace: openstack

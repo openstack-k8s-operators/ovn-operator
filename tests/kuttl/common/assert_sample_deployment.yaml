@@ -1,0 +1,228 @@
+#
+# Check for:
+#
+# - 1 OVNNorthd CR
+# - 2 OVNDBCluster CR (ovndbcluster-nb-sample, ovndbcluster-sb-sample)
+# - Deployment with 1 Pod for OVNNorthd CR
+# - ovsdbserver-nb-0 Pod
+# - ovsdbserver-sb-0 Pod
+# - ovsdbserver-nb Service
+# - ovsdbserver-nb-0 Service
+# - ovsdbserver-sb Service
+# - ovsdbserver-sb-0 Service
+
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNNorthd
+metadata:
+  finalizers:
+  - OVNNorthd
+  name: ovnnorthd-sample
+  namespace: openstack
+spec:
+  containerImage: quay.io/tripleozedcentos9/openstack-ovn-northd:current-tripleo
+  logLevel: info
+  replicas: 1
+status:
+  readyCount: 1
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  finalizers:
+  - OVNDBCluster
+  name: ovndbcluster-nb-sample
+  namespace: openstack
+spec:
+  containerImage: quay.io/tripleozedcentos9/openstack-ovn-nb-db-server:current-tripleo
+  dbType: NB
+  logLevel: info
+  replicas: 1
+  storageClass: local-storage
+  storageRequest: 10G
+status:
+  readyCount: 1
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  finalizers:
+  - OVNDBCluster
+  name: ovndbcluster-sb-sample
+  namespace: openstack
+spec:
+  containerImage: quay.io/tripleozedcentos9/openstack-ovn-sb-db-server:current-tripleo
+  dbType: SB
+  logLevel: info
+  replicas: 1
+  storageClass: local-storage
+  storageRequest: 10G
+status:
+  readyCount: 1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ovn-northd
+  namespace: openstack
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        service: ovn-northd
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: service
+                  operator: In
+                  values:
+                  - ovn-northd
+              topologyKey: kubernetes.io/hostname
+            weight: 1
+      containers:
+      - args:
+        - -c
+        - /usr/local/bin/kolla_set_configs && /usr/local/bin/kolla_start
+        command:
+        - /bin/bash
+        image: quay.io/tripleozedcentos9/openstack-ovn-northd:current-tripleo
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+              - /usr/bin/pidof
+              - ovn-northd
+          failureThreshold: 3
+          initialDelaySeconds: 3
+          periodSeconds: 3
+          successThreshold: 1
+          timeoutSeconds: 5
+        securityContext:
+          runAsUser: 0
+        name: ovn-northd
+        readinessProbe:
+          exec:
+            command:
+              - /usr/bin/pidof
+              - ovn-northd
+          failureThreshold: 3
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 5
+        resources: {}
+      serviceAccount: ovn-operator-ovn
+      serviceAccountName: ovn-operator-ovn
+      restartPolicy: Always
+status:
+  availableReplicas: 1
+  replicas: 1
+---
+# the openshift annotations can't be checked through the deployment above
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    openshift.io/scc: privileged
+  labels:
+    service: ovn-northd
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    openshift.io/scc: privileged
+  labels:
+    service: ovsdbserver-nb
+  name: ovsdbserver-nb-0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    openshift.io/scc: privileged
+  labels:
+    service: ovsdbserver-sb
+  name: ovsdbserver-sb-0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: ovsdbserver-nb
+  name: ovsdbserver-nb
+  namespace: openstack
+spec:
+  ports:
+    - name: north-raft
+      port: 6643
+      protocol: TCP
+      targetPort: 6643
+  selector:
+    service: ovsdbserver-nb
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: ovsdbserver-nb
+    statefulset.kubernetes.io/pod-name: ovsdbserver-nb-0
+  name: ovsdbserver-nb-0
+  namespace: openstack
+spec:
+  ports:
+    - name: north
+      port: 6641
+      protocol: TCP
+      targetPort: 6641
+    - name: north-raft
+      port: 6643
+      protocol: TCP
+      targetPort: 6643
+  selector:
+    service: ovsdbserver-nb
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: ovsdbserver-sb
+  name: ovsdbserver-sb
+  namespace: openstack
+spec:
+  ports:
+    - name: south-raft
+      port: 6644
+      protocol: TCP
+      targetPort: 6644
+  selector:
+    service: ovsdbserver-sb
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: ovsdbserver-sb
+    statefulset.kubernetes.io/pod-name: ovsdbserver-sb-0
+  name: ovsdbserver-sb-0
+  namespace: openstack
+spec:
+  ports:
+    - name: south
+      port: 6642
+      protocol: TCP
+      targetPort: 6642
+    - name: south-raft
+      port: 6644
+      protocol: TCP
+      targetPort: 6644
+  selector:
+    service: ovsdbserver-sb
+  type: ClusterIP
