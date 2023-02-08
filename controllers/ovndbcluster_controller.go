@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -284,7 +285,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	// Define a new Statefulset object
 	sfset := statefulset.NewStatefulSet(
 		ovndbcluster.StatefulSet(instance, inputHash, serviceLabels),
-		5,
+		time.Duration(5)*time.Second,
 	)
 
 	ctrlResult, err = sfset.CreateOrPatch(ctx, helper)
@@ -357,7 +358,7 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 	headlesssvc := service.NewService(
 		ovndbcluster.HeadlessService(serviceName, instance, serviceLabels),
 		serviceLabels,
-		5,
+		time.Duration(5)*time.Second,
 	)
 
 	ctrlResult, err := headlesssvc.CreateOrPatch(ctx, helper)
@@ -383,7 +384,7 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 		svc := service.NewService(
 			ovndbcluster.Service(ovnPod.Name, instance, ovndbServiceLabels),
 			ovndbServiceLabels,
-			5,
+			time.Duration(5)*time.Second,
 		)
 		ctrlResult, err := svc.CreateOrPatch(ctx, helper)
 		if err != nil {

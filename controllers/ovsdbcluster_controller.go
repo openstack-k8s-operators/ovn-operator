@@ -191,7 +191,7 @@ func (r *OVSDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	if err := r.finalizeServers(ctx, cluster, servers, serverPods); err != nil {
 		if _, ok := err.(clusterKickError); ok {
-			return ctrl.Result{RequeueAfter: time.Second * 10}, nil
+			return ctrl.Result{RequeueAfter: time.Duration(10) * time.Second}, nil
 		}
 
 		return ctrl.Result{}, err
