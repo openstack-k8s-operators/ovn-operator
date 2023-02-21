@@ -446,6 +446,7 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 		templateParameters["RAFT_PORT"] = 6644
 	}
 	templateParameters["OVN_ELECTION_TIMER"] = instance.Spec.ElectionTimer
+	templateParameters["OVN_INACTIVITY_PROBE"] = instance.Spec.InactivityProbe
 	templateParameters["OVN_PROBE_INTERVAL_TO_ACTIVE"] = instance.Spec.ProbeIntervalToActive
 	cms := []util.Template{
 		// ScriptsConfigMap

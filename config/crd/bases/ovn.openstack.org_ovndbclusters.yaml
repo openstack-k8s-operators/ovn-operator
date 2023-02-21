@@ -58,6 +58,11 @@ spec:
                   to use on db creation (in milliseconds)
                 format: int32
                 type: integer
+              inactivityProbe:
+                default: 60000
+                description: Probe interval for the OVSDB session (in milliseconds)
+                format: int32
+                type: integer
               logLevel:
                 default: info
                 description: LogLevel - Set log level info, dbg, emer etc
