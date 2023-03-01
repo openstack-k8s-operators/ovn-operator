@@ -66,6 +66,13 @@ func StatefulSet(
 	readinessProbe.Exec = livenessProbe.Exec
 
 	lifecycle := &corev1.Lifecycle{
+		PostStart: &corev1.LifecycleHandler{
+			Exec: &corev1.ExecAction{
+				Command: []string{
+					"/usr/local/bin/container-scripts/settings.sh",
+				},
+			},
+		},
 		PreStop: &corev1.LifecycleHandler{
 			Exec: &corev1.ExecAction{
 				Command: []string{

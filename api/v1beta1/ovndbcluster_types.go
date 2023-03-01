@@ -59,6 +59,11 @@ type OVNDBClusterSpec struct {
 
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=60000
+	// Probe interval for the OVSDB session (in milliseconds)
+	InactivityProbe int32 `json:"inactivityProbe"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=60000
 	// Active probe interval from standby to active ovsdb-server remote
 	ProbeIntervalToActive int32 `json:"probeIntervalToActive"`
 
