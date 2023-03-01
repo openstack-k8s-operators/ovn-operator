@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/controllers"
 	//+kubebuilder:scaffold:imports
@@ -48,6 +49,8 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(ovnv1.AddToScheme(scheme))
+	utilruntime.Must(networkv1.AddToScheme(scheme))
+
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -92,33 +95,37 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.OVNCentralReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Log:    ctrl.Log.WithName("controllers").WithName("OVNCentral"),
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		Kclient: kclient,
+		Log:     ctrl.Log.WithName("controllers").WithName("OVNCentral"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OVNCentral")
 		os.Exit(1)
 	}
 	if err = (&controllers.OVSDBServerReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Log:    ctrl.Log.WithName("controllers").WithName("OVSDBServer"),
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		Kclient: kclient,
+		Log:     ctrl.Log.WithName("controllers").WithName("OVSDBServer"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OVSDBServer")
 		os.Exit(1)
 	}
 	if err = (&controllers.OVSDBClusterReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Log:    ctrl.Log.WithName("controllers").WithName("OVSDBCluster"),
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		Kclient: kclient,
+		Log:     ctrl.Log.WithName("controllers").WithName("OVSDBCluster"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OVSDBCluster")
 		os.Exit(1)
 	}
 	if err = (&controllers.OVNNorthdReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Log:    ctrl.Log.WithName("controllers").WithName("OVNNorthd"),
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		Kclient: kclient,
+		Log:     ctrl.Log.WithName("controllers").WithName("OVNNorthd"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OVNNorthd")
 		os.Exit(1)

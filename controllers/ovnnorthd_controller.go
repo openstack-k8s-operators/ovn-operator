@@ -37,6 +37,7 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
+	nad "github.com/openstack-k8s-operators/lib-common/modules/common/networkattachment"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovnnorthd"
@@ -75,6 +76,8 @@ func (r *OVNNorthdReconciler) GetScheme() *runtime.Scheme {
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovndbclusters/status,verbs=get;list;watch;
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;patch;update;delete;
+//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
+//+kubebuilder:rbac:groups=k8s.cni.cncf.io,resources=network-attachment-definitions,verbs=get;list;watch
 
 // Reconcile - OVN Northd
 func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -113,6 +116,9 @@ func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 	if instance.Status.Hash == nil {
 		instance.Status.Hash = map[string]string{}
+	}
+	if instance.Status.NetworkAttachments == nil {
+		instance.Status.NetworkAttachments = map[string][]string{}
 	}
 
 	helper, err := helper.NewHelper(
@@ -263,6 +269,33 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 		common.AppSelector: ovnnorthd.ServiceName,
 	}
 
+	// network to attach to
+	_, err = nad.GetNADWithName(ctx, helper, instance.Spec.NetworkAttachment, instance.Namespace)
+	if err != nil {
+		if k8s_errors.IsNotFound(err) {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.NetworkAttachmentsReadyCondition,
+				condition.RequestedReason,
+				condition.SeverityInfo,
+				condition.NetworkAttachmentsReadyWaitingMessage,
+				instance.Spec.NetworkAttachment))
+			return ctrl.Result{RequeueAfter: time.Second * 10}, fmt.Errorf("network-attachment-definition %s not found", instance.Spec.NetworkAttachment)
+		}
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.NetworkAttachmentsReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.NetworkAttachmentsReadyErrorMessage,
+			err.Error()))
+		return ctrl.Result{}, err
+	}
+
+	serviceAnnotations, err := nad.CreateNetworksAnnotation(instance.Namespace, []string{instance.Spec.NetworkAttachment})
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed create network annotation from %s: %w",
+			instance.Spec.NetworkAttachment, err)
+	}
+
 	// Handle service update
 	ctrlResult, err := r.reconcileUpdate(ctx, instance, helper)
 	if err != nil {
@@ -281,7 +314,7 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 
 	// Define a new Deployment object
 	depl := deployment.NewDeployment(
-		ovnnorthd.Deployment(instance, inputHash, serviceLabels),
+		ovnnorthd.Deployment(instance, inputHash, serviceLabels, serviceAnnotations),
 		time.Duration(5)*time.Second,
 	)
 
@@ -304,6 +337,27 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	}
 
 	instance.Status.ReadyCount = depl.GetDeployment().Status.ReadyReplicas
+
+	// verify if network attachment matches expectations
+	networkReady, networkAttachmentStatus, err := nad.VerifyNetworkStatusFromAnnotation(ctx, helper, []string{instance.Spec.NetworkAttachment}, serviceLabels, instance.Status.ReadyCount)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	instance.Status.NetworkAttachments = networkAttachmentStatus
+	if networkReady {
+		instance.Status.Conditions.MarkTrue(condition.NetworkAttachmentsReadyCondition, condition.NetworkAttachmentsReadyMessage)
+	} else {
+		err := fmt.Errorf("not all pods have interfaces with ips as configured in NetworkAttachments: %s", instance.Spec.NetworkAttachment)
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.NetworkAttachmentsReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.NetworkAttachmentsReadyErrorMessage,
+			err.Error()))
+
+		return ctrlResult, nil
+	}
 
 	if instance.Status.ReadyCount > 0 {
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)

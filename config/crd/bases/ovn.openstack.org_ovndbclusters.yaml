@@ -16,6 +16,10 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - description: NetworkAttachments
+      jsonPath: .spec.networkAttachments
+      name: NetworkAttachments
+      type: string
     - description: Status
       jsonPath: .status.conditions[0].status
       name: Status
@@ -66,6 +70,11 @@ spec:
               logLevel:
                 default: info
                 description: LogLevel - Set log level info, dbg, emer etc
+                type: string
+              networkAttachment:
+                description: NetworkAttachment is a NetworkAttachment resource name
+                  to expose the service to the given network. If specified the IP
+                  address of this network is used as the dbAddress connection.
                 type: string
               nodeSelector:
                 additionalProperties:
@@ -176,6 +185,13 @@ spec:
                 additionalProperties:
                   type: string
                 description: Map of hashes to track e.g. job status
+                type: object
+              networkAttachments:
+                additionalProperties:
+                  items:
+                    type: string
+                  type: array
+                description: NetworkAttachments status of the deployment pods
                 type: object
               raftAddress:
                 description: RaftAddress -

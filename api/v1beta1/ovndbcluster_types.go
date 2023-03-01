@@ -79,6 +79,11 @@ type OVNDBClusterSpec struct {
 	// +kubebuilder:validation:Required
 	// StorageRequest
 	StorageRequest string `json:"storageRequest"`
+
+	// +kubebuilder:validation:Optional
+	// NetworkAttachment is a NetworkAttachment resource name to expose the service to the given network.
+	// If specified the IP address of this network is used as the dbAddress connection.
+	NetworkAttachment string `json:"networkAttachment"`
 }
 
 // OVNDBClusterStatus defines the observed state of OVNDBCluster
@@ -97,10 +102,14 @@ type OVNDBClusterStatus struct {
 
 	// DBAddress -
 	DBAddress string `json:"dbAddress,omitempty"`
+
+	// NetworkAttachments status of the deployment pods
+	NetworkAttachments map[string][]string `json:"networkAttachments,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="NetworkAttachments",type="string",JSONPath=".spec.networkAttachments",description="NetworkAttachments"
 //+kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[0].status",description="Status"
 //+kubebuilder:printcolumn:name="Message",type="string",JSONPath=".status.conditions[0].message",description="Message"
 
