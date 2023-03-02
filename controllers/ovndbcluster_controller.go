@@ -228,27 +228,32 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	}
 
 	// network to attach to
-	_, err := nad.GetNADWithName(ctx, helper, instance.Spec.NetworkAttachment, instance.Namespace)
-	if err != nil {
-		if k8s_errors.IsNotFound(err) {
+	networkAttachments := []string{}
+	if instance.Spec.NetworkAttachment != "" {
+		networkAttachments = append(networkAttachments, instance.Spec.NetworkAttachment)
+
+		_, err := nad.GetNADWithName(ctx, helper, instance.Spec.NetworkAttachment, instance.Namespace)
+		if err != nil {
+			if k8s_errors.IsNotFound(err) {
+				instance.Status.Conditions.Set(condition.FalseCondition(
+					condition.NetworkAttachmentsReadyCondition,
+					condition.RequestedReason,
+					condition.SeverityInfo,
+					condition.NetworkAttachmentsReadyWaitingMessage,
+					instance.Spec.NetworkAttachment))
+				return ctrl.Result{RequeueAfter: time.Second * 10}, fmt.Errorf("network-attachment-definition %s not found", instance.Spec.NetworkAttachment)
+			}
 			instance.Status.Conditions.Set(condition.FalseCondition(
 				condition.NetworkAttachmentsReadyCondition,
-				condition.RequestedReason,
-				condition.SeverityInfo,
-				condition.NetworkAttachmentsReadyWaitingMessage,
-				instance.Spec.NetworkAttachment))
-			return ctrl.Result{RequeueAfter: time.Second * 10}, fmt.Errorf("network-attachment-definition %s not found", instance.Spec.NetworkAttachment)
+				condition.ErrorReason,
+				condition.SeverityWarning,
+				condition.NetworkAttachmentsReadyErrorMessage,
+				err.Error()))
+			return ctrl.Result{}, err
 		}
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			condition.NetworkAttachmentsReadyCondition,
-			condition.ErrorReason,
-			condition.SeverityWarning,
-			condition.NetworkAttachmentsReadyErrorMessage,
-			err.Error()))
-		return ctrl.Result{}, err
 	}
 
-	serviceAnnotations, err := nad.CreateNetworksAnnotation(instance.Namespace, []string{instance.Spec.NetworkAttachment})
+	serviceAnnotations, err := nad.CreateNetworksAnnotation(instance.Namespace, networkAttachments)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed create network annotation from %s: %w",
 			instance.Spec.NetworkAttachment, err)
@@ -342,7 +347,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	instance.Status.ReadyCount = sfset.GetStatefulSet().Status.ReadyReplicas
 
 	// verify if network attachment matches expectations
-	networkReady, networkAttachmentStatus, err := nad.VerifyNetworkStatusFromAnnotation(ctx, helper, []string{instance.Spec.NetworkAttachment}, serviceLabels, instance.Status.ReadyCount)
+	networkReady, networkAttachmentStatus, err := nad.VerifyNetworkStatusFromAnnotation(ctx, helper, networkAttachments, serviceLabels, instance.Status.ReadyCount)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
