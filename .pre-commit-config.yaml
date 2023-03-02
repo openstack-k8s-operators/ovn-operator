@@ -1,4 +1,5 @@
 repos:
+
 - repo: local
   hooks:
     - id: golangci-lint
@@ -60,6 +61,7 @@ repos:
     - id: destroyed-symlinks
     - id: check-yaml
       args: [-m]
+      exclude: "^templates/(openstackconfiggenerator|openstackcontrolplane)/.*$"
     - id: check-json
     - id: detect-private-key
     - id: end-of-file-fixer
@@ -68,8 +70,17 @@ repos:
     - id: trailing-whitespace
       exclude: ^vendor
 
-- repo: https://github.com/openstack/bashate.git
+- repo: https://github.com/openstack-dev/bashate.git
   rev: 2.1.1
   hooks:
     - id: bashate
-      entry: bashate --error . --ignore=E006,E040,E011,E020,E012
+      entry: bashate --error . --ignore=E006,E040,E020,E012
+      # Run bashate check for all bash scripts
+      # Ignores the following rules:
+      # E006: Line longer than 79 columns (as many scripts use jinja
+      #       templating, this is very difficult)
+      # E040: Syntax error determined using `bash -n` (as many scripts
+      #       use jinja templating, this will often fail and the syntax
+      #       error will be discovered in execution anyway)
+      # E020: Function declaration not in format ^function name {$
+      # E012: here doc didn't end before EOF
