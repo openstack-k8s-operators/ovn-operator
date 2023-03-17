@@ -66,10 +66,16 @@ func GetDBEndpoints(
 	}
 	DBEndpointsMap := make(map[string]string)
 	for _, ovndb := range ovnDBList.Items {
-		if ovndb.Status.DBAddress != "" {
+		if ovndb.Status.InternalDBAddress == "" {
+			return DBEndpointsMap, fmt.Errorf("internal DBEndpoint not ready yet for %s", ovndb.Spec.DBType)
+		}
+		DBEndpointsMap["internal-"+ovndb.Spec.DBType] = ovndb.Status.InternalDBAddress
+		//External DB address is available only if NetworkAttachment are configured
+		if ovndb.Spec.NetworkAttachment != "" {
+			if ovndb.Status.DBAddress == "" {
+				return DBEndpointsMap, fmt.Errorf("external DBEndpoint not ready yet for %s", ovndb.Spec.DBType)
+			}
 			DBEndpointsMap[ovndb.Spec.DBType] = ovndb.Status.DBAddress
-		} else {
-			return DBEndpointsMap, fmt.Errorf("DBEndpoint not ready yet for %s", ovndb.Spec.DBType)
 		}
 	}
 	return DBEndpointsMap, nil

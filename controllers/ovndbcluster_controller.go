@@ -384,6 +384,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	if err == nil && instance.Status.ReadyCount > 0 && len(svcList.Items) > 0 {
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
 		dbAddress := []string{}
+		internalDbAddress := []string{}
 		raftAddress := []string{}
 		var svcPort int32
 		for _, svc := range svcList.Items {
@@ -395,15 +396,12 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 				//serviceHostname := fmt.Sprintf("%s.%s.svc", svc.Name, svc.GetNamespace())
 				//dbAddress = append(dbAddress, fmt.Sprintf("tcp:%s:%d", serviceHostname, svc.Spec.Ports[0].Port))
 
-				// dbAddress if no netwkrAttachment is used
-				if instance.Spec.NetworkAttachment == "" {
-					dbAddress = append(dbAddress, fmt.Sprintf("tcp:%s:%d", svc.Spec.ClusterIP, svcPort))
-				}
+				internalDbAddress = append(internalDbAddress, fmt.Sprintf("tcp:%s:%d", svc.Spec.ClusterIP, svcPort))
 				raftAddress = append(raftAddress, fmt.Sprintf("tcp:%s:%d", svc.Spec.ClusterIP, svc.Spec.Ports[1].Port))
 			}
 		}
 
-		// dbAddress if netwkrAttachment is used
+		// External dbAddress if networkAttachment is used
 		if instance.Spec.NetworkAttachment != "" {
 			net := instance.Namespace + "/" + instance.Spec.NetworkAttachment
 			if netStat, ok := instance.Status.NetworkAttachments[net]; ok {
@@ -414,7 +412,8 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 
 		}
 
-		// Set DBAddress
+		// Set DB Addresses
+		instance.Status.InternalDBAddress = strings.Join(internalDbAddress, ",")
 		instance.Status.DBAddress = strings.Join(dbAddress, ",")
 		// Set RaftAddress
 		instance.Status.RaftAddress = strings.Join(raftAddress, ",")
