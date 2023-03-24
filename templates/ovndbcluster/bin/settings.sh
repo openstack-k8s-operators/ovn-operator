@@ -1,4 +1,4 @@
-#!/bin//bash
+#!/bin/bash
 #
 # Copyright 2022 Red Hat Inc.
 #
@@ -20,13 +20,13 @@ DB_PORT="{{ .DB_PORT }}"
 exec 1>/proc/1/fd/1 2>&1
 
 if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
-	while [ ! -S /tmp/ovn${DB_TYPE}_db.ctl ]; do
-		echo DB Server Not ready, waiting
-		sleep 1
-	done
+    while [ ! -S /tmp/ovn${DB_TYPE}_db.ctl ]; do
+        echo DB Server Not ready, waiting
+        sleep 1
+    done
 
-	while [ "$(ovn-${DB_TYPE}ctl --no-leader-only get connection . inactivity_probe)" != "{{ .OVN_INACTIVITY_PROBE }}" ]; do
-		ovn-${DB_TYPE}ctl --no-leader-only --inactivity-probe={{ .OVN_INACTIVITY_PROBE }} set-connection ptcp:${DB_PORT}:0.0.0.0
-	done
-	ovn-${DB_TYPE}ctl --no-leader-only list connection
+    while [ "$(ovn-${DB_TYPE}ctl --no-leader-only get connection . inactivity_probe)" != "{{ .OVN_INACTIVITY_PROBE }}" ]; do
+        ovn-${DB_TYPE}ctl --no-leader-only --inactivity-probe={{ .OVN_INACTIVITY_PROBE }} set-connection ptcp:${DB_PORT}:0.0.0.0
+    done
+    ovn-${DB_TYPE}ctl --no-leader-only list connection
 fi
