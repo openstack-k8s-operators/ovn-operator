@@ -100,8 +100,11 @@ type OVNDBClusterStatus struct {
 	// RaftAddress -
 	RaftAddress string `json:"raftAddress,omitempty"`
 
-	// DBAddress -
+	// DBAddress - DB IP address used by external nodes
 	DBAddress string `json:"dbAddress,omitempty"`
+
+	// InternalDBAddress - DB IP address used by other Pods in the cluster
+	InternalDBAddress string `json:"internalDbAddress,omitempty"`
 
 	// NetworkAttachments status of the deployment pods
 	NetworkAttachments map[string][]string `json:"networkAttachments,omitempty"`

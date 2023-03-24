@@ -179,13 +179,17 @@ spec:
                   type: object
                 type: array
               dbAddress:
-                description: DBAddress -
+                description: DBAddress - DB IP address used by external nodes
                 type: string
               hash:
                 additionalProperties:
                   type: string
                 description: Map of hashes to track e.g. job status
                 type: object
+              internalDbAddress:
+                description: InternalDBAddress - DB IP address used by other Pods
+                  in the cluster
+                type: string
               networkAttachments:
                 additionalProperties:
                   items:

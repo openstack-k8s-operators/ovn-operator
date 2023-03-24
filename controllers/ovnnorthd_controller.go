@@ -390,8 +390,8 @@ func (r *OVNNorthdReconciler) generateServiceConfigMaps(
 	}
 	templateParameters := make(map[string]interface{})
 
-	templateParameters["NBConnection"] = dbmap["NB"]
-	templateParameters["SBConnection"] = dbmap["SB"]
+	templateParameters["NBConnection"] = dbmap["internal-NB"]
+	templateParameters["SBConnection"] = dbmap["internal-SB"]
 	templateParameters["OVN_LOG_LEVEL"] = instance.Spec.LogLevel
 
 	cms := []util.Template{
