@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 CLUSTER_BUNDLE_FILE="bundle/manifests/ovn-operator.clusterserviceversion.yaml"
