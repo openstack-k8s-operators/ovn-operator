@@ -26,8 +26,8 @@ import (
 // OVNDBClusterSpec defines the desired state of OVNDBCluster
 type OVNDBClusterSpec struct {
 
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default="quay.io/tripleozedcentos9/openstack-ovn-nb-db-server:current-tripleo"
+	// +kubebuilder:validation:Required
+	// ContainerImage - Container Image URL (will be set to environmental default if empty)
 	ContainerImage string `json:"containerImage"`
 
 	// +kubebuilder:validation:Required

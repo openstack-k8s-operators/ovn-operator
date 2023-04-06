@@ -49,7 +49,8 @@ spec:
             description: OVNNorthdSpec defines the desired state of OVNNorthd
             properties:
               containerImage:
-                default: quay.io/tripleozedcentos9/openstack-ovn-northd:current-tripleo
+                description: ContainerImage - Container Image URL (will be set to
+                  environmental default if empty)
                 type: string
               logLevel:
                 default: info
@@ -100,6 +101,8 @@ spec:
                       to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                     type: object
                 type: object
+            required:
+            - containerImage
             type: object
           status:
             description: OVNNorthdStatus defines the observed state of OVNNorthd

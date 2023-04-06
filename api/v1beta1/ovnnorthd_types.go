@@ -33,8 +33,8 @@ type Hash struct {
 
 // OVNNorthdSpec defines the desired state of OVNNorthd
 type OVNNorthdSpec struct {
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default="quay.io/tripleozedcentos9/openstack-ovn-northd:current-tripleo"
+	// +kubebuilder:validation:Required
+	// ContainerImage - Container Image URL (will be set to environmental default if empty)
 	ContainerImage string `json:"containerImage"`
 
 	// +kubebuilder:validation:Optional
