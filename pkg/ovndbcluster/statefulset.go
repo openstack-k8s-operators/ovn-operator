@@ -146,7 +146,7 @@ func StatefulSet(
 	ownerRef := metav1.NewControllerRef(instance, instance.GroupVersionKind())
 	ownerRef.BlockOwnerDeletion = &blockOwnerDeletion
 	statefulset.Spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{
-		corev1.PersistentVolumeClaim{
+		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            instance.Name + PvcSuffixEtcOvn,
 				Namespace:       instance.Namespace,
