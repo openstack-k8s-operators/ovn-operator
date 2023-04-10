@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"os"
+	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -35,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/controllers"
 	//+kubebuilder:scaffold:imports
@@ -139,6 +141,33 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OVNDBCluster")
 		os.Exit(1)
 	}
+
+	// Acquire environmental defaults and initialize OVNDBCluster defaults with them
+	ovnDbClusterDefaults := ovnv1.OVNDBClusterDefaults{
+		ContainerImageURL: os.Getenv("OVN_DBCLUSTER_IMAGE_URL_DEFAULT"),
+	}
+
+	ovnv1.SetupOVNDBClusterDefaults(ovnDbClusterDefaults)
+
+	// Acquire environmental defaults and initialize OVNNorthd defaults with them
+	ovnNorthdDefaults := ovnv1.OVNNorthdDefaults{
+		ContainerImageURL: os.Getenv("OVN_NORTHD_IMAGE_URL_DEFAULT"),
+	}
+
+	ovnv1.SetupOVNNorthdDefaults(ovnNorthdDefaults)
+
+	// Setup webhooks if requested
+	if strings.ToLower(os.Getenv("ENABLE_WEBHOOKS")) != "false" {
+		if err = (&ovnv1.OVNDBCluster{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OVNDBCluster")
+			os.Exit(1)
+		}
+		if err = (&ovnv1.OVNNorthd{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OVNNorthd")
+			os.Exit(1)
+		}
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

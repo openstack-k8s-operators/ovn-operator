@@ -1,0 +1,94 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: mutating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-ovn-openstack-org-v1beta1-ovndbcluster
+  failurePolicy: Fail
+  name: movndbcluster.kb.io
+  rules:
+  - apiGroups:
+    - ovn.openstack.org
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - ovndbclusters
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-ovn-openstack-org-v1beta1-ovnnorthd
+  failurePolicy: Fail
+  name: movnnorthd.kb.io
+  rules:
+  - apiGroups:
+    - ovn.openstack.org
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - ovnnorthds
+  sideEffects: None
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-ovn-openstack-org-v1beta1-ovndbcluster
+  failurePolicy: Fail
+  name: vovndbcluster.kb.io
+  rules:
+  - apiGroups:
+    - ovn.openstack.org
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - ovndbclusters
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-ovn-openstack-org-v1beta1-ovnnorthd
+  failurePolicy: Fail
+  name: vovnnorthd.kb.io
+  rules:
+  - apiGroups:
+    - ovn.openstack.org
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - ovnnorthds
+  sideEffects: None
