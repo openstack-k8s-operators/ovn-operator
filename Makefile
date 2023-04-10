@@ -104,7 +104,7 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: tidy
-tidy: fmt
+tidy: ## Run go mod tidy on every mod file in the repo
 	go mod tidy; \
 	pushd "$(LOCALBIN)/../api"; \
 	go mod tidy; \
