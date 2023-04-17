@@ -96,33 +96,6 @@ func main() {
 		setupLog.Error(err, "")
 		os.Exit(1)
 	}
-	if err = (&controllers.OVNCentralReconciler{
-		Client:  mgr.GetClient(),
-		Scheme:  mgr.GetScheme(),
-		Kclient: kclient,
-		Log:     ctrl.Log.WithName("controllers").WithName("OVNCentral"),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OVNCentral")
-		os.Exit(1)
-	}
-	if err = (&controllers.OVSDBServerReconciler{
-		Client:  mgr.GetClient(),
-		Scheme:  mgr.GetScheme(),
-		Kclient: kclient,
-		Log:     ctrl.Log.WithName("controllers").WithName("OVSDBServer"),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OVSDBServer")
-		os.Exit(1)
-	}
-	if err = (&controllers.OVSDBClusterReconciler{
-		Client:  mgr.GetClient(),
-		Scheme:  mgr.GetScheme(),
-		Kclient: kclient,
-		Log:     ctrl.Log.WithName("controllers").WithName("OVSDBCluster"),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OVSDBCluster")
-		os.Exit(1)
-	}
 	if err = (&controllers.OVNNorthdReconciler{
 		Client:  mgr.GetClient(),
 		Scheme:  mgr.GetScheme(),

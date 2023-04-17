@@ -10,11 +10,6 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: OVNCentral is the Schema for the ovncentrals API
-      displayName: OVNCentral
-      kind: OVNCentral
-      name: ovncentrals.ovn.openstack.org
-      version: v1beta1
     - description: OVNDBCluster is the Schema for the ovndbclusters API
       displayName: OVNDBCluster
       kind: OVNDBCluster
@@ -24,18 +19,6 @@ spec:
       displayName: OVNNorthd
       kind: OVNNorthd
       name: ovnnorthds.ovn.openstack.org
-      version: v1beta1
-    - description: OVSDBCluster represents a raft cluster of OVSDBServers. It is the
-        Schema for the ovsdbclusters API.
-      displayName: OVSDBCluster
-      kind: OVSDBCluster
-      name: ovsdbclusters.ovn.openstack.org
-      version: v1beta1
-    - description: OVSDBServer represents the storage and network identity of an ovsdb-server
-        in a raft cluster. It is the Schema for the ovsdbservers API.
-      displayName: OVSDBServer
-      kind: OVSDBServer
-      name: ovsdbservers.ovn.openstack.org
       version: v1beta1
   description: OVN Operator
   displayName: OVN Operator
