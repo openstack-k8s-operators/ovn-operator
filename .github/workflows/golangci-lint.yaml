@@ -23,12 +23,6 @@ jobs:
       - name: Run golint.sh
         run: ./openstack-k8s-operators-ci/test-runner/golint.sh
       - name: Run gotest.sh
-        # Legacy Resources have some issue and make tests fail even
-        # there are no tests added and no reason is mentioned.
-        # These legacy Resources will be dropped in future so ignoring
-        # the failures for now, flag can be removed once we add tests and
-        # drop legacy resources.
-        continue-on-error: true
         run: ./openstack-k8s-operators-ci/test-runner/gotest.sh
 
   golangci:
