@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 
+	"errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -125,7 +126,8 @@ func PodExec(
 		Stderr: &stderr,
 	})
 	if err != nil {
-		if exitError, ok := err.(exec.ExitError); ok {
+		var exitError exec.ExitError
+		if errors.As(err, &exitError) {
 			result.ExitStatus = exitError.ExitStatus()
 		} else {
 			return nil, fmt.Errorf("Executing remote command: %w", err)
