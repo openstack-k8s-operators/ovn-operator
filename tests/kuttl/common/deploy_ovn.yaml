@@ -1,6 +1,5 @@
 apiVersion: kuttl.dev/v1beta1
 kind: TestStep
-commands:
-  - script: |
-      PWD=$INSTALL_YAMLS
-      make -C $INSTALL_YAMLS ovn_deploy
+apply:
+- ../../../../config/samples/ovn_v1beta1_ovndbcluster.yaml
+- ../../../../config/samples/ovn_v1beta1_ovnnorthd.yaml
