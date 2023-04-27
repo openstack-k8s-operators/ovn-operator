@@ -23,6 +23,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	// NBDBType - Northbound database type
+	NBDBType = "NB"
+	// SBDBType - Southbound database type
+	SBDBType = "SB"
+)
+
 // OVNDBClusterSpec defines the desired state of OVNDBCluster
 type OVNDBClusterSpec struct {
 

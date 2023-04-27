@@ -322,7 +322,8 @@ operator-lint: gowork ## Runs operator-lint
 # $oc delete mutatingwebhookconfiguration/movnnorthd.kb.io
 SKIP_CERT ?=false
 .PHONY: run-with-webhook
-run-with-webhook: export OVN_DBCLUSTER_IMAGE_URL_DEFAULT=quay.io/tripleozedcentos9/openstack-ovn-nb-db-server:current-tripleo
+run-with-webhook: export OVN_NB_DBCLUSTER_IMAGE_URL_DEFAULT=quay.io/tripleozedcentos9/openstack-ovn-nb-db-server:current-tripleo
+run-with-webhook: export OVN_SB_DBCLUSTER_IMAGE_URL_DEFAULT=quay.io/tripleozedcentos9/openstack-ovn-sb-db-server:current-tripleo
 run-with-webhook: export OVN_NORTHD_IMAGE_URL_DEFAULT=quay.io/tripleozedcentos9/openstack-ovn-northd:current-tripleo
 run-with-webhook: manifests generate fmt vet ## Run a controller from your host.
 	/bin/bash hack/configure_local_webhook.sh

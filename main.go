@@ -117,7 +117,8 @@ func main() {
 
 	// Acquire environmental defaults and initialize OVNDBCluster defaults with them
 	ovnDbClusterDefaults := ovnv1.OVNDBClusterDefaults{
-		ContainerImageURL: os.Getenv("OVN_DBCLUSTER_IMAGE_URL_DEFAULT"),
+		NBContainerImageURL: os.Getenv("OVN_NB_DBCLUSTER_IMAGE_URL_DEFAULT"),
+		SBContainerImageURL: os.Getenv("OVN_SB_DBCLUSTER_IMAGE_URL_DEFAULT"),
 	}
 
 	ovnv1.SetupOVNDBClusterDefaults(ovnDbClusterDefaults)

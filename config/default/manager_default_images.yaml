@@ -11,7 +11,9 @@ spec:
       containers:
       - name: manager
         env:
-        - name: OVN_DBCLUSTER_IMAGE_URL_DEFAULT
+        - name: OVN_NB_DBCLUSTER_IMAGE_URL_DEFAULT
           value: quay.io/tripleozedcentos9/openstack-ovn-nb-db-server:current-tripleo
+        - name: OVN_SB_DBCLUSTER_IMAGE_URL_DEFAULT
+          value: quay.io/tripleozedcentos9/openstack-ovn-sb-db-server:current-tripleo
         - name: OVN_NORTHD_IMAGE_URL_DEFAULT
           value: quay.io/tripleozedcentos9/openstack-ovn-northd:current-tripleo
