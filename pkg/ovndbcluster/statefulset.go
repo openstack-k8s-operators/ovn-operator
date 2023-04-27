@@ -17,10 +17,10 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/affinity"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
-	"k8s.io/apimachinery/pkg/api/resource"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -145,6 +145,7 @@ func StatefulSet(
 	blockOwnerDeletion := false
 	ownerRef := metav1.NewControllerRef(instance, instance.GroupVersionKind())
 	ownerRef.BlockOwnerDeletion = &blockOwnerDeletion
+
 	statefulset.Spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{
 		{
 			ObjectMeta: metav1.ObjectMeta{
