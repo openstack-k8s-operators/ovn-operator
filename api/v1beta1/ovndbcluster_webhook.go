@@ -31,7 +31,8 @@ import (
 
 // OVNDBClusterDefaults -
 type OVNDBClusterDefaults struct {
-	ContainerImageURL string
+	NBContainerImageURL string
+	SBContainerImageURL string
 }
 
 var ovnDbClusterDefaults OVNDBClusterDefaults
@@ -66,7 +67,11 @@ func (r *OVNDBCluster) Default() {
 // Default - set defaults for this OVNDBCluster spec
 func (spec *OVNDBClusterSpec) Default() {
 	if spec.ContainerImage == "" {
-		spec.ContainerImage = ovnDbClusterDefaults.ContainerImageURL
+		if spec.DBType == NBDBType {
+			spec.ContainerImage = ovnDbClusterDefaults.NBContainerImageURL
+		} else if spec.DBType == SBDBType {
+			spec.ContainerImage = ovnDbClusterDefaults.SBContainerImageURL
+		}
 	}
 }
 
