@@ -113,3 +113,18 @@ func (instance OVNNorthd) IsReady() bool {
 	// there is at least a single pod to serve the OVN Northd service
 	return instance.Status.ReadyCount >= 1
 }
+
+// RbacConditionsSet - set the conditions for the rbac object
+func (instance OVNNorthd) RbacConditionsSet(c *condition.Condition) {
+	instance.Status.Conditions.Set(c)
+}
+
+// RbacNamespace - return the namespace
+func (instance OVNNorthd) RbacNamespace() string {
+	return instance.Namespace
+}
+
+// RbacResourceName - return the name to be used for rbac objects (serviceaccount, role, rolebinding)
+func (instance OVNNorthd) RbacResourceName() string {
+	return "ovnnorth-" + instance.Name
+}

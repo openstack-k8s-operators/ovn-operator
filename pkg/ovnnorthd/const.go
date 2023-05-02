@@ -6,7 +6,4 @@ const (
 
 	// KollaConfigOVNNorthd -
 	KollaConfigOVNNorthd = "/var/lib/config-data/ovn-northd.json"
-
-	// ServiceAccountName -
-	ServiceAccountName = "ovn-operator-ovn"
 )

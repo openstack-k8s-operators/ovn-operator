@@ -115,8 +115,8 @@ spec:
           successThreshold: 1
           timeoutSeconds: 5
         resources: {}
-      serviceAccount: ovn-operator-ovn
-      serviceAccountName: ovn-operator-ovn
+      serviceAccount: ovnnorth-ovnnorthd-sample
+      serviceAccountName: ovnnorth-ovnnorthd-sample
       restartPolicy: Always
 status:
   availableReplicas: 1
