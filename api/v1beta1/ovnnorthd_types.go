@@ -126,5 +126,5 @@ func (instance OVNNorthd) RbacNamespace() string {
 
 // RbacResourceName - return the name to be used for rbac objects (serviceaccount, role, rolebinding)
 func (instance OVNNorthd) RbacResourceName() string {
-	return "ovnnorth-" + instance.Name
+	return "ovnnorthd-" + instance.Name
 }
