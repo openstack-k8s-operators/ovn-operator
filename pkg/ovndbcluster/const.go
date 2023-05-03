@@ -9,7 +9,4 @@ const (
 
 	// KollaConfigOVNDBCluster -
 	KollaConfigOVNDBCluster = "/var/lib/config-data/ovn-dbcluster.json"
-
-	// ServiceAccountName -
-	ServiceAccountName = "ovn-operator-ovn"
 )

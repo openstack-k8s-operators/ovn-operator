@@ -85,7 +85,7 @@ func Deployment(
 					Labels:      labels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: ServiceAccountName,
+					ServiceAccountName: instance.RbacResourceName(),
 					Containers: []corev1.Container{
 						{
 							Name: ServiceName,

@@ -151,3 +151,18 @@ func (instance OVNDBCluster) IsReady() bool {
 	// there is at least a single pod to serve the OVN DBCluster
 	return instance.Status.ReadyCount >= 1
 }
+
+// RbacConditionsSet - set the conditions for the rbac object
+func (instance OVNDBCluster) RbacConditionsSet(c *condition.Condition) {
+    instance.Status.Conditions.Set(c)
+}
+
+// RbacNamespace - return the namespace
+func (instance OVNDBCluster) RbacNamespace() string {
+    return instance.Namespace
+}
+
+// RbacResourceName - return the name to be used for rbac objects (serviceaccount, role, rolebinding)
+func (instance OVNDBCluster) RbacResourceName() string {
+    return "ovncluster-" + instance.Name
+}
