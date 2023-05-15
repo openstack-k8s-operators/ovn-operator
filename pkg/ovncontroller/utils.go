@@ -18,14 +18,14 @@ import (
 	"strings"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
-	"github.com/openstack-k8s-operators/ovs-operator/api/v1beta1"
+	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"golang.org/x/exp/maps"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func getPhysicalNetworks(
-	instance *v1beta1.OVS,
+	instance *v1beta1.OVNController,
 ) string {
 	// NOTE(slaweq): to make things easier, each physical bridge will have
 	//               the same name as "br-<physical network>"
@@ -39,7 +39,7 @@ func getPhysicalNetworks(
 func getOvsPodsNodes(
 	ctx context.Context,
 	k8sClient client.Client,
-	instance *v1beta1.OVS,
+	instance *v1beta1.OVNController,
 ) ([]string, error) {
 
 	var nodes []string

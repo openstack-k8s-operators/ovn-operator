@@ -10,10 +10,9 @@ require (
 	github.com/onsi/gomega v1.27.6
 	github.com/openshift/api v3.9.0+incompatible
 	github.com/openstack-k8s-operators/lib-common/modules/common v0.0.0-20230504132716-fcffbcec69db
-	github.com/openstack-k8s-operators/lib-common/modules/test v0.0.0-20230504132716-fcffbcec69db
+	github.com/openstack-k8s-operators/lib-common/modules/test v0.0.0-20230505090059-1db7d191885e
 	github.com/openstack-k8s-operators/lib-common/modules/test-operators v0.0.0-20230504132716-fcffbcec69db
 	github.com/openstack-k8s-operators/ovn-operator/api v0.0.0-20230418071801-b5843d9e05fb
-	github.com/openstack-k8s-operators/ovs-operator/api v0.0.0-20230511150547-af737c07ef58
 	go.uber.org/zap v1.24.0
 	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc
 	k8s.io/api v0.26.3
@@ -62,7 +61,7 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	golang.org/x/mod v0.9.0 // indirect
+	golang.org/x/mod v0.10.0 // indirect
 	golang.org/x/net v0.9.0 // indirect
 	golang.org/x/oauth2 v0.7.0 // indirect
 	golang.org/x/sys v0.7.0 // indirect

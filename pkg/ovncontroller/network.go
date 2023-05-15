@@ -22,14 +22,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openstack-k8s-operators/ovs-operator/api/v1beta1"
+	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 )
 
 // CreateAdditionalNetworks - creates network attachement definitions based on the provided mappings
 func CreateAdditionalNetworks(
 	ctx context.Context,
 	h *helper.Helper,
-	instance *v1beta1.OVS,
+	instance *v1beta1.OVNController,
 	labels map[string]string,
 ) ([]string, error) {
 
