@@ -140,6 +140,62 @@ webhooks:
     scope: '*'
   sideEffects: None
   timeoutSeconds: 10
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: vovncontroller.kb.io
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    caBundle: ${CA_BUNDLE}
+    url: https://${CRC_IP}:9443/validate-ovn-openstack-org-v1beta1-ovncontroller
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: vovncontroller.kb.io
+  objectSelector: {}
+  rules:
+  - apiGroups:
+    - ovn.openstack.org
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - ovncontrollers
+    scope: '*'
+  sideEffects: None
+  timeoutSeconds: 10
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: movncontroller.kb.io
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    caBundle: ${CA_BUNDLE}
+    url: https://${CRC_IP}:9443/mutate-ovn-openstack-org-v1beta1-ovncontroller
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: movncontroller.kb.io
+  objectSelector: {}
+  rules:
+  - apiGroups:
+    - ovn.openstack.org
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - ovncontrollers
+    scope: '*'
+  sideEffects: None
+  timeoutSeconds: 10
 EOF_CAT
 
 oc apply -n openstack -f ${TMPDIR}/patch_webhook_configurations.yaml
