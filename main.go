@@ -115,20 +115,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Acquire environmental defaults and initialize OVNDBCluster defaults with them
-	ovnDbClusterDefaults := ovnv1.OVNDBClusterDefaults{
-		NBContainerImageURL: os.Getenv("OVN_NB_DBCLUSTER_IMAGE_URL_DEFAULT"),
-		SBContainerImageURL: os.Getenv("OVN_SB_DBCLUSTER_IMAGE_URL_DEFAULT"),
-	}
-
-	ovnv1.SetupOVNDBClusterDefaults(ovnDbClusterDefaults)
-
-	// Acquire environmental defaults and initialize OVNNorthd defaults with them
-	ovnNorthdDefaults := ovnv1.OVNNorthdDefaults{
-		ContainerImageURL: os.Getenv("OVN_NORTHD_IMAGE_URL_DEFAULT"),
-	}
-
-	ovnv1.SetupOVNNorthdDefaults(ovnNorthdDefaults)
+	// Acquire environmental defaults and initialize operator defaults with them
+	ovnv1.SetupDefaults()
 
 	// Setup webhooks if requested
 	if strings.ToLower(os.Getenv("ENABLE_WEBHOOKS")) != "false" {
