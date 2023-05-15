@@ -1,0 +1,6 @@
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNController
+metadata:
+  name: ovncontroller-sample
+spec:
+  # TODO(user): Add fields here

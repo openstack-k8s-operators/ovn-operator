@@ -93,6 +93,32 @@ rules:
 - apiGroups:
   - ovn.openstack.org
   resources:
+  - ovncontrollers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovncontrollers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovncontrollers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ovn.openstack.org
+  resources:
   - ovndbclusters
   verbs:
   - create

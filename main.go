@@ -38,6 +38,7 @@ import (
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovnv1beta1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/controllers"
 	//+kubebuilder:scaffold:imports
 )
@@ -53,6 +54,7 @@ func init() {
 	utilruntime.Must(ovnv1.AddToScheme(scheme))
 	utilruntime.Must(networkv1.AddToScheme(scheme))
 
+	utilruntime.Must(ovnv1beta1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -142,6 +144,13 @@ func main() {
 		}
 	}
 
+	if err = (&controllers.OVNControllerReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OVNController")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
