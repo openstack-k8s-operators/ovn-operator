@@ -3,4 +3,9 @@ kind: OVNController
 metadata:
   name: ovncontroller-sample
 spec:
-  # TODO(user): Add fields here
+  ovsContainerImage: "quay.io/podified-antelope-centos9/openstack-ovn-base:current-podified"
+  ovnContainerImage: "quay.io/podified-antelope-centos9/openstack-ovn-controller:current-podified"
+  external-ids:
+    system-id: "random"
+    ovn-bridge: "br-int"
+    ovn-encap-type: "geneve"
