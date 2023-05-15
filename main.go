@@ -149,11 +149,10 @@ func main() {
 			setupLog.Error(err, "unable to create webhook", "webhook", "OVNNorthd")
 			os.Exit(1)
 		}
-	}
-
-	if err = (&ovnv1beta1.OVNController{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OVNController")
-		os.Exit(1)
+		if err = (&ovnv1beta1.OVNController{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OVNController")
+			os.Exit(1)
+		}
 	}
 	//+kubebuilder:scaffold:builder
 
