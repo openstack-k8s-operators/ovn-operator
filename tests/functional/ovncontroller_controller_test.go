@@ -36,7 +36,7 @@ var _ = Describe("OVNController controller", func() {
 	When("A OVNController instance is created", func() {
 		var OVNControllerName types.NamespacedName
 		BeforeEach(func() {
-			name := fmt.Sprintf("ovncontroller-%s", uuid.New().String())
+			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
 			instance := CreateOVNController(namespace, name, GetDefaultOVNControllerSpec())
 			OVNControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
@@ -83,7 +83,7 @@ var _ = Describe("OVNController controller", func() {
 				DeferCleanup(DeleteOVNDBClusters, dbs)
 				daemonSetName := types.NamespacedName{
 					Namespace: namespace,
-					Name:      "ovncontroller",
+					Name:      "ovn-controller",
 				}
 				SimulateDaemonsetNumberReady(daemonSetName)
 				scriptsCM := types.NamespacedName{
@@ -136,7 +136,7 @@ var _ = Describe("OVNController controller", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
-			name := fmt.Sprintf("ovncontroller-%s", uuid.New().String())
+			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
 			spec := GetDefaultOVNControllerSpec()
 			spec["networkAttachment"] = "internalapi"
 			instance := CreateOVNController(namespace, name, spec)
@@ -161,7 +161,7 @@ var _ = Describe("OVNController controller", func() {
 
 			daemonSetName := types.NamespacedName{
 				Namespace: namespace,
-				Name:      "ovncontroller",
+				Name:      "ovn-controller",
 			}
 			ds := GetDaemonSet(daemonSetName)
 
@@ -199,7 +199,7 @@ var _ = Describe("OVNController controller", func() {
 
 			daemonSetName := types.NamespacedName{
 				Namespace: namespace,
-				Name:      "ovncontroller",
+				Name:      "ovn-controller",
 			}
 			ds := GetDaemonSet(daemonSetName)
 
@@ -240,7 +240,7 @@ var _ = Describe("OVNController controller", func() {
 
 			daemonSetName := types.NamespacedName{
 				Namespace: namespace,
-				Name:      "ovncontroller",
+				Name:      "ovn-controller",
 			}
 			SimulateDaemonsetNumberReadyWithPods(
 				daemonSetName,
@@ -268,7 +268,7 @@ var _ = Describe("OVNController controller", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
-			name := fmt.Sprintf("ovncontroller-%s", uuid.New().String())
+			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
 			spec := GetDefaultOVNControllerSpec()
 			spec["nicMappings"] = map[string]interface{}{
 				"physnet1": "enp2s0.100",
@@ -281,7 +281,7 @@ var _ = Describe("OVNController controller", func() {
 		It("reports that the networkattachment definition is created based on nic configs", func() {
 			daemonSetName := types.NamespacedName{
 				Namespace: namespace,
-				Name:      "ovncontroller",
+				Name:      "ovn-controller",
 			}
 			ds := GetDaemonSet(daemonSetName)
 
@@ -309,7 +309,7 @@ var _ = Describe("OVNController controller", func() {
 		It("reports IP to not exist in Status for nic-configs", func() {
 			daemonSetName := types.NamespacedName{
 				Namespace: namespace,
-				Name:      "ovncontroller",
+				Name:      "ovn-controller",
 			}
 			SimulateDaemonsetNumberReadyWithPods(
 				daemonSetName,
@@ -336,7 +336,7 @@ var _ = Describe("OVNController controller", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
-			name := fmt.Sprintf("ovncontroller-%s", uuid.New().String())
+			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
 			spec := GetDefaultOVNControllerSpec()
 			spec["networkAttachment"] = "internalapi"
 			spec["nicMappings"] = map[string]interface{}{
@@ -353,7 +353,7 @@ var _ = Describe("OVNController controller", func() {
 
 			daemonSetName := types.NamespacedName{
 				Namespace: namespace,
-				Name:      "ovncontroller",
+				Name:      "ovn-controller",
 			}
 			ds := GetDaemonSet(daemonSetName)
 
