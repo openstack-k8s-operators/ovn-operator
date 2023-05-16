@@ -3,7 +3,9 @@
 #
 # No OVNNorthd CR
 # No OVNDBCluster CR
+# No OVNController CR
 # No Deployment for OVNNorthd CR
+# No DaemonSet for OVNController CR
 # No Pods in ovn Deployment
 # No OVN Services
 #
@@ -31,10 +33,24 @@ metadata:
   name: ovndbcluster-sb-sample
   namespace: openstack
 ---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNController
+metadata:
+  finalizers:
+  - OVNController
+  name: ovncontroller-sample
+  namespace: openstack
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ovn-northd
+  namespace: openstack
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ovncontroller
   namespace: openstack
 ---
 # the openshift annotations can't be checked through the deployment above
@@ -57,6 +73,15 @@ metadata:
   labels:
     service: ovsdbserver-sb
   name: ovsdbserver-sb-0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    openshift.io/scc: privileged
+  generateName: ovn-controller-
+  labels:
+    service: ovn-controller
 ---
 apiVersion: v1
 kind: Service

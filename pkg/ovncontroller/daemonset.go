@@ -84,7 +84,7 @@ func DaemonSet(
 					Containers: []corev1.Container{
 						// ovsdb-server container
 						{
-							Name: ServiceName + "db-server",
+							Name: "ovsdb-server",
 							Command: []string{
 								"/usr/local/bin/container-scripts/start-ovsdb-server.sh",
 							},
@@ -113,7 +113,7 @@ func DaemonSet(
 							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 						}, {
 							// ovs-vswitchd container
-							Name: ServiceName + "-vswitchd",
+							Name: "ovs-vswitchd",
 							Command: []string{
 								"/usr/sbin/ovs-vswitchd",
 							},
@@ -147,7 +147,7 @@ func DaemonSet(
 							// ovn-controller container
 							// NOTE(slaweq): for some reason, when ovn-controller is started without
 							// bash shell, it fails with error "unrecognized option --pidfile"
-							Name: OvnControllerServiceName,
+							Name: "ovn-controller",
 							Command: []string{
 								"/bin/bash", "-c",
 							},

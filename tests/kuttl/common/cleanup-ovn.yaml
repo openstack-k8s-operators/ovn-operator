@@ -13,3 +13,7 @@ delete:
   kind: OVNNorthd
   name: ovnnorthd-sample
   namespace: openstack
+- apiVersion: ovn.openstack.org/v1beta1
+  kind: OVNController
+  name: ovncontroller-sample
+  namespace: openstack
