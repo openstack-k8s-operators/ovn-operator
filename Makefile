@@ -333,6 +333,8 @@ SKIP_CERT ?=false
 run-with-webhook: export OVN_NB_DBCLUSTER_IMAGE_URL_DEFAULT=quay.io/podified-antelope-centos9/openstack-ovn-nb-db-server:current-podified
 run-with-webhook: export OVN_SB_DBCLUSTER_IMAGE_URL_DEFAULT=quay.io/podified-antelope-centos9/openstack-ovn-sb-db-server:current-podified
 run-with-webhook: export OVN_NORTHD_IMAGE_URL_DEFAULT=quay.io/podified-antelope-centos9/openstack-ovn-northd:current-podified
+run-with-webhook: export OVN_CONTROLLER_OVS_IMAGE_URL_DEFAULT=quay.io/podified-antelope-centos9/openstack-ovn-base:current-podified
+run-with-webhook: export OVN_CONTROLLER_IMAGE_URL_DEFAULT=quay.io/podified-antelope-centos9/openstack-ovn-controller:current-podified
 run-with-webhook: manifests generate fmt vet ## Run a controller from your host.
 	/bin/bash hack/configure_local_webhook.sh
 	go run ./main.go

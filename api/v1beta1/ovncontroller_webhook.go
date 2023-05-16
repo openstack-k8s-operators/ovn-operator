@@ -23,16 +23,28 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
+// OvnControllerDefaults -
+type OvnControllerDefaults struct {
+	OvsContainerImageURL string
+	OvnControllerContainerImageURL string
+}
+
+var ovnDefaults OvnControllerDefaults
+
 // log is for logging in this package.
 var ovncontrollerlog = logf.Log.WithName("ovncontroller-resource")
+
+// SetupOvnControllerDefaults - initialize OVNController spec defaults for use with either internal or external webhooks
+func SetupOvnControllerDefaults(defaults OvnControllerDefaults) {
+	ovnDefaults = defaults
+	ovncontrollerlog.Info("OVNController defaults initialized", "defaults", defaults)
+}
 
 func (r *OVNController) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
 		Complete()
 }
-
-// TODO(user): EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 
 //+kubebuilder:webhook:path=/mutate-ovn-openstack-org-v1beta1-ovncontroller,mutating=true,failurePolicy=fail,sideEffects=None,groups=ovn.openstack.org,resources=ovncontrollers,verbs=create;update,versions=v1beta1,name=movncontroller.kb.io,admissionReviewVersions=v1
 
@@ -42,7 +54,17 @@ var _ webhook.Defaulter = &OVNController{}
 func (r *OVNController) Default() {
 	ovncontrollerlog.Info("default", "name", r.Name)
 
-	// TODO(user): fill in your defaulting logic.
+	r.Spec.Default()
+}
+
+// Default - set defaults for this OVNController spec
+func (spec *OVNControllerSpec) Default() {
+	if spec.OvsContainerImage == "" {
+		spec.OvsContainerImage = ovnDefaults.OvsContainerImageURL
+	}
+	if spec.OvnContainerImage == "" {
+		spec.OvnContainerImage = ovnDefaults.OvnControllerContainerImageURL
+	}
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.

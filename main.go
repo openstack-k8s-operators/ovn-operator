@@ -139,6 +139,14 @@ func main() {
 
 	ovnv1.SetupOVNNorthdDefaults(ovnNorthdDefaults)
 
+	// Acquire environmental defaults and initialize OVNController defaults with them
+	ovnControllerDefaults := ovnv1.OvnControllerDefaults{
+		OvsContainerImageURL:           os.Getenv("OVN_CONTROLLER_OVS_IMAGE_URL_DEFAULT"),
+		OvnControllerContainerImageURL: os.Getenv("OVN_CONTROLLER_IMAGE_URL_DEFAULT"),
+	}
+
+	ovnv1.SetupOvnControllerDefaults(ovnControllerDefaults)
+
 	// Setup webhooks if requested
 	if strings.ToLower(os.Getenv("ENABLE_WEBHOOKS")) != "false" {
 		if err = (&ovnv1.OVNDBCluster{}).SetupWebhookWithManager(mgr); err != nil {
