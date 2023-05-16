@@ -117,8 +117,10 @@ PROCS?=$(shell expr $(shell nproc --ignore 2) / 2)
 PROC_CMD = --procs ${PROCS}
 
 .PHONY: test
+test: export OVN_CONTROLLER_OVS_IMAGE_URL_DEFAULT=quay.io/podified-antelope-centos9/openstack-ovn-base:current-podified
+test: export OVN_CONTROLLER_IMAGE_URL_DEFAULT=quay.io/podified-antelope-centos9/openstack-ovn-controller:current-podified
 test: manifests generate fmt vet envtest ginkgo ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) -v debug --bin-dir $(LOCALBIN) use $(ENVTEST_K8S_VERSION) -p path)" OPERATOR_TEMPLATES="$(PWD)/templates" $(GINKGO) --trace --cover --coverpkg=../../pkg/ovndbcluster,../../pkg/ovnnorthd,../../controllers,../../api/v1beta1 --coverprofile cover.out --covermode=atomic --randomize-all ${PROC_CMD} $(GINKGO_ARGS) ./tests/...
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) -v debug --bin-dir $(LOCALBIN) use $(ENVTEST_K8S_VERSION) -p path)" OPERATOR_TEMPLATES="$(PWD)/templates" $(GINKGO) --trace --cover --coverpkg=../../pkg/ovndbcluster,../../pkg/ovnnorthd,../../pkg/ovncontroller,../../controllers,../../api/v1beta1 --coverprofile cover.out --covermode=atomic --randomize-all ${PROC_CMD} $(GINKGO_ARGS) ./tests/...
 
 ##@ Build
 

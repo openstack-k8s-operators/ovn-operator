@@ -1,12 +1,12 @@
 package ovncontroller
 
 const (
-	// ServiceName - ovs service name
-	ServiceName = "ovs"
+	// ServiceName - ovncontroller service name
+	ServiceName = "ovncontroller"
 	// OvnControllerServiceName - ovn-controller service name
 	OvnControllerServiceName = "ovn-controller"
 	// ServiceType -
-	ServiceType = "ovs"
+	ServiceType = "ovncontroller"
 	// KollaConfigAPI -
-	KollaConfigAPI = "/var/lib/config-data/merged/ovs-config.json"
+	KollaConfigAPI = "/var/lib/config-data/ovncontroller-config.json"
 )

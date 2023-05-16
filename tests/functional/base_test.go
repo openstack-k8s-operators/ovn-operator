@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/uuid"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -301,4 +302,112 @@ func SimulateDeploymentReplicaReadyWithPods(name types.NamespacedName, networkIP
 	}, timeout, interval).Should(Succeed())
 
 	logger.Info("Simulated statefulset success", "on", name)
+}
+
+// GetDaemonSet -
+func GetDaemonSet(name types.NamespacedName) *appsv1.DaemonSet {
+	ds := &appsv1.DaemonSet{}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, name, ds)).Should(Succeed())
+	}, timeout, interval).Should(Succeed())
+	return ds
+}
+
+// ListDaemonsets -
+func ListDaemonsets(namespace string) *appsv1.DaemonSetList {
+	dss := &appsv1.DaemonSetList{}
+	Expect(k8sClient.List(ctx, dss, client.InNamespace(namespace))).Should(Succeed())
+	return dss
+}
+
+// SimulateDaemonsetNumberReady -
+func SimulateDaemonsetNumberReady(name types.NamespacedName) {
+	Eventually(func(g Gomega) {
+		ds := GetDaemonSet(name)
+		ds.Status.NumberReady = 1
+		ds.Status.DesiredNumberScheduled = 1
+		g.Expect(k8sClient.Status().Update(ctx, ds)).To(Succeed())
+
+	}, timeout, interval).Should(Succeed())
+	logger.Info("Simulated daemonset success", "on", name)
+}
+
+func GetDefaultOVNControllerSpec() map[string]interface{} {
+	return map[string]interface{}{
+		// Default external Ids not picked up
+		"external-ids": map[string]interface{}{
+			"ovn-encap-type": "geneve",
+		},
+	}
+}
+
+func CreateOVNController(namespace string, OVNControllerName string, spec map[string]interface{}) client.Object {
+
+	raw := map[string]interface{}{
+		"apiVersion": "ovn.openstack.org/v1beta1",
+		"kind":       "OVNController",
+		"metadata": map[string]interface{}{
+			"name":      OVNControllerName,
+			"namespace": namespace,
+		},
+		"spec": spec,
+	}
+	return th.CreateUnstructured(raw)
+}
+
+func GetOVNController(name types.NamespacedName) *ovnv1.OVNController {
+	instance := &ovnv1.OVNController{}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, name, instance)).Should(Succeed())
+	}, timeout, interval).Should(Succeed())
+	return instance
+}
+
+func OVNControllerConditionGetter(name types.NamespacedName) condition.Conditions {
+	instance := GetOVNController(name)
+	return instance.Status.Conditions
+}
+
+func SimulateDaemonsetNumberReadyWithPods(name types.NamespacedName, networkIPs map[string][]string) {
+	ds := GetDaemonSet(name)
+
+	for i := 0; i < int(1); i++ {
+		pod := &corev1.Pod{
+			ObjectMeta: ds.Spec.Template.ObjectMeta,
+			Spec:       ds.Spec.Template.Spec,
+		}
+		pod.ObjectMeta.Namespace = name.Namespace
+		pod.ObjectMeta.GenerateName = name.Name
+		pod.ObjectMeta.Labels = map[string]string{
+			"service": "ovncontroller",
+		}
+
+		// NodeName required for getOvsPodsNodes
+		pod.Spec.NodeName = name.Name
+
+		var netStatus []networkv1.NetworkStatus
+		for network, IPs := range networkIPs {
+			netStatus = append(
+				netStatus,
+				networkv1.NetworkStatus{
+					Name: network,
+					IPs:  IPs,
+				},
+			)
+		}
+		netStatusAnnotation, err := json.Marshal(netStatus)
+		Expect(err).NotTo(HaveOccurred())
+		pod.Annotations[networkv1.NetworkStatusAnnot] = string(netStatusAnnotation)
+		Expect(k8sClient.Create(ctx, pod)).Should(Succeed())
+	}
+
+	Eventually(func(g Gomega) {
+		ds := GetDaemonSet(name)
+		ds.Status.NumberReady = 1
+		ds.Status.DesiredNumberScheduled = 1
+		g.Expect(k8sClient.Status().Update(ctx, ds)).To(Succeed())
+
+	}, timeout, interval).Should(Succeed())
+
+	logger.Info("Simulated daemonset success", "on", name)
 }
