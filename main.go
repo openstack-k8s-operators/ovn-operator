@@ -38,7 +38,6 @@ import (
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
-	ovnv1beta1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/controllers"
 	//+kubebuilder:scaffold:imports
 )
@@ -50,11 +49,8 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
 	utilruntime.Must(ovnv1.AddToScheme(scheme))
 	utilruntime.Must(networkv1.AddToScheme(scheme))
-
-	utilruntime.Must(ovnv1beta1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -145,7 +141,7 @@ func main() {
 			setupLog.Error(err, "unable to create webhook", "webhook", "OVNNorthd")
 			os.Exit(1)
 		}
-		if err = (&ovnv1beta1.OVNController{}).SetupWebhookWithManager(mgr); err != nil {
+		if err = (&ovnv1.OVNController{}).SetupWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "OVNController")
 			os.Exit(1)
 		}
