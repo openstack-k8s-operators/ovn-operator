@@ -89,10 +89,9 @@ func (r *OVNControllerReconciler) GetLogger() logr.Logger {
 // +kubebuilder:rbac:groups="",resources=pods,verbs=create;delete;get;list;patch;update;watch
 
 func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, _err error) {
-	//_ = context.Background()
-	_ = r.Log.WithValues("ovs", req.NamespacedName)
+	_ = r.Log.WithValues("ovncontroller", req.NamespacedName)
 
-	// Fetch ovs instance
+	// Fetch OVNController instance
 	instance := &v1beta1.OVNController{}
 	err := r.Client.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
@@ -256,7 +255,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	instance.Status.Conditions.MarkTrue(condition.InputReadyCondition, condition.InputReadyMessage)
 
 	//
-	// create Configmap required for ovs input
+	// create Configmap required for OVNController input
 	// - %-scripts configmap holding scripts to e.g. bootstrap the service
 	//
 	err = r.generateServiceConfigMaps(ctx, helper, instance, &configMapVars)
@@ -367,13 +366,13 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 
 	// Define a new DaemonSet object
-	ovsDaemonSet, err := ovncontroller.DaemonSet(instance, inputHash, serviceLabels, serviceAnnotations)
+	ovnDaemonSet, err := ovncontroller.DaemonSet(instance, inputHash, serviceLabels, serviceAnnotations)
 	if err != nil {
 		r.Log.Error(err, "Failed to create OVS DaemonSet")
 		return ctrl.Result{}, err
 	}
 	dset := daemonset.NewDaemonSet(
-		ovsDaemonSet,
+		ovnDaemonSet,
 		time.Duration(5)*time.Second,
 	)
 
