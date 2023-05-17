@@ -34,4 +34,12 @@ func SetupDefaults() {
 	}
 
 	SetupOVNNorthdDefaults(ovnNorthdDefaults)
+
+	// Acquire environmental defaults and initialize OVNController defaults with them
+	ovnControllerDefaults := OvnControllerDefaults{
+		OvsContainerImageURL:           util.GetEnvVar("OVN_CONTROLLER_OVS_IMAGE_URL_DEFAULT", OvnControllerOvsContainerImage),
+		OvnControllerContainerImageURL: util.GetEnvVar("OVN_CONTROLLER_IMAGE_URL_DEFAULT", OvnControllerContainerImage),
+	}
+
+	SetupOvnControllerDefaults(ovnControllerDefaults)
 }

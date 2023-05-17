@@ -26,6 +26,13 @@ import (
 const (
 	// OvnConfigHash - OvnConfigHash key
 	OvnConfigHash = "OvnConfigHash"
+
+	// Container image fall-back defaults
+
+	// OvnControllerOvsContainerImage is the fall-back container image for OVNController ovs-*
+	OvnControllerOvsContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-base:current-podified"
+	// OvnControllerContainerImage is the fall-back container image for OVNController ovn-controller
+	OvnControllerContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-controller:current-podified"
 )
 
 // OVNControllerSpec defines the desired state of OVNController
