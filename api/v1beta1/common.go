@@ -41,5 +41,5 @@ func SetupDefaults() {
 		OvnControllerContainerImageURL: util.GetEnvVar("OVN_CONTROLLER_IMAGE_URL_DEFAULT", OvnControllerContainerImage),
 	}
 
-	SetupOvnControllerDefaults(ovnControllerDefaults)
+	SetupOVNControllerDefaults(ovnControllerDefaults)
 }

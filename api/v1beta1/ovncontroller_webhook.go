@@ -34,8 +34,8 @@ var ovnDefaults OvnControllerDefaults
 // log is for logging in this package.
 var ovncontrollerlog = logf.Log.WithName("ovncontroller-resource")
 
-// SetupOvnControllerDefaults - initialize OVNController spec defaults for use with either internal or external webhooks
-func SetupOvnControllerDefaults(defaults OvnControllerDefaults) {
+// SetupOVNControllerDefaults - initialize OVNController spec defaults for use with either internal or external webhooks
+func SetupOVNControllerDefaults(defaults OvnControllerDefaults) {
 	ovnDefaults = defaults
 	ovncontrollerlog.Info("OVNController defaults initialized", "defaults", defaults)
 }
