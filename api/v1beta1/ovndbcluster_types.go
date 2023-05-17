@@ -28,6 +28,13 @@ const (
 	NBDBType = "NB"
 	// SBDBType - Southbound database type
 	SBDBType = "SB"
+
+	// Container image fall-back defaults
+
+	// OvnNBContainerImage is the fall-back container image for OVNDBCluster NB
+	OvnNBContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-nb-db-server:current-podified"
+	// OvnSBContainerImage is the fall-back container image for OVNDBCluster SB
+	OvnSBContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-sb-db-server:current-podified"
 )
 
 // OVNDBClusterSpec defines the desired state of OVNDBCluster
@@ -154,15 +161,15 @@ func (instance OVNDBCluster) IsReady() bool {
 
 // RbacConditionsSet - set the conditions for the rbac object
 func (instance OVNDBCluster) RbacConditionsSet(c *condition.Condition) {
-    instance.Status.Conditions.Set(c)
+	instance.Status.Conditions.Set(c)
 }
 
 // RbacNamespace - return the namespace
 func (instance OVNDBCluster) RbacNamespace() string {
-    return instance.Namespace
+	return instance.Namespace
 }
 
 // RbacResourceName - return the name to be used for rbac objects (serviceaccount, role, rolebinding)
 func (instance OVNDBCluster) RbacResourceName() string {
-    return "ovncluster-" + instance.Name
+	return "ovncluster-" + instance.Name
 }

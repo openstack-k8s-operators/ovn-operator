@@ -23,6 +23,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	// Container image fall-back defaults
+
+	// OvnNorthdContainerImage is the fall-back container image for OVNNorthd
+	OvnNorthdContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-northd:current-podified"
+)
+
 // Hash - struct to add hashes to status
 type Hash struct {
 	// Name of hash referencing the parameter
