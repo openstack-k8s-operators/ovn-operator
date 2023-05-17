@@ -9,8 +9,8 @@ require (
 	github.com/onsi/ginkgo/v2 v2.9.2
 	github.com/onsi/gomega v1.27.6
 	github.com/openshift/api v3.9.0+incompatible
-	github.com/openstack-k8s-operators/lib-common/modules/common v0.0.0-20230504132716-fcffbcec69db
-	github.com/openstack-k8s-operators/lib-common/modules/test v0.0.0-20230505090059-1db7d191885e
+	github.com/openstack-k8s-operators/lib-common/modules/common v0.0.0-20230510145530-3c8e9179fb6e
+	github.com/openstack-k8s-operators/lib-common/modules/test v0.0.0-20230504132716-fcffbcec69db
 	github.com/openstack-k8s-operators/lib-common/modules/test-operators v0.0.0-20230504132716-fcffbcec69db
 	github.com/openstack-k8s-operators/ovn-operator/api v0.0.0-20230418071801-b5843d9e05fb
 	go.uber.org/zap v1.24.0

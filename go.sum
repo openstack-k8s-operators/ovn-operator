@@ -139,12 +139,12 @@ github.com/openstack-k8s-operators/infra-operator/apis v0.0.0-20230420195930-f71
 github.com/openstack-k8s-operators/infra-operator/apis v0.0.0-20230420195930-f71e24e80596/go.mod h1:L6qvm+1R4HfEJO3Dn8ftTnDqP/QpSQzpNzd3+mapR/Y=
 github.com/openstack-k8s-operators/keystone-operator/api v0.0.0-20230412125711-203185e59d89 h1:DK/7ox5IYqw2d+4LJNpowS9Di+HMpNnwZmn/hcIjkPA=
 github.com/openstack-k8s-operators/keystone-operator/api v0.0.0-20230412125711-203185e59d89/go.mod h1:wusg8YoauTTaQg8al6xA6W8mIDVf+dzIk1g6LwQFOcM=
-github.com/openstack-k8s-operators/lib-common/modules/common v0.0.0-20230504132716-fcffbcec69db h1:IAIGTY97V3sjZ3P0TTNcz5en0ENqs46dv+2Gh9ohbx0=
-github.com/openstack-k8s-operators/lib-common/modules/common v0.0.0-20230504132716-fcffbcec69db/go.mod h1:uhOYIjYwG/4fs8OkPrPxCsKP15G2hs2VtpJo0EVuRjw=
+github.com/openstack-k8s-operators/lib-common/modules/common v0.0.0-20230510145530-3c8e9179fb6e h1:svid3nTQbL4IoVwVmh56wroJXDjSnWTaKjNW1tlHxCY=
+github.com/openstack-k8s-operators/lib-common/modules/common v0.0.0-20230510145530-3c8e9179fb6e/go.mod h1:qO1YjgynYksN3GYFrIcrwvAwws22zCzYmn0kOYBn1/A=
 github.com/openstack-k8s-operators/lib-common/modules/openstack v0.0.0-20230314121334-30ee8131cd07 h1:anrnHNjCrQH6XKvNQYUotpTSUhLoOrabM/RRm0sr65k=
 github.com/openstack-k8s-operators/lib-common/modules/openstack v0.0.0-20230314121334-30ee8131cd07/go.mod h1:h1lDC9G4tEEgwK/T5mr3LoKHuLyeUiZ5LRUAK/s+dX8=
-github.com/openstack-k8s-operators/lib-common/modules/test v0.0.0-20230505090059-1db7d191885e h1:nIb/0uGHp0Wp9f9+qC5DloCEm3vCnjkTB0VSKiKfHGM=
-github.com/openstack-k8s-operators/lib-common/modules/test v0.0.0-20230505090059-1db7d191885e/go.mod h1:TpUsnJnIjt3A9CJnPAnifvShIKF6qM1AYGV3b7f1qn8=
+github.com/openstack-k8s-operators/lib-common/modules/test v0.0.0-20230504132716-fcffbcec69db h1:A/Q+AScyX1p4MhbnCSzzAgtxrZlVFwFl/PXGb8igHSg=
+github.com/openstack-k8s-operators/lib-common/modules/test v0.0.0-20230504132716-fcffbcec69db/go.mod h1:TpUsnJnIjt3A9CJnPAnifvShIKF6qM1AYGV3b7f1qn8=
 github.com/openstack-k8s-operators/lib-common/modules/test-operators v0.0.0-20230504132716-fcffbcec69db h1:f7ETgNUTUjVI+Gh+QggjMvPzeEKRPLmWmlSQIxJnPBI=
 github.com/openstack-k8s-operators/lib-common/modules/test-operators v0.0.0-20230504132716-fcffbcec69db/go.mod h1:zay2XLdLmax6mmMNM7KG3SbkdT0NCysiXTp3Ec0nbi4=
 github.com/openstack-k8s-operators/mariadb-operator/api v0.0.0-20230428102546-5d2d648e367e h1:hd6vDQcn8rMiUcxgcByAj32DGEXQ6X9MzlE7X15Di30=
@@ -164,7 +164,7 @@ github.com/prometheus/common v0.42.0/go.mod h1:xBwqVerjNdUDjgODMpudtOMwlOwf2SaTr
 github.com/prometheus/procfs v0.9.0 h1:wzCHvIvM5SxWqYvwgVL7yJY8Lz3PKn49KQtpgMYJfhI=
 github.com/prometheus/procfs v0.9.0/go.mod h1:+pB4zwohETzFnmlpe6yd2lSc+0/46IYZRB/chUwxUZY=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
-github.com/rogpeppe/go-internal v1.10.0 h1:TMyTOH3F/DB16zRVcYyreMH6GnZZrwQVAoYjRBZyWFQ=
+github.com/rogpeppe/go-internal v1.9.0 h1:73kH8U+JUqXU8lRuOHeVHaa/SZPifC7BkcraZVejAe8=
 github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
 github.com/spf13/pflag v1.0.5 h1:iy+VFUOCP1a+8yFto/drg2CJ5u0yRoB7fZw3DKv/JXA=
 github.com/spf13/pflag v1.0.5/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
