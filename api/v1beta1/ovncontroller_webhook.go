@@ -67,7 +67,6 @@ func (spec *OVNControllerSpec) Default() {
 	}
 }
 
-// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
 //+kubebuilder:webhook:path=/validate-ovn-openstack-org-v1beta1-ovncontroller,mutating=false,failurePolicy=fail,sideEffects=None,groups=ovn.openstack.org,resources=ovncontrollers,verbs=create;update,versions=v1beta1,name=vovncontroller.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Validator = &OVNController{}
@@ -76,7 +75,6 @@ var _ webhook.Validator = &OVNController{}
 func (r *OVNController) ValidateCreate() error {
 	ovncontrollerlog.Info("validate create", "name", r.Name)
 
-	// TODO(user): fill in your validation logic upon object creation.
 	return nil
 }
 
@@ -84,7 +82,6 @@ func (r *OVNController) ValidateCreate() error {
 func (r *OVNController) ValidateUpdate(old runtime.Object) error {
 	ovncontrollerlog.Info("validate update", "name", r.Name)
 
-	// TODO(user): fill in your validation logic upon object update.
 	return nil
 }
 
@@ -92,6 +89,5 @@ func (r *OVNController) ValidateUpdate(old runtime.Object) error {
 func (r *OVNController) ValidateDelete() error {
 	ovncontrollerlog.Info("validate delete", "name", r.Name)
 
-	// TODO(user): fill in your validation logic upon object deletion.
 	return nil
 }
