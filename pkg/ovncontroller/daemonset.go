@@ -174,7 +174,7 @@ func DaemonSet(
 								Privileged: &privileged,
 							},
 							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-							VolumeMounts:             GetOvnVolumeMounts(),
+							VolumeMounts:             GetOvnControllerVolumeMounts(),
 							Resources:                instance.Spec.Resources,
 							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 						},

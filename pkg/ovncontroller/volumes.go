@@ -169,8 +169,8 @@ func GetVswitchdVolumeMounts() []corev1.VolumeMount {
 	}
 }
 
-// GetOvnVolumeMounts - ovn-controller VolumeMounts
-func GetOvnVolumeMounts() []corev1.VolumeMount {
+// GetOvnControllerVolumeMounts - ovn-controller VolumeMounts
+func GetOvnControllerVolumeMounts() []corev1.VolumeMount {
 	return []corev1.VolumeMount{
 		{
 			Name:      "etc-machine-id",
