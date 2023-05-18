@@ -195,7 +195,7 @@ spec:
                 description: NetworkAttachments status of the deployment pods
                 type: object
               numberReady:
-                description: NumberReady of the ovs instances
+                description: NumberReady of the OVNController instances
                 format: int32
                 type: integer
             type: object
