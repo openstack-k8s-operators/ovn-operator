@@ -368,7 +368,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	// Define a new DaemonSet object
 	ovnDaemonSet, err := ovncontroller.DaemonSet(instance, inputHash, serviceLabels, serviceAnnotations)
 	if err != nil {
-		r.Log.Error(err, "Failed to create OVS DaemonSet")
+		r.Log.Error(err, "Failed to create OVNController DaemonSet")
 		return ctrl.Result{}, err
 	}
 	dset := daemonset.NewDaemonSet(
@@ -482,7 +482,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		}
 		instance.Status.Conditions.MarkTrue(condition.ServiceConfigReadyCondition, condition.ServiceConfigReadyMessage)
 	} else {
-		r.Log.Info("OVS DaemonSet not ready yet. Configuration job cannot be started.")
+		r.Log.Info("OVNController DaemonSet not ready yet. Configuration job cannot be started.")
 		return ctrl.Result{Requeue: true}, nil
 	}
 	// create OVN Config Job - end

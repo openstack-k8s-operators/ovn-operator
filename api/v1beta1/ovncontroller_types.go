@@ -69,7 +69,7 @@ type OVNControllerSpec struct {
 
 // OVNControllerStatus defines the observed state of OVNController
 type OVNControllerStatus struct {
-	// NumberReady of the ovs instances
+	// NumberReady of the OVNController instances
 	NumberReady int32 `json:"numberReady,omitempty"`
 
 	// DesiredNumberScheduled - total number of the nodes which should be running Daemon
@@ -143,5 +143,5 @@ func (instance OVNController) RbacNamespace() string {
 
 // RbacResourceName - return the name to be used for rbac objects (serviceaccount, role, rolebinding)
 func (instance OVNController) RbacResourceName() string {
-	return "ovs-" + instance.Name
+	return "ovncontroller-" + instance.Name
 }
