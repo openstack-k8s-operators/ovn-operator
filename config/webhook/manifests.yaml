@@ -11,6 +11,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /mutate-ovn-openstack-org-v1beta1-ovncontroller
+  failurePolicy: Fail
+  name: movncontroller.kb.io
+  rules:
+  - apiGroups:
+    - ovn.openstack.org
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - ovncontrollers
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /mutate-ovn-openstack-org-v1beta1-ovndbcluster
   failurePolicy: Fail
   name: movndbcluster.kb.io
@@ -52,6 +72,26 @@ metadata:
   creationTimestamp: null
   name: validating-webhook-configuration
 webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-ovn-openstack-org-v1beta1-ovncontroller
+  failurePolicy: Fail
+  name: vovncontroller.kb.io
+  rules:
+  - apiGroups:
+    - ovn.openstack.org
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - ovncontrollers
+  sideEffects: None
 - admissionReviewVersions:
   - v1
   clientConfig:

@@ -3,9 +3,12 @@
 #
 # - 1 OVNNorthd CR
 # - 2 OVNDBCluster CR (ovndbcluster-nb-sample, ovndbcluster-sb-sample)
+# - 1 OVNController CR
 # - Deployment with 1 Pod for OVNNorthd CR
+# - Daemonset with 3 Pods for OVNController CR
 # - ovsdbserver-nb-0 Pod
 # - ovsdbserver-sb-0 Pod
+# - ovn-controller- Pod
 # - ovsdbserver-nb Service
 # - ovsdbserver-nb-0 Service
 # - ovsdbserver-sb Service
@@ -58,6 +61,24 @@ spec:
   storageRequest: 10G
 status:
   readyCount: 1
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNController
+metadata:
+  finalizers:
+  - OVNController
+  name: ovncontroller-sample
+  namespace: openstack
+spec:
+  external-ids:
+    ovn-bridge: br-int
+    ovn-encap-type: geneve
+    system-id: random
+  ovnContainerImage: quay.io/podified-antelope-centos9/openstack-ovn-controller:current-podified
+  ovsContainerImage: quay.io/podified-antelope-centos9/openstack-ovn-base:current-podified
+status:
+  desiredNumberScheduled: 1
+  numberReady: 1
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -122,6 +143,14 @@ status:
   availableReplicas: 1
   replicas: 1
 ---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ovn-controller
+  namespace: openstack
+status:
+  numberReady: 1
+---
 # the openshift annotations can't be checked through the deployment above
 apiVersion: v1
 kind: Pod
@@ -148,6 +177,17 @@ metadata:
   labels:
     service: ovsdbserver-sb
   name: ovsdbserver-sb-0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    openshift.io/scc: privileged
+  labels:
+    service: ovn-controller
+  generateName: ovn-controller-
+status:
+  phase: Running
 ---
 apiVersion: v1
 kind: Service

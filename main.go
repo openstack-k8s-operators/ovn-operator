@@ -49,10 +49,8 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
 	utilruntime.Must(ovnv1.AddToScheme(scheme))
 	utilruntime.Must(networkv1.AddToScheme(scheme))
-
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -114,6 +112,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OVNDBCluster")
 		os.Exit(1)
 	}
+	if err = (&controllers.OVNControllerReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OVNController")
+		os.Exit(1)
+	}
 
 	// Acquire environmental defaults and initialize operator defaults with them
 	ovnv1.SetupDefaults()
@@ -128,8 +133,11 @@ func main() {
 			setupLog.Error(err, "unable to create webhook", "webhook", "OVNNorthd")
 			os.Exit(1)
 		}
+		if err = (&ovnv1.OVNController{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OVNController")
+			os.Exit(1)
+		}
 	}
-
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

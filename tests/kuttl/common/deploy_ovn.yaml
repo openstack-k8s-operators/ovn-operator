@@ -3,3 +3,4 @@ kind: TestStep
 apply:
 - ../../../../config/samples/ovn_v1beta1_ovndbcluster.yaml
 - ../../../../config/samples/ovn_v1beta1_ovnnorthd.yaml
+- ../../../../config/samples/ovn_v1beta1_ovncontroller.yaml

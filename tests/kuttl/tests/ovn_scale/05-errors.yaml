@@ -1,1 +1,11 @@
-../../common/errors_cleanup_ovn.yaml
+#
+# Check for:
+#
+# No OVNController pods after asking for a non existing node in nodeSelector
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    service: ovncontroller
+  namespace: openstack

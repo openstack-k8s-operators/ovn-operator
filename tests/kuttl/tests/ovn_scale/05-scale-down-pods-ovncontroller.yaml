@@ -1,0 +1,5 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      oc patch OVNController -n openstack ovncontroller-sample --type='json' -p='[{"op": "replace", "path": "/spec/nodeSelector", "value":{"node": "non-existing-node-name"}}]'

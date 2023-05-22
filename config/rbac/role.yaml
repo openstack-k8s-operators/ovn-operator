@@ -30,6 +30,18 @@ rules:
 - apiGroups:
   - apps
   resources:
+  - daemonsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
   - deployments
   verbs:
   - create
@@ -43,6 +55,18 @@ rules:
   - apps
   resources:
   - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
   verbs:
   - create
   - delete
@@ -87,9 +111,39 @@ rules:
   resources:
   - network-attachment-definitions
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovncontrollers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovncontrollers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ovn.openstack.org
+  resources:
+  - ovncontrollers/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - ovn.openstack.org
   resources:
