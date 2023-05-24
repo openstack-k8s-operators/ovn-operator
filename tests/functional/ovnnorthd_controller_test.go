@@ -40,7 +40,7 @@ var _ = Describe("OVNNorthd controller", func() {
 			name := fmt.Sprintf("ovnnorthd-%s", uuid.New().String())
 			instance := CreateOVNNorthd(namespace, name, GetDefaultOVNNorthdSpec())
 			OVNNorthdName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
-			DeferCleanup(DeleteInstance, instance)
+			DeferCleanup(th.DeleteInstance, instance)
 		})
 
 		It("should have the Spec fields initialized", func() {
@@ -132,7 +132,7 @@ var _ = Describe("OVNNorthd controller", func() {
 					return *th.GetConfigMap(configataCM)
 				}, timeout, interval).ShouldNot(BeNil())
 
-				DeleteInstance(GetOVNNorthd(OVNNorthdName))
+				th.DeleteInstance(GetOVNNorthd(OVNNorthdName))
 
 				Eventually(func() []corev1.ConfigMap {
 					return th.ListConfigMaps(configataCM.Name).Items
@@ -152,7 +152,7 @@ var _ = Describe("OVNNorthd controller", func() {
 			spec["networkAttachment"] = "internalapi"
 			instance := CreateOVNNorthd(namespace, name, spec)
 			OVNNorthdName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
-			DeferCleanup(DeleteInstance, instance)
+			DeferCleanup(th.DeleteInstance, instance)
 		})
 
 		It("reports that the definition is missing", func() {
@@ -167,8 +167,8 @@ var _ = Describe("OVNNorthd controller", func() {
 		})
 		It("reports that network attachment is missing", func() {
 			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
-			nad := CreateNetworkAttachmentDefinition(internalAPINADName)
-			DeferCleanup(DeleteInstance, nad)
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
 
 			statefulSetName := types.NamespacedName{
 				Namespace: namespace,
@@ -204,8 +204,8 @@ var _ = Describe("OVNNorthd controller", func() {
 		})
 		It("reports that an IP is missing", func() {
 			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
-			nad := CreateNetworkAttachmentDefinition(internalAPINADName)
-			DeferCleanup(DeleteInstance, nad)
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
 
 			statefulSetName := types.NamespacedName{
 				Namespace: namespace,
@@ -244,8 +244,8 @@ var _ = Describe("OVNNorthd controller", func() {
 		})
 		It("reports NetworkAttachmentsReady if the Pods got the proper annotations", func() {
 			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
-			nad := CreateNetworkAttachmentDefinition(internalAPINADName)
-			DeferCleanup(DeleteInstance, nad)
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
 
 			statefulSetName := types.NamespacedName{
 				Namespace: namespace,

@@ -24,15 +24,11 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-	routev1 "github.com/openshift/api/route/v1"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 )
@@ -41,34 +37,6 @@ const (
 	timeout  = time.Second * 10
 	interval = timeout / 100
 )
-
-func CreateUnstructured(rawObj map[string]interface{}) *unstructured.Unstructured {
-	logger.Info("Creating", "raw", rawObj)
-	unstructuredObj := &unstructured.Unstructured{Object: rawObj}
-	_, err := controllerutil.CreateOrPatch(
-		ctx, k8sClient, unstructuredObj, func() error { return nil })
-	Expect(err).ShouldNot(HaveOccurred())
-	return unstructuredObj
-}
-
-func DeleteInstance(instance client.Object) {
-	// We have to wait for the controller to fully delete the instance
-	logger.Info("Deleting", "Name", instance.GetName(), "Namespace", instance.GetNamespace(), "Kind", instance.GetObjectKind().GroupVersionKind().Kind)
-	Eventually(func(g Gomega) {
-		name := types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
-		err := k8sClient.Get(ctx, name, instance)
-		// if it is already gone that is OK
-		if k8s_errors.IsNotFound(err) {
-			return
-		}
-		g.Expect(err).ShouldNot(HaveOccurred())
-
-		g.Expect(k8sClient.Delete(ctx, instance)).Should(Succeed())
-
-		err = k8sClient.Get(ctx, name, instance)
-		g.Expect(k8s_errors.IsNotFound(err)).To(BeTrue())
-	}, timeout, interval).Should(Succeed())
-}
 
 func GetDefaultOVNNorthdSpec() map[string]interface{} {
 	return map[string]interface{}{
@@ -87,7 +55,7 @@ func CreateOVNNorthd(namespace string, OVNNorthdName string, spec map[string]int
 		},
 		"spec": spec,
 	}
-	return CreateUnstructured(raw)
+	return th.CreateUnstructured(raw)
 }
 
 func GetOVNNorthd(name types.NamespacedName) *ovnv1.OVNNorthd {
@@ -122,28 +90,12 @@ func CreateOVNDBCluster(namespace string, OVNDBClusterName string, spec map[stri
 		},
 		"spec": spec,
 	}
-	return CreateUnstructured(raw)
+	return th.CreateUnstructured(raw)
 }
 
 func OVNDBClusterConditionGetter(name types.NamespacedName) condition.Conditions {
 	instance := GetOVNDBCluster(name)
 	return instance.Status.Conditions
-}
-
-func AssertServiceExists(name types.NamespacedName) *corev1.Service {
-	instance := &corev1.Service{}
-	Eventually(func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, name, instance)).Should(Succeed())
-	}, timeout, interval).Should(Succeed())
-	return instance
-}
-
-func AssertRouteExists(name types.NamespacedName) *routev1.Route {
-	instance := &routev1.Route{}
-	Eventually(func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, name, instance)).Should(Succeed())
-	}, timeout, interval).Should(Succeed())
-	return instance
 }
 
 // CreateOVNDBClusters Creates NB and SB OVNDBClusters
@@ -195,7 +147,7 @@ func CreateOVNDBClusters(namespace string) []types.NamespacedName {
 // DeleteOVNDBClusters Delete OVN DBClusters
 func DeleteOVNDBClusters(names []types.NamespacedName) {
 	for _, db := range names {
-		DeleteInstance(GetOVNDBCluster(db))
+		th.DeleteInstance(GetOVNDBCluster(db))
 	}
 }
 
@@ -205,20 +157,6 @@ func GetOVNDBCluster(name types.NamespacedName) *ovnv1.OVNDBCluster {
 	Eventually(func(g Gomega) {
 		g.Expect(k8sClient.Get(ctx, name, instance)).Should(Succeed())
 	}, timeout, interval).Should(Succeed())
-	return instance
-}
-
-func CreateNetworkAttachmentDefinition(name types.NamespacedName) client.Object {
-	instance := &networkv1.NetworkAttachmentDefinition{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name.Name,
-			Namespace: name.Namespace,
-		},
-		Spec: networkv1.NetworkAttachmentDefinitionSpec{
-			Config: "",
-		},
-	}
-	Expect(k8sClient.Create(ctx, instance)).Should(Succeed())
 	return instance
 }
 
