@@ -27,6 +27,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // OVNNorthdDefaults -
@@ -76,25 +77,25 @@ func (spec *OVNNorthdSpec) Default() {
 var _ webhook.Validator = &OVNNorthd{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *OVNNorthd) ValidateCreate() error {
+func (r *OVNNorthd) ValidateCreate() (warnings admission.Warnings, err error) {
 	ovnnorthdlog.Info("validate create", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object creation.
-	return nil
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *OVNNorthd) ValidateUpdate(old runtime.Object) error {
+func (r *OVNNorthd) ValidateUpdate(old runtime.Object) (warnings admission.Warnings, err error) {
 	ovnnorthdlog.Info("validate update", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object update.
-	return nil
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *OVNNorthd) ValidateDelete() error {
+func (r *OVNNorthd) ValidateDelete() (warnings admission.Warnings, err error) {
 	ovnnorthdlog.Info("validate delete", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object deletion.
-	return nil
+	return nil, nil
 }
