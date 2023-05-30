@@ -119,6 +119,7 @@ func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// initialize conditions used later as Status=Unknown
 		cl := condition.CreateList(
 			condition.UnknownCondition(condition.InputReadyCondition, condition.InitReason, condition.InputReadyInitMessage),
+			condition.UnknownCondition(condition.ExposeServiceReadyCondition, condition.InitReason, condition.ExposeServiceReadyInitMessage),
 			condition.UnknownCondition(condition.ServiceConfigReadyCondition, condition.InitReason, condition.ServiceConfigReadyInitMessage),
 			condition.UnknownCondition(condition.NetworkAttachmentsReadyCondition, condition.InitReason, condition.NetworkAttachmentsReadyInitMessage),
 			condition.UnknownCondition(condition.DeploymentReadyCondition, condition.InitReason, condition.DeploymentReadyInitMessage),
@@ -409,18 +410,41 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	// Handle service init
 	ctrlResult, err = r.reconcileServices(ctx, instance, helper, serviceLabels, serviceName)
 	if err != nil {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.ExposeServiceReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.ExposeServiceReadyErrorMessage,
+			err.Error()))
 		return ctrlResult, err
 	} else if (ctrlResult != ctrl.Result{}) {
-		return ctrlResult, nil
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.ExposeServiceReadyCondition,
+			condition.RequestedReason,
+			condition.SeverityInfo,
+			condition.ExposeServiceReadyRunningMessage))
+		return ctrlResult, err
 	}
+
 	svcList, err := service.GetServicesListWithLabel(
 		ctx,
 		helper,
 		helper.GetBeforeObject().GetNamespace(),
 		serviceLabels,
 	)
-	if err == nil && instance.Status.ReadyCount > 0 && len(svcList.Items) > 0 {
+	if err != nil {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.ExposeServiceReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.ExposeServiceReadyErrorMessage,
+			err.Error()))
+		return ctrl.Result{}, err
+	}
+
+	if instance.Status.ReadyCount > 0 && len(svcList.Items) > 0 {
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
+		instance.Status.Conditions.MarkTrue(condition.ExposeServiceReadyCondition, condition.ExposeServiceReadyMessage)
 		dbAddress := []string{}
 		internalDbAddress := []string{}
 		raftAddress := []string{}
@@ -447,7 +471,6 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 					dbAddress = append(dbAddress, fmt.Sprintf("tcp:%s:%d", instanceIP, svcPort))
 				}
 			}
-
 		}
 
 		// Set DB Addresses
