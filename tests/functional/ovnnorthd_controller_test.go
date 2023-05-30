@@ -227,7 +227,7 @@ var _ = Describe("OVNNorthd controller", func() {
 
 			// We simulate that there is no IP associated with the internalapi
 			// network attachment
-			SimulateDeploymentReplicaReadyWithPods(
+			th.SimulateDeploymentReadyWithPods(
 				statefulSetName,
 				map[string][]string{namespace + "/internalapi": {}},
 			)
@@ -251,7 +251,7 @@ var _ = Describe("OVNNorthd controller", func() {
 				Namespace: namespace,
 				Name:      "ovn-northd",
 			}
-			SimulateDeploymentReplicaReadyWithPods(
+			th.SimulateDeploymentReadyWithPods(
 				statefulSetName,
 				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
 			)
