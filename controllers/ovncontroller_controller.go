@@ -118,11 +118,18 @@ func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Always patch the instance status when exiting this function so we can persist any changes.
 	defer func() {
-		// update the overall status condition if service is ready
-		if instance.IsReady() {
-			instance.Status.Conditions.MarkTrue(condition.ReadyCondition, condition.ReadyMessage)
+		// update the Ready condition based on the sub conditions
+		if instance.Status.Conditions.AllSubConditionIsTrue() {
+			instance.Status.Conditions.MarkTrue(
+				condition.ReadyCondition, condition.ReadyMessage)
+		} else {
+			// something is not ready so reset the Ready condition
+			instance.Status.Conditions.MarkUnknown(
+				condition.ReadyCondition, condition.InitReason, condition.ReadyInitMessage)
+			// and recalculate it based on the state of the rest of the conditions
+			instance.Status.Conditions.Set(
+				instance.Status.Conditions.Mirror(condition.ReadyCondition))
 		}
-
 		err := helper.PatchInstance(ctx, instance)
 		if err != nil {
 			_err = err
@@ -417,15 +424,14 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		return ctrl.Result{}, err
 	}
 
-	if instance.IsReady() {
+	if instance.Status.NumberReady == instance.Status.DesiredNumberScheduled {
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
 	}
 	// create DaemonSet - end
 
 	// create OVN Config Job - start
-	if instance.IsReady() {
+	if instance.Status.NumberReady == instance.Status.DesiredNumberScheduled {
 		jobsDef, err := ovncontroller.ConfigJob(ctx, helper, r.Client, instance, serviceLabels)
-		configChanged := false
 		if err != nil {
 			r.Log.Error(err, "Failed to create OVN controller configuration Job")
 			return ctrl.Result{}, err
@@ -466,18 +472,9 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 				return ctrl.Result{}, err
 			}
 			if configJob.HasChanged() {
-				configChanged = true
 				instance.Status.Hash[configHashKey] = configJob.GetHash()
 				r.Log.Info(fmt.Sprintf("Job %s hash added - %s", jobDef.Name, instance.Status.Hash[configHashKey]))
 			}
-		}
-		if configChanged {
-			defer func() {
-				if err := helper.PatchInstance(ctx, instance); err != nil {
-					r.Log.Error(err, fmt.Sprintf("Failed to patch status of %s", instance.Name))
-					return
-				}
-			}()
 		}
 		instance.Status.Conditions.MarkTrue(condition.ServiceConfigReadyCondition, condition.ServiceConfigReadyMessage)
 	} else {
