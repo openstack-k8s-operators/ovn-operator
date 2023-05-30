@@ -117,8 +117,8 @@ func init() {
 // IsReady - returns true if service is ready to server requests
 func (instance OVNNorthd) IsReady() bool {
 	// Ready when:
-	// there is at least a single pod to serve the OVN Northd service
-	return instance.Status.ReadyCount >= 1
+	// OVNNorthd is reconciled successfully
+	return instance.Status.Conditions.IsTrue(condition.ReadyCondition)
 }
 
 // RbacConditionsSet - set the conditions for the rbac object

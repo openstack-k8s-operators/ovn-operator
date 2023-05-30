@@ -94,7 +94,7 @@ func (r *OVNDBClusterReconciler) GetScheme() *runtime.Scheme {
 // +kubebuilder:rbac:groups="",resources=pods,verbs=create;delete;get;list;patch;update;watch
 
 // Reconcile - OVN DBCluster
-func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, _err error) {
 	_ = context.Background()
 	_ = r.Log.WithValues("ovndbcluster", req.NamespacedName)
 
@@ -118,6 +118,10 @@ func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		instance.Status.Conditions = condition.Conditions{}
 		// initialize conditions used later as Status=Unknown
 		cl := condition.CreateList(
+			condition.UnknownCondition(condition.InputReadyCondition, condition.InitReason, condition.InputReadyInitMessage),
+			condition.UnknownCondition(condition.ExposeServiceReadyCondition, condition.InitReason, condition.ExposeServiceReadyInitMessage),
+			condition.UnknownCondition(condition.ServiceConfigReadyCondition, condition.InitReason, condition.ServiceConfigReadyInitMessage),
+			condition.UnknownCondition(condition.NetworkAttachmentsReadyCondition, condition.InitReason, condition.NetworkAttachmentsReadyInitMessage),
 			condition.UnknownCondition(condition.DeploymentReadyCondition, condition.InitReason, condition.DeploymentReadyInitMessage),
 			condition.UnknownCondition(condition.ServiceAccountReadyCondition, condition.InitReason, condition.ServiceAccountReadyInitMessage),
 			condition.UnknownCondition(condition.RoleReadyCondition, condition.InitReason, condition.RoleReadyInitMessage),
@@ -151,21 +155,22 @@ func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	// Always patch the instance status when exiting this function so we can persist any changes.
 	defer func() {
-		// update the overall status condition if service is ready
-		if instance.IsReady() {
-			instance.Status.Conditions.MarkTrue(condition.ReadyCondition, condition.ReadyMessage)
+		// update the Ready condition based on the sub conditions
+		if instance.Status.Conditions.AllSubConditionIsTrue() {
+			instance.Status.Conditions.MarkTrue(
+				condition.ReadyCondition, condition.ReadyMessage)
+		} else {
+			// something is not ready so reset the Ready condition
+			instance.Status.Conditions.MarkUnknown(
+				condition.ReadyCondition, condition.InitReason, condition.ReadyInitMessage)
+			// and recalculate it based on the state of the rest of the conditions
+			instance.Status.Conditions.Set(
+				instance.Status.Conditions.Mirror(condition.ReadyCondition))
 		}
-
-		if err := helper.SetAfter(instance); err != nil {
-			util.LogErrorForObject(helper, err, "Set after and calc patch/diff", instance)
-		}
-
-		if changed := helper.GetChanges()["status"]; changed {
-			patch := client.MergeFrom(helper.GetBeforeObject())
-
-			if err := r.Status().Patch(ctx, instance, patch); err != nil && !k8s_errors.IsNotFound(err) {
-				util.LogErrorForObject(helper, err, "Update status", instance)
-			}
+		err := helper.PatchInstance(ctx, instance)
+		if err != nil {
+			_err = err
+			return
 		}
 	}()
 
@@ -406,18 +411,41 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	// Handle service init
 	ctrlResult, err = r.reconcileServices(ctx, instance, helper, serviceLabels, serviceName)
 	if err != nil {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.ExposeServiceReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.ExposeServiceReadyErrorMessage,
+			err.Error()))
 		return ctrlResult, err
 	} else if (ctrlResult != ctrl.Result{}) {
-		return ctrlResult, nil
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.ExposeServiceReadyCondition,
+			condition.RequestedReason,
+			condition.SeverityInfo,
+			condition.ExposeServiceReadyRunningMessage))
+		return ctrlResult, err
 	}
+
 	svcList, err := service.GetServicesListWithLabel(
 		ctx,
 		helper,
 		helper.GetBeforeObject().GetNamespace(),
 		serviceLabels,
 	)
-	if err == nil && instance.Status.ReadyCount > 0 && len(svcList.Items) > 0 {
+	if err != nil {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.ExposeServiceReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.ExposeServiceReadyErrorMessage,
+			err.Error()))
+		return ctrl.Result{}, err
+	}
+
+	if instance.Status.ReadyCount > 0 && len(svcList.Items) > 0 {
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
+		instance.Status.Conditions.MarkTrue(condition.ExposeServiceReadyCondition, condition.ExposeServiceReadyMessage)
 		dbAddress := []string{}
 		internalDbAddress := []string{}
 		raftAddress := []string{}
@@ -444,7 +472,6 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 					dbAddress = append(dbAddress, fmt.Sprintf("tcp:%s:%d", instanceIP, svcPort))
 				}
 			}
-
 		}
 
 		// Set DB Addresses
