@@ -113,8 +113,10 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.OVNControllerReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:  mgr.GetClient(),
+		Kclient: kclient,
+		Scheme:  mgr.GetScheme(),
+		Log:     ctrl.Log.WithName("controllers").WithName("OVNController"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OVNController")
 		os.Exit(1)
