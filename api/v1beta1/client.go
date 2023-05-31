@@ -26,9 +26,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+)
 
-	appsv1 "k8s.io/api/apps/v1"
-	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
+const (
+	expectedNumDBClusters = 2
 )
 
 // GetDBEndpoints - get DB Endpoints
@@ -54,16 +55,12 @@ func GetDBEndpoints(
 		return nil, err
 	}
 
-	if len(ovnDBList.Items) > 2 {
-		return nil, fmt.Errorf("more then two OVNDBCluster object found in namespace %s", namespace)
+	numDBClusters := len(ovnDBList.Items)
+	if numDBClusters != expectedNumDBClusters {
+		return nil, fmt.Errorf("Invalid number of OVNDBCluster objects found in namespace %s. " +
+		                       "Expected %d, got %d.", namespace, expectedNumDBClusters, numDBClusters)
 	}
 
-	if len(ovnDBList.Items) == 0 {
-		return nil, k8s_errors.NewNotFound(
-			appsv1.Resource("OVNDBCluster"),
-			fmt.Sprintf("No OVNDBCluster object found in namespace %s", namespace),
-		)
-	}
 	DBEndpointsMap := make(map[string]string)
 	for _, ovndb := range ovnDBList.Items {
 		if ovndb.Status.InternalDBAddress == "" {
