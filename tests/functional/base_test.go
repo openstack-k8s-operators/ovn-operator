@@ -175,12 +175,7 @@ func SimulateDaemonsetNumberReady(name types.NamespacedName) {
 }
 
 func GetDefaultOVNControllerSpec() map[string]interface{} {
-	return map[string]interface{}{
-		// Default external Ids not picked up
-		"external-ids": map[string]interface{}{
-			"ovn-encap-type": "geneve",
-		},
-	}
+	return map[string]interface{}{}
 }
 
 func CreateOVNController(namespace string, OVNControllerName string, spec map[string]interface{}) client.Object {
@@ -192,7 +187,9 @@ func CreateOVNController(namespace string, OVNControllerName string, spec map[st
 			"name":      OVNControllerName,
 			"namespace": namespace,
 		},
-		"spec": spec,
+	}
+	if len(spec) != 0 {
+		raw["spec"] = spec
 	}
 	return th.CreateUnstructured(raw)
 }
