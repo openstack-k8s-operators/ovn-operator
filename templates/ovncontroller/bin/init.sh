@@ -19,7 +19,7 @@ OvnBridge=${OvnBridge:-"br-int"}
 OvnRemote=${OvnRemote:-"tcp:127.0.0.1:6642"}
 OvnEncapType=${OvnEncapType:-"geneve"}
 OvnEncapNIC=${OvnEncapNIC:="eth0"}
-EnableChassisAsGateway=${EnableChassisAsGateway:-false}
+EnableChassisAsGateway=${EnableChassisAsGateway:-true}
 PhysicalNetworks=${PhysicalNetworks:-""}
 OvnHostName=${OvnHostName:-""}
 OvnEncapIP=$(ip -o addr show dev ${OvnEncapNIC} scope global | awk '{print $4}' | cut -d/ -f1)
