@@ -128,7 +128,9 @@ type OVSExternalIDs struct {
 	// OvnEncapType - geneve or vxlan
 	OvnEncapType string `json:"ovn-encap-type"`
 
-	EnableChassisAsGateway bool `json:"enable-chassis-as-gateway,omitempty" optional:"true"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=true
+	EnableChassisAsGateway bool `json:"enable-chassis-as-gateway"`
 }
 
 // RbacConditionsSet - set the conditions for the rbac object

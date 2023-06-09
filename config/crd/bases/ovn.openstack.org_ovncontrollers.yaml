@@ -40,6 +40,7 @@ spec:
                   OVS external-ids table
                 properties:
                   enable-chassis-as-gateway:
+                    default: true
                     type: boolean
                   ovn-bridge:
                     type: string
