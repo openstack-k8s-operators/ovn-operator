@@ -53,12 +53,10 @@ function configure_external_ids {
 # Configure bridge mappings and physical bridges
 function configure_physical_networks {
     local OvnBridgeMappings=""
-    local net_number=1
     for physicalNetwork in ${PhysicalNetworks}; do
         br_name="br-${physicalNetwork}"
         ovs-vsctl --may-exist add-br ${br_name}
-        ovs-vsctl --may-exist add-port ${br_name} net${net_number}
-        net_number=$(( net_number+1 ))
+        ovs-vsctl --may-exist add-port ${br_name} ${physicalNetwork}
         bridgeMapping="${physicalNetwork}:${br_name}"
         if [ -z "$OvnBridgeMappings"]; then
             OvnBridgeMappings=$bridgeMapping
