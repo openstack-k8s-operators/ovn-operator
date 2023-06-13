@@ -1,6 +1,6 @@
-#!/bin//bash
+#!/bin/sh
 #
-# Copyright 2022 Red Hat Inc.
+# Copyright 2023 Red Hat Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -14,12 +14,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+OvnEncapIP=$(ip -o addr show dev {{ .OvnEncapNIC }} scope global | awk '{print $4}' | cut -d/ -f1)
+
 source $(dirname $0)/functions
 
 wait_for_ovsdb_server
 
-# From now on, we should exit immediatelly when any command exits with non-zero status
 set -ex
-
-configure_external_ids
-configure_physical_networks
+ovs-vsctl set open . external-ids:ovn-encap-ip=${OvnEncapIP}

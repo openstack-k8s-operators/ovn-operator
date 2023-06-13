@@ -498,14 +498,21 @@ func (r *OVNControllerReconciler) generateServiceConfigMaps(
 	// Create/update configmaps from templates
 	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovncontroller.ServiceName), map[string]string{})
 
+	templateParameters := make(map[string]interface{})
+	if instance.Spec.NetworkAttachment != "" {
+		templateParameters["OvnEncapNIC"] = nad.GetNetworkIFName(instance.Spec.NetworkAttachment)
+	} else {
+		templateParameters["OvnEncapNIC"] = "eth0"
+	}
 	cms := []util.Template{
 		// ScriptsConfigMap
 		{
-			Name:         fmt.Sprintf("%s-scripts", instance.Name),
-			Namespace:    instance.Namespace,
-			Type:         util.TemplateTypeScripts,
-			InstanceType: instance.Kind,
-			Labels:       cmLabels,
+			Name:          fmt.Sprintf("%s-scripts", instance.Name),
+			Namespace:     instance.Namespace,
+			Type:          util.TemplateTypeScripts,
+			InstanceType:  instance.Kind,
+			Labels:        cmLabels,
+			ConfigOptions: templateParameters,
 		},
 	}
 	return configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
