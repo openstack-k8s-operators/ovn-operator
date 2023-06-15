@@ -15,7 +15,6 @@ metadata:
   finalizers:
   - OVNNorthd
   name: ovnnorthd-sample
-  namespace: openstack
 ---
 apiVersion: ovn.openstack.org/v1beta1
 kind: OVNDBCluster
@@ -23,7 +22,6 @@ metadata:
   finalizers:
   - OVNDBCluster
   name: ovndbcluster-nb-sample
-  namespace: openstack
 ---
 apiVersion: ovn.openstack.org/v1beta1
 kind: OVNDBCluster
@@ -31,7 +29,6 @@ metadata:
   finalizers:
   - OVNDBCluster
   name: ovndbcluster-sb-sample
-  namespace: openstack
 ---
 apiVersion: ovn.openstack.org/v1beta1
 kind: OVNController
@@ -39,19 +36,16 @@ metadata:
   finalizers:
   - OVNController
   name: ovncontroller-sample
-  namespace: openstack
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ovn-northd
-  namespace: openstack
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: ovncontroller
-  namespace: openstack
 ---
 # the openshift annotations can't be checked through the deployment above
 apiVersion: v1
@@ -89,7 +83,6 @@ metadata:
   labels:
     service: ovsdbserver-nb
   name: ovsdbserver-nb
-  namespace: openstack
 ---
 apiVersion: v1
 kind: Service
@@ -98,7 +91,6 @@ metadata:
     service: ovsdbserver-nb
     statefulset.kubernetes.io/pod-name: ovsdbserver-nb-0
   name: ovsdbserver-nb-0
-  namespace: openstack
 ---
 apiVersion: v1
 kind: Service
@@ -106,7 +98,6 @@ metadata:
   labels:
     service: ovsdbserver-sb
   name: ovsdbserver-sb
-  namespace: openstack
 ---
 apiVersion: v1
 kind: Service
@@ -115,4 +106,3 @@ metadata:
     service: ovsdbserver-sb
     statefulset.kubernetes.io/pod-name: ovsdbserver-sb-0
   name: ovsdbserver-sb-0
-  namespace: openstack

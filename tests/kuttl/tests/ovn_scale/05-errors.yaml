@@ -8,4 +8,3 @@ kind: Pod
 metadata:
   labels:
     service: ovncontroller
-  namespace: openstack
