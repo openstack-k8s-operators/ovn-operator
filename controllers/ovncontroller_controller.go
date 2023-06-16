@@ -443,7 +443,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 				jobDef,
 				configHashKey,
 				false,
-				5,
+				time.Duration(5)*time.Second,
 				configHash,
 			)
 			ctrlResult, err = configJob.DoJob(ctx, helper)
