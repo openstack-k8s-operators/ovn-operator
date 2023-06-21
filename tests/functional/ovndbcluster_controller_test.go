@@ -154,7 +154,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 
 			// We don't add network attachment status annotations to the Pods
 			// to simulate that the network attachments are missing.
-			SimulateStatefulSetReplicaReadyWithPods(statefulSetName, map[string][]string{})
+			th.SimulateStatefulSetReplicaReadyWithPods(statefulSetName, map[string][]string{})
 
 			th.ExpectConditionWithDetails(
 				OVNDBClusterName,
@@ -191,7 +191,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 
 			// We simulate that there is no IP associated with the internalapi
 			// network attachment
-			SimulateStatefulSetReplicaReadyWithPods(
+			th.SimulateStatefulSetReplicaReadyWithPods(
 				statefulSetName,
 				map[string][]string{namespace + "/internalapi": {}},
 			)
@@ -215,7 +215,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 				Namespace: namespace,
 				Name:      "ovsdbserver-sb",
 			}
-			SimulateStatefulSetReplicaReadyWithPods(
+			th.SimulateStatefulSetReplicaReadyWithPods(
 				statefulSetName,
 				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
 			)

@@ -190,7 +190,7 @@ var _ = Describe("OVNNorthd controller", func() {
 
 			// We don't add network attachment status annotations to the Pods
 			// to simulate that the network attachments are missing.
-			//SimulateDeploymentReplicaReadyWithPods(statefulSetName, map[string][]string{})
+			//th.SimulateDeploymentReadyWithPods(statefulSetName, map[string][]string{})
 
 			th.ExpectConditionWithDetails(
 				OVNNorthdName,
@@ -227,7 +227,7 @@ var _ = Describe("OVNNorthd controller", func() {
 
 			// We simulate that there is no IP associated with the internalapi
 			// network attachment
-			SimulateDeploymentReplicaReadyWithPods(
+			th.SimulateDeploymentReadyWithPods(
 				statefulSetName,
 				map[string][]string{namespace + "/internalapi": {}},
 			)
@@ -251,7 +251,7 @@ var _ = Describe("OVNNorthd controller", func() {
 				Namespace: namespace,
 				Name:      "ovn-northd",
 			}
-			SimulateDeploymentReplicaReadyWithPods(
+			th.SimulateDeploymentReadyWithPods(
 				statefulSetName,
 				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
 			)
