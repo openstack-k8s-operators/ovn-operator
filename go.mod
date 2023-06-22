@@ -9,12 +9,12 @@ require (
 	github.com/onsi/ginkgo/v2 v2.11.0
 	github.com/onsi/gomega v1.27.8
 	github.com/openshift/api v3.9.0+incompatible
-	github.com/openstack-k8s-operators/lib-common/modules/common v0.0.0-20230613062027-d886a7879256
-	github.com/openstack-k8s-operators/lib-common/modules/test v0.0.0-20230613062027-d886a7879256
-	github.com/openstack-k8s-operators/lib-common/modules/test-operators v0.0.0-20230613062027-d886a7879256
+	github.com/openstack-k8s-operators/lib-common/modules/common v0.0.0-20230619102827-49e72f626a11
+	github.com/openstack-k8s-operators/lib-common/modules/test v0.0.0-20230619102827-49e72f626a11
+	github.com/openstack-k8s-operators/lib-common/modules/test-operators v0.0.0-20230619102827-49e72f626a11
 	github.com/openstack-k8s-operators/ovn-operator/api v0.0.0-20230418071801-b5843d9e05fb
 	go.uber.org/zap v1.24.0
-	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc
+	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	k8s.io/api v0.26.3
 	k8s.io/apimachinery v0.26.3
 	k8s.io/client-go v0.26.3
