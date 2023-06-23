@@ -29,8 +29,8 @@ func getPhysicalNetworks(
 ) string {
 	// NOTE(slaweq): to make things easier, each physical bridge will have
 	//               the same name as "br-<physical network>"
-	// NOTE(slaweq): interface names aren't important as inside Pod they will have
-	//               names like "net1, net2..." so only order is important really
+	// NOTE(slaweq): interface names aren't important as inside Pod they will be
+	//               named based on the NicMappings keys
 	return strings.Join(
 		maps.Keys(instance.Spec.NicMappings), " ",
 	)
