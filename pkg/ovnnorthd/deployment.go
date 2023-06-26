@@ -35,7 +35,6 @@ func Deployment(
 	labels map[string]string,
 	annotations map[string]string,
 ) *appsv1.Deployment {
-	runAsUser := int64(0)
 
 	livenessProbe := &corev1.Probe{
 		// TODO might need tuning
@@ -92,11 +91,8 @@ func Deployment(
 							Command: []string{
 								"/bin/bash",
 							},
-							Args:  args,
-							Image: instance.Spec.ContainerImage,
-							SecurityContext: &corev1.SecurityContext{
-								RunAsUser: &runAsUser,
-							},
+							Args:                     args,
+							Image:                    instance.Spec.ContainerImage,
 							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
 							VolumeMounts:             GetNorthdVolumeMounts(),
 							Resources:                instance.Spec.Resources,

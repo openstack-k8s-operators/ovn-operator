@@ -39,7 +39,6 @@ func StatefulSet(
 	labels map[string]string,
 	annotations map[string]string,
 ) *appsv1.StatefulSet {
-	runAsUser := int64(0)
 
 	livenessProbe := &corev1.Probe{
 		// TODO might need tuning
@@ -117,11 +116,8 @@ func StatefulSet(
 							Command: []string{
 								"/bin/bash",
 							},
-							Args:  args,
-							Image: instance.Spec.ContainerImage,
-							SecurityContext: &corev1.SecurityContext{
-								RunAsUser: &runAsUser,
-							},
+							Args:                     args,
+							Image:                    instance.Spec.ContainerImage,
 							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
 							VolumeMounts:             GetDBClusterVolumeMounts(instance.Name + PvcSuffixEtcOvn),
 							Resources:                instance.Spec.Resources,
