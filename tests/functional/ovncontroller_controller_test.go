@@ -78,27 +78,46 @@ var _ = Describe("OVNController controller", func() {
 		})
 
 		When("OVNDBCluster instances are available", func() {
-			It("should create a ConfigMap for init.sh with the ovn remote config option set based on the OVNDBCluster", func() {
-				dbs := CreateOVNDBClusters(namespace)
+			var scriptsCM types.NamespacedName
+			var dbs []types.NamespacedName
+			BeforeEach(func() {
+				dbs = CreateOVNDBClusters(namespace)
 				DeferCleanup(DeleteOVNDBClusters, dbs)
 				daemonSetName := types.NamespacedName{
 					Namespace: namespace,
 					Name:      "ovn-controller",
 				}
 				SimulateDaemonsetNumberReady(daemonSetName)
-				scriptsCM := types.NamespacedName{
+				scriptsCM = types.NamespacedName{
 					Namespace: OVNControllerName.Namespace,
 					Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "scripts"),
 				}
+			})
 
+			It("should create a ConfigMap for init.sh with the ovn remote config option set based on the OVNDBCluster", func() {
 				Eventually(func() corev1.ConfigMap {
 					return *th.GetConfigMap(scriptsCM)
 				}, timeout, interval).ShouldNot(BeNil())
 				for _, db := range dbs {
 					ovndb := GetOVNDBCluster(db)
-					Expect(th.GetConfigMap(scriptsCM).Data["init.sh"]).Should(
+					Expect(th.GetConfigMap(scriptsCM).Data["functions"]).Should(
 						ContainSubstring("ovn-remote=%s", ovndb.Status.DBAddress))
 				}
+
+				th.ExpectCondition(
+					OVNControllerName,
+					ConditionGetterFunc(OVNControllerConditionGetter),
+					condition.ServiceConfigReadyCondition,
+					corev1.ConditionTrue,
+				)
+			})
+			It("should create a ConfigMap for net_setup.sh with eth0 as Interface Name", func() {
+				Eventually(func() corev1.ConfigMap {
+					return *th.GetConfigMap(scriptsCM)
+				}, timeout, interval).ShouldNot(BeNil())
+
+				Expect(th.GetConfigMap(scriptsCM).Data["net_setup.sh"]).Should(
+					ContainSubstring("addr show dev eth0"))
 
 				th.ExpectCondition(
 					OVNControllerName,
@@ -260,6 +279,23 @@ var _ = Describe("OVNController controller", func() {
 					Equal(map[string][]string{namespace + "/internalapi": {"10.0.0.1"}}))
 
 			}, timeout, interval).Should(Succeed())
+		})
+		It("should create a ConfigMap for net_setup.sh with nic name as Network Attachment", func() {
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+			scriptsCM := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "scripts"),
+			}
+
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(scriptsCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			ovncontroller := GetOVNController(OVNControllerName)
+			Expect(th.GetConfigMap(scriptsCM).Data["net_setup.sh"]).Should(
+				ContainSubstring("addr show dev %s", ovncontroller.Spec.NetworkAttachment))
 		})
 	})
 

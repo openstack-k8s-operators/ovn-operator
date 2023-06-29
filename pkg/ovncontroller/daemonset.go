@@ -152,7 +152,7 @@ func DaemonSet(
 								"/bin/bash", "-c",
 							},
 							Args: []string{
-								"ovn-controller --pidfile unix:/run/openvswitch/db.sock",
+								"/usr/local/bin/container-scripts/net_setup.sh && ovn-controller --pidfile unix:/run/openvswitch/db.sock",
 							},
 							Lifecycle: &corev1.Lifecycle{
 								PreStop: &corev1.LifecycleHandler{
