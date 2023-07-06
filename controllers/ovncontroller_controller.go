@@ -189,6 +189,9 @@ func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&batchv1.Job{}).
 		Owns(&netattdefv1.NetworkAttachmentDefinition{}).
 		Owns(&appsv1.DaemonSet{}).
+		Owns(&corev1.ServiceAccount{}).
+		Owns(&rbacv1.Role{}).
+		Owns(&rbacv1.RoleBinding{}).
 		Watches(&source.Kind{Type: &v1beta1.OVNDBCluster{}}, handler.EnqueueRequestsFromMapFunc(v1beta1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), r.Log))).
 		Complete(r)
 }
