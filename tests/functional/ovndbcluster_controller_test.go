@@ -44,7 +44,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 
 		It("should have the Spec fields initialized", func() {
 			OVNDBCluster := GetOVNDBCluster(OVNDBClusterName)
-			Expect(OVNDBCluster.Spec.Replicas).Should(Equal(int32(1)))
+			Expect(*(OVNDBCluster.Spec.Replicas)).Should(Equal(int32(1)))
 			Expect(OVNDBCluster.Spec.LogLevel).Should(Equal("info"))
 			Expect(OVNDBCluster.Spec.DBType).Should(Equal("NB"))
 		})

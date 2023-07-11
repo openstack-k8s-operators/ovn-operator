@@ -3,6 +3,5 @@ kind: OVNNorthd
 metadata:
   name: ovnnorthd-sample
 spec:
-  replicas: 1
   containerImage: quay.io/podified-antelope-centos9/openstack-ovn-northd:current-podified
   logLevel: info

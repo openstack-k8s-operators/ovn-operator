@@ -547,8 +547,8 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 		helper.GetBeforeObject().GetNamespace(),
 		serviceLabels,
 	)
-	if err == nil && len(svcList.Items) > int(instance.Spec.Replicas) {
-		for i := len(svcList.Items) - 1; i >= int(instance.Spec.Replicas); i-- {
+	if err == nil && len(svcList.Items) > int(*(instance.Spec.Replicas)) {
+		for i := len(svcList.Items) - 1; i >= int(*(instance.Spec.Replicas)); i-- {
 			svcLabels := map[string]string{
 				common.AppSelector:                   serviceName,
 				"statefulset.kubernetes.io/pod-name": serviceName + fmt.Sprintf("-%d", i),

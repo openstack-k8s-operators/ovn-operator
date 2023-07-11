@@ -103,7 +103,7 @@ func StatefulSet(
 				MatchLabels: labels,
 			},
 			ServiceName: serviceName,
-			Replicas:    &instance.Spec.Replicas,
+			Replicas:    instance.Spec.Replicas,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: annotations,
