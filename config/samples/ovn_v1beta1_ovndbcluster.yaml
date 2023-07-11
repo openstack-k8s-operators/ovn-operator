@@ -3,7 +3,6 @@ kind: OVNDBCluster
 metadata:
   name: ovndbcluster-nb-sample
 spec:
-  containerImage: quay.io/podified-antelope-centos9/openstack-ovn-nb-db-server:current-podified
   logLevel: info
   storageRequest: 10G
   storageClass: local-storage
@@ -14,7 +13,6 @@ kind: OVNDBCluster
 metadata:
   name: ovndbcluster-sb-sample
 spec:
-  containerImage: quay.io/podified-antelope-centos9/openstack-ovn-sb-db-server:current-podified
   logLevel: info
   storageRequest: 10G
   storageClass: local-storage
