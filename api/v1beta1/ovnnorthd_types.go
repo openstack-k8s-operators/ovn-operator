@@ -49,7 +49,7 @@ type OVNNorthdSpec struct {
 	// +kubebuilder:validation:Maximum=32
 	// +kubebuilder:validation:Minimum=0
 	// Replicas of OVN Northd to run
-	Replicas int32 `json:"replicas"`
+	Replicas *int32 `json:"replicas"`
 
 	// +kubebuilder:validation:Optional
 	// NodeSelector to target subset of worker nodes running this service

@@ -45,7 +45,7 @@ var _ = Describe("OVNNorthd controller", func() {
 
 		It("should have the Spec fields initialized", func() {
 			OVNNorthd := GetOVNNorthd(OVNNorthdName)
-			Expect(OVNNorthd.Spec.Replicas).Should(Equal(int32(1)))
+			Expect(*(OVNNorthd.Spec.Replicas)).Should(Equal(int32(1)))
 		})
 
 		It("should have the Status fields initialized", func() {
