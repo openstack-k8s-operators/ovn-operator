@@ -30,14 +30,6 @@ const (
 	OvnNorthdContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-northd:current-podified"
 )
 
-// Hash - struct to add hashes to status
-type Hash struct {
-	// Name of hash referencing the parameter
-	Name string `json:"name,omitempty"`
-	// Hash
-	Hash string `json:"hash,omitempty"`
-}
-
 // OVNNorthdSpec defines the desired state of OVNNorthd
 type OVNNorthdSpec struct {
 	// +kubebuilder:validation:Required
