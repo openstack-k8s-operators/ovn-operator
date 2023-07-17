@@ -150,6 +150,44 @@ var _ = Describe("OVNController controller", func() {
 
 	})
 
+	When("A OVNController instance is created with debug on", func() {
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
+			spec := GetDefaultOVNControllerSpec()
+			spec["debug"] = map[string]interface{}{
+				"service": true,
+			}
+			instance := CreateOVNController(namespace, name, spec)
+			DeferCleanup(th.DeleteInstance, instance)
+		})
+
+		It("Container commands to include debug commands", func() {
+			dsName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			ds := GetDaemonSet(dsName)
+			Expect(ds.Spec.Template.Spec.Containers).To(HaveLen(3))
+			Expect(ds.Spec.Template.Spec.Containers[0].LivenessProbe.Exec.Command).To(
+				Equal([]string{"/bin/true"}))
+			Expect(ds.Spec.Template.Spec.Containers[0].Command[0]).Should(ContainSubstring("sleep infinity"))
+			Expect(ds.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(
+				Equal([]string{"/bin/true"}))
+
+			Expect(ds.Spec.Template.Spec.Containers[1].LivenessProbe.Exec.Command).To(
+				Equal([]string{"/bin/true"}))
+			Expect(ds.Spec.Template.Spec.Containers[1].Command[0]).Should(ContainSubstring("sleep infinity"))
+			Expect(ds.Spec.Template.Spec.Containers[1].Lifecycle.PreStop.Exec.Command).To(
+				Equal([]string{"/bin/true"}))
+
+			Expect(ds.Spec.Template.Spec.Containers[2].Args[0]).Should(ContainSubstring("sleep infinity"))
+			Expect(ds.Spec.Template.Spec.Containers[2].Lifecycle.PreStop.Exec.Command).To(
+				Equal([]string{"/bin/true"}))
+		})
+	})
+
 	When("OVNController is created with networkAttachments", func() {
 		var OVNControllerName types.NamespacedName
 		BeforeEach(func() {

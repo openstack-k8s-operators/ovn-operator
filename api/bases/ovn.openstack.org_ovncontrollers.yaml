@@ -35,6 +35,16 @@ spec:
           spec:
             description: OVNControllerSpec defines the desired state of OVNController
             properties:
+              debug:
+                description: Debug - enable debug for different deploy stages. If
+                  an init container is used, it runs and the actual action pod gets
+                  started with sleep infinity
+                properties:
+                  service:
+                    default: false
+                    description: Service enable debug
+                    type: boolean
+                type: object
               external-ids:
                 description: OVSExternalIDs is a set of configuration options for
                   OVS external-ids table

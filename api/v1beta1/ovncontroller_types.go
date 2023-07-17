@@ -49,6 +49,11 @@ type OVNControllerSpec struct {
 	OvnContainerImage string `json:"ovnContainerImage"`
 
 	// +kubebuilder:validation:Optional
+	// Debug - enable debug for different deploy stages. If an init container is used, it runs and the
+	// actual action pod gets started with sleep infinity
+	Debug OVNControllerdDebug `json:"debug,omitempty"`
+
+	// +kubebuilder:validation:Optional
 	// +optional
 	NicMappings map[string]string `json:"nicMappings,omitempty"`
 
@@ -65,6 +70,14 @@ type OVNControllerSpec struct {
 	// NetworkAttachment is a NetworkAttachment resource name to expose the service to the given network.
 	// If specified the IP address of this network is used as the OvnEncapIP.
 	NetworkAttachment string `json:"networkAttachment"`
+}
+
+// OVNControllerdDebug defines the observed state of OVNControllerdDebug
+type OVNControllerdDebug struct {
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=false
+	// Service enable debug
+	Service bool `json:"service"`
 }
 
 // OVNControllerStatus defines the observed state of OVNController
