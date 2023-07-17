@@ -50,17 +50,31 @@ func Deployment(
 		InitialDelaySeconds: 5,
 	}
 
-	args := []string{"-c"}
-	args = append(args, ServiceCommand)
-	//
-	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
-	//
-	livenessProbe.Exec = &corev1.ExecAction{
-		Command: []string{
-			"/usr/bin/pidof", "ovn-northd",
-		},
+	noopCmd := []string{
+		"/bin/true",
 	}
-	readinessProbe.Exec = livenessProbe.Exec
+	args := []string{"-c"}
+	if instance.Spec.Debug.Service {
+		args = append(args, common.DebugCommand)
+		livenessProbe.Exec = &corev1.ExecAction{
+			Command: noopCmd,
+		}
+
+		readinessProbe.Exec = &corev1.ExecAction{
+			Command: noopCmd,
+		}
+	} else {
+		args = append(args, ServiceCommand)
+		//
+		// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+		//
+		livenessProbe.Exec = &corev1.ExecAction{
+			Command: []string{
+				"/usr/bin/pidof", "ovn-northd",
+			},
+		}
+		readinessProbe.Exec = livenessProbe.Exec
+	}
 
 	envVars := map[string]env.Setter{}
 	envVars["KOLLA_CONFIG_FILE"] = env.SetValue(KollaConfigOVNNorthd)

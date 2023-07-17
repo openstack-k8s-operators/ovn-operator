@@ -52,6 +52,11 @@ type OVNNorthdSpec struct {
 	Replicas *int32 `json:"replicas"`
 
 	// +kubebuilder:validation:Optional
+	// Debug - enable debug for different deploy stages. If an init container is used, it runs and the
+	// actual action pod gets started with sleep infinity
+	Debug OVNNorthdDebug `json:"debug,omitempty"`
+
+	// +kubebuilder:validation:Optional
 	// NodeSelector to target subset of worker nodes running this service
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 
@@ -69,6 +74,14 @@ type OVNNorthdSpec struct {
 	// NetworkAttachment is a NetworkAttachment resource name to expose the service to the given network.
 	// If specified the IP address of this network is used as the dbAddress connection.
 	NetworkAttachment string `json:"networkAttachment"`
+}
+
+// OVNNorthdDebug defines the observed state of NeutronAPIDebug
+type OVNNorthdDebug struct {
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=false
+	// Service enable debug
+	Service bool `json:"service"`
 }
 
 // OVNNorthdStatus defines the observed state of OVNNorthd

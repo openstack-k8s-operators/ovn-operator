@@ -142,6 +142,34 @@ var _ = Describe("OVNNorthd controller", func() {
 
 	})
 
+	When("A OVNNorthd instance is created with debug on", func() {
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			name := fmt.Sprintf("ovnnorthd-%s", uuid.New().String())
+			spec := GetDefaultOVNNorthdSpec()
+			spec["debug"] = map[string]interface{}{
+				"service": true,
+			}
+			instance := CreateOVNNorthd(namespace, name, spec)
+			DeferCleanup(th.DeleteInstance, instance)
+		})
+
+		It("Container commands to include debug commands", func() {
+			deplName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-northd",
+			}
+			depl := th.GetDeployment(deplName)
+			Expect(depl.Spec.Template.Spec.Containers).To(HaveLen(1))
+			Expect(depl.Spec.Template.Spec.Containers[0].LivenessProbe.Exec.Command).To(
+				Equal([]string{"/bin/true"}))
+			Expect(depl.Spec.Template.Spec.Containers[0].ReadinessProbe.Exec.Command).To(
+				Equal([]string{"/bin/true"}))
+			Expect(depl.Spec.Template.Spec.Containers[0].Args[1]).Should(ContainSubstring("sleep infinity"))
+		})
+	})
+
 	When("OVNNorthd is created with networkAttachments", func() {
 		var OVNNorthdName types.NamespacedName
 		BeforeEach(func() {
