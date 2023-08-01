@@ -62,12 +62,19 @@ var _ = Describe("OVNController controller", func() {
 			}, timeout, interval).Should(ContainElement("OVNController"))
 		})
 
-		It("should not create a config map", func() {
+		It("should not create a scripts config map", func() {
 			Eventually(func() []corev1.ConfigMap {
 				return th.ListConfigMaps(fmt.Sprintf("%s-%s", OVNControllerName.Name, "scripts")).Items
 			}, timeout, interval).Should(BeEmpty())
 		})
 
+		It("should not create an external config map", func() {
+			Eventually(func() []corev1.ConfigMap {
+				return th.ListConfigMaps(fmt.Sprintf("%s-%s", OVNControllerName.Name, "config")).Items
+			}, timeout, interval).Should(BeEmpty())
+		})
+
+		// TODO(ihar) introduce a new condition for the external config?
 		It("should be in input ready condition", func() {
 			th.ExpectCondition(
 				OVNControllerName,
@@ -125,6 +132,12 @@ var _ = Describe("OVNController controller", func() {
 					condition.ServiceConfigReadyCondition,
 					corev1.ConditionTrue,
 				)
+			})
+
+			It("should not create an external config map", func() {
+				Eventually(func() []corev1.ConfigMap {
+					return th.ListConfigMaps(fmt.Sprintf("%s-%s", OVNControllerName.Name, "config")).Items
+				}, timeout, interval).Should(BeEmpty())
 			})
 		})
 
@@ -190,9 +203,13 @@ var _ = Describe("OVNController controller", func() {
 
 	When("OVNController is created with networkAttachments", func() {
 		var OVNControllerName types.NamespacedName
+		var dbs []types.NamespacedName
+
 		BeforeEach(func() {
-			dbs := CreateOVNDBClusters(namespace)
-			DeferCleanup(DeleteOVNDBClusters, dbs)
+			dbs = CreateOVNDBClusters(namespace)
+			for _, db := range dbs {
+				DeferCleanup(th.DeleteInstance, GetOVNDBCluster(db))
+			}
 			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
 			spec := GetDefaultOVNControllerSpec()
 			spec["networkAttachment"] = "internalapi"
@@ -335,6 +352,131 @@ var _ = Describe("OVNController controller", func() {
 			Expect(th.GetConfigMap(scriptsCM).Data["net_setup.sh"]).Should(
 				ContainSubstring("addr show dev %s", ovncontroller.Spec.NetworkAttachment))
 		})
+		It("should create an external ConfigMap with expected key-value pairs", func() {
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+			externalCM := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "config"),
+			}
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+			externalSBEndpoint := "10.0.0.254"
+			SetExternalEndpoint(dbs[1], externalSBEndpoint)
+
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(externalCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+				ContainSubstring("ovn-remote: %s", externalSBEndpoint))
+			Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+				ContainSubstring("ovn-encap-type: %s", "geneve"))
+		})
+
+		It("should delete an external ConfigMap once SB DBCluster is deleted", func() {
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+			externalCM := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "config"),
+			}
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+			externalSBEndpoint := "10.0.0.254"
+			SetExternalEndpoint(dbs[1], externalSBEndpoint)
+
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(externalCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			DeleteOVNDBClusters(dbs)
+			Eventually(func() []corev1.ConfigMap {
+				return th.ListConfigMaps(fmt.Sprintf("%s-%s", OVNControllerName.Name, "config")).Items
+			}, timeout, interval).Should(BeEmpty())
+		})
+
+		It("should delete an external ConfigMap once SB DBCluster is detached from NAD", func() {
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+			externalCM := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "config"),
+			}
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+			externalSBEndpoint := "10.0.0.254"
+			SetExternalEndpoint(dbs[1], externalSBEndpoint)
+
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(externalCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			SetExternalEndpoint(dbs[1], "")
+			Eventually(func() []corev1.ConfigMap {
+				return th.ListConfigMaps(fmt.Sprintf("%s-%s", OVNControllerName.Name, "config")).Items
+			}, timeout, interval).Should(BeEmpty())
+		})
+
+		It("should update the external ConfigMap once SB DBCluster is updated", func() {
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+			externalCM := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "config"),
+			}
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+			externalSBEndpoint := "10.0.0.254"
+			SetExternalEndpoint(dbs[1], externalSBEndpoint)
+
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(externalCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+				ContainSubstring("ovn-remote: %s", externalSBEndpoint))
+
+			newExternalSBEndpoint := "10.0.0.250"
+			SetExternalEndpoint(dbs[1], newExternalSBEndpoint)
+
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-remote: %s", newExternalSBEndpoint))
+			}, timeout, interval).Should(Succeed())
+		})
 	})
 
 	When("OVNController is created with nic configs", func() {
@@ -450,5 +592,4 @@ var _ = Describe("OVNController controller", func() {
 			)
 		})
 	})
-
 })

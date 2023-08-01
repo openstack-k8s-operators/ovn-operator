@@ -21,7 +21,6 @@ import (
 	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	ovnclient "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,6 +32,7 @@ func ConfigJob(
 	h *helper.Helper,
 	k8sClient client.Client,
 	instance *v1beta1.OVNController,
+	sbCluster *v1beta1.OVNDBCluster,
 	labels map[string]string,
 ) ([]*batchv1.Job, error) {
 
@@ -43,11 +43,6 @@ func ConfigJob(
 	// configuration job automatically right after it will be finished
 	jobTTLAfterFinished := int32(0)
 
-	dbmap, err := ovnclient.GetDBEndpoints(ctx, h, instance.Namespace, map[string]string{})
-	if err != nil {
-		return nil, err
-	}
-
 	ovsNodes, err := getOvsPodsNodes(
 		ctx,
 		k8sClient,
@@ -57,9 +52,14 @@ func ConfigJob(
 		return nil, err
 	}
 
+	internalEndpoint, err := sbCluster.GetInternalEndpoint()
+	if err != nil {
+		return nil, err
+	}
+
 	envVars := map[string]env.Setter{}
 	envVars["OvnBridge"] = env.SetValue(instance.Spec.ExternalIDS.OvnBridge)
-	envVars["OvnRemote"] = env.SetValue(dbmap["internal-SB"])
+	envVars["OvnRemote"] = env.SetValue(internalEndpoint)
 	envVars["OvnEncapType"] = env.SetValue(instance.Spec.ExternalIDS.OvnEncapType)
 	envVars["EnableChassisAsGateway"] = env.SetValue(fmt.Sprintf("%t", instance.Spec.ExternalIDS.EnableChassisAsGateway))
 	envVars["PhysicalNetworks"] = env.SetValue(getPhysicalNetworks(instance))

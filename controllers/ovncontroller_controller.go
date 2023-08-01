@@ -25,6 +25,7 @@ import (
 	"github.com/go-logr/logr"
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -432,9 +433,39 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 	// create DaemonSet - end
 
+	sbCluster, err := v1beta1.GetDBClusterByType(ctx, helper, instance.Namespace, map[string]string{}, v1beta1.SBDBType)
+	if err != nil {
+		r.Log.Info("No SB OVNDBCluster defined, deleting external ConfigMap")
+		cleanupConfigMapErr := r.deleteExternalConfigMaps(ctx, helper, instance)
+		if cleanupConfigMapErr != nil {
+			r.Log.Error(cleanupConfigMapErr, "Failed to delete external ConfigMap")
+			return ctrl.Result{}, cleanupConfigMapErr
+		}
+		return ctrl.Result{}, nil
+	}
+
+	_, err = sbCluster.GetExternalEndpoint()
+	if err != nil {
+		r.Log.Info("No external endpoint defined for SB OVNDBCluster, deleting external ConfigMap")
+		cleanupConfigMapErr := r.deleteExternalConfigMaps(ctx, helper, instance)
+		if cleanupConfigMapErr != nil {
+			r.Log.Error(cleanupConfigMapErr, "Failed to delete external ConfigMap")
+			return ctrl.Result{}, cleanupConfigMapErr
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// Create ConfigMap for external dataplane consumption
+	// TODO(ihar) - is there any hashing mechanism for EDP config? do we trigger deploy somehow?
+	err = r.generateExternalConfigMaps(ctx, helper, instance, sbCluster, &configMapVars)
+	if err != nil {
+		r.Log.Error(err, "Failed to generate external ConfigMap")
+		return ctrl.Result{}, err
+	}
+
 	// create OVN Config Job - start
 	if instance.Status.NumberReady == instance.Status.DesiredNumberScheduled {
-		jobsDef, err := ovncontroller.ConfigJob(ctx, helper, r.Client, instance, serviceLabels)
+		jobsDef, err := ovncontroller.ConfigJob(ctx, helper, r.Client, instance, sbCluster, serviceLabels)
 		if err != nil {
 			r.Log.Error(err, "Failed to create OVN controller configuration Job")
 			return ctrl.Result{}, err
@@ -491,7 +522,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	return ctrl.Result{}, nil
 }
 
-// generateServiceConfigMaps - create create configmaps which hold scripts and service configuration
+// generateServiceConfigMaps - create configmaps which hold scripts and service configuration
 func (r *OVNControllerReconciler) generateServiceConfigMaps(
 	ctx context.Context,
 	h *helper.Helper,
@@ -519,6 +550,61 @@ func (r *OVNControllerReconciler) generateServiceConfigMaps(
 		},
 	}
 	return configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
+}
+
+// generateExternalConfigMaps - create configmaps for external dataplane consumption
+func (r *OVNControllerReconciler) generateExternalConfigMaps(
+	ctx context.Context,
+	h *helper.Helper,
+	instance *v1beta1.OVNController,
+	sbCluster *v1beta1.OVNDBCluster,
+	envVars *map[string]env.Setter,
+) error {
+	// Create/update configmaps from templates
+	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovncontroller.ServiceName), map[string]string{})
+
+	externalEndpoint, err := sbCluster.GetExternalEndpoint()
+	if err != nil {
+		return err
+	}
+
+	externalTemplateParameters := make(map[string]interface{})
+	externalTemplateParameters["OvnRemote"] = externalEndpoint
+	externalTemplateParameters["OvnEncapType"] = instance.Spec.ExternalIDS.OvnEncapType
+
+	cms := []util.Template{
+		// EDP ConfigMap
+		{
+			Name:          fmt.Sprintf("%s-config", instance.Name),
+			Namespace:     instance.Namespace,
+			Type:          util.TemplateTypeConfig,
+			InstanceType:  instance.Kind,
+			Labels:        cmLabels,
+			ConfigOptions: externalTemplateParameters,
+		},
+	}
+	return configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
+}
+
+// TODO(ihar) this function could live in lib-common
+// deleteExternalConfigMaps - delete obsolete configmaps for external dataplane consumption
+func (r *OVNControllerReconciler) deleteExternalConfigMaps(
+	ctx context.Context,
+	h *helper.Helper,
+	instance *v1beta1.OVNController,
+) error {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-config", instance.Name),
+			Namespace: instance.Namespace,
+		},
+	}
+
+	err := h.GetClient().Delete(ctx, cm)
+	if err != nil && !k8s_errors.IsNotFound(err) {
+		return fmt.Errorf("error deleting external config map %s: %w", cm.Name, err)
+	}
+	return nil
 }
 
 // createHashOfInputHashes - creates a hash of hashes which gets added to the resources which requires a restart

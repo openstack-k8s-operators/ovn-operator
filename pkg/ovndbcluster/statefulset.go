@@ -16,6 +16,7 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/affinity"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
+	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -105,7 +106,7 @@ func StatefulSet(
 		},
 	}
 	serviceName := ServiceNameNB
-	if instance.Spec.DBType == "SB" {
+	if instance.Spec.DBType == v1beta1.SBDBType {
 		serviceName = ServiceNameSB
 	}
 	envVars := map[string]env.Setter{}

@@ -210,6 +210,14 @@ func OVNControllerConditionGetter(name types.NamespacedName) condition.Condition
 	return instance.Status.Conditions
 }
 
+func SetExternalEndpoint(name types.NamespacedName, endpoint string) {
+	Eventually(func(g Gomega) {
+		cluster := GetOVNDBCluster(name)
+		cluster.Status.DBAddress = endpoint
+		g.Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
+	}, timeout, interval).Should(Succeed())
+}
+
 func SimulateDaemonsetNumberReadyWithPods(name types.NamespacedName, networkIPs map[string][]string) {
 	ds := GetDaemonSet(name)
 
