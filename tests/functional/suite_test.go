@@ -150,15 +150,13 @@ var _ = BeforeSuite(func() {
 		Client:  k8sManager.GetClient(),
 		Scheme:  k8sManager.GetScheme(),
 		Kclient: kclient,
-		Log:     ctrl.Log.WithName("controllers").WithName("OVNNorthd"),
-	}).SetupWithManager(k8sManager)
+	}).SetupWithManager(k8sManager, context.Background())
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&controllers.OVNDBClusterReconciler{
 		Client:  k8sManager.GetClient(),
 		Scheme:  k8sManager.GetScheme(),
 		Kclient: kclient,
-		Log:     ctrl.Log.WithName("controllers").WithName("OVNDBCluster"),
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -166,8 +164,7 @@ var _ = BeforeSuite(func() {
 		Client:  k8sManager.GetClient(),
 		Scheme:  k8sManager.GetScheme(),
 		Kclient: kclient,
-		Log:     ctrl.Log.WithName("controllers").WithName("OVNController"),
-	}).SetupWithManager(k8sManager)
+	}).SetupWithManager(k8sManager, context.Background())
 	Expect(err).ToNot(HaveOccurred())
 
 	// Acquire environmental defaults and initialize operator defaults with them

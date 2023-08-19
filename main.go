@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"strings"
@@ -98,8 +99,7 @@ func main() {
 		Client:  mgr.GetClient(),
 		Scheme:  mgr.GetScheme(),
 		Kclient: kclient,
-		Log:     ctrl.Log.WithName("controllers").WithName("OVNNorthd"),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, context.Background()); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OVNNorthd")
 		os.Exit(1)
 	}
@@ -107,7 +107,6 @@ func main() {
 		Client:  mgr.GetClient(),
 		Kclient: kclient,
 		Scheme:  mgr.GetScheme(),
-		Log:     ctrl.Log.WithName("controllers").WithName("OVNDBCluster"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OVNDBCluster")
 		os.Exit(1)
@@ -116,8 +115,7 @@ func main() {
 		Client:  mgr.GetClient(),
 		Kclient: kclient,
 		Scheme:  mgr.GetScheme(),
-		Log:     ctrl.Log.WithName("controllers").WithName("OVNController"),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, context.Background()); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OVNController")
 		os.Exit(1)
 	}
