@@ -4,6 +4,7 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
+    operators.openshift.io/infrastructure-features: '["disconnected"]'
     operators.operatorframework.io/operator-type: non-standalone
   name: ovn-operator.v0.0.0
   namespace: placeholder
@@ -11,6 +12,11 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - description: OVNController is the Schema for the ovncontrollers API
+      displayName: OVNController
+      kind: OVNController
+      name: ovncontrollers.ovn.openstack.org
+      version: v1beta1
     - description: OVNDBCluster is the Schema for the ovndbclusters API
       displayName: OVNDBCluster
       kind: OVNDBCluster

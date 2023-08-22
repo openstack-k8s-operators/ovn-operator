@@ -22,7 +22,6 @@ metadata:
   - OVNNorthd
   name: ovnnorthd-sample
 spec:
-  containerImage: quay.io/podified-antelope-centos9/openstack-ovn-northd:current-podified
   logLevel: info
   replicas: 1
 status:
@@ -35,7 +34,6 @@ metadata:
   - OVNDBCluster
   name: ovndbcluster-nb-sample
 spec:
-  containerImage: quay.io/podified-antelope-centos9/openstack-ovn-nb-db-server:current-podified
   dbType: NB
   logLevel: info
   replicas: 1
@@ -51,7 +49,6 @@ metadata:
   - OVNDBCluster
   name: ovndbcluster-sb-sample
 spec:
-  containerImage: quay.io/podified-antelope-centos9/openstack-ovn-sb-db-server:current-podified
   dbType: SB
   logLevel: info
   replicas: 1
@@ -71,8 +68,6 @@ spec:
     ovn-bridge: br-int
     ovn-encap-type: geneve
     system-id: random
-  ovnContainerImage: quay.io/podified-antelope-centos9/openstack-ovn-controller:current-podified
-  ovsContainerImage: quay.io/podified-antelope-centos9/openstack-ovn-base:current-podified
 status:
   conditions:
   - message: Setup complete
@@ -137,7 +132,6 @@ spec:
         - /usr/local/bin/kolla_set_configs && /usr/local/bin/kolla_start
         command:
         - /bin/bash
-        image: quay.io/podified-antelope-centos9/openstack-ovn-northd:current-podified
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -301,6 +295,38 @@ commands:
         if [ "$num_nodes" != "$num_pods" ]; then
           echo "Cluster has $num_nodes nodes but OVNController spawned $num_pods pods"
           exit 1
-        else
-          exit 0
         fi
+
+        tupleTemplate='{{ range (index .spec.template.spec.containers 1).env }}{{ .name }}{{ "#" }}{{ .value}}{{"\n"}}{{ end }}'
+        imageTuples=$(oc get -n openstack-operators deployment ovn-operator-controller-manager -o go-template="$tupleTemplate")
+        for ITEM in $(echo $imageTuples); do
+          # it is an image
+          if echo $ITEM | grep 'RELATED_IMAGE' &> /dev/null; then
+            NAME=$(echo $ITEM | sed -e 's|^RELATED_IMAGE_OVN_\(.*\)_IMAGE.*|\1|')
+            IMG_FROM_ENV=$(echo $ITEM | sed -e 's|^.*#\(.*\)|\1|')
+            template='{{.spec.containerImage}}'
+            case $NAME in
+              NB_DBCLUSTER)
+                SERVICE_IMAGE=$(oc get -n $NAMESPACE ovndbcluster ovndbcluster-nb-sample -o go-template="$template")
+                ;;
+              SB_DBCLUSTER)
+                SERVICE_IMAGE=$(oc get -n $NAMESPACE ovndbcluster ovndbcluster-sb-sample -o go-template="$template")
+                ;;
+              NORTHD)
+                SERVICE_IMAGE=$(oc get -n $NAMESPACE ovnnorthd ovnnorthd-sample -o go-template="$template")
+                ;;
+              CONTROLLER)
+                SERVICE_IMAGE=$(oc get -n $NAMESPACE ovncontroller ovncontroller-sample -o go-template="{{.spec.ovnContainerImage}}")
+                ;;
+              CONTROLLER_OVS)
+                SERVICE_IMAGE=$(oc get -n $NAMESPACE ovncontroller ovncontroller-sample -o go-template="{{.spec.ovsContainerImage}}")
+                ;;
+            esac
+            if [ "$SERVICE_IMAGE" != "$IMG_FROM_ENV" ]; then
+                    echo "$NAME image ($SERVICE_IMAGE) does not equal $IMG_FROM_ENV"
+              exit 1
+            fi
+          fi
+        done
+
+        exit 0
