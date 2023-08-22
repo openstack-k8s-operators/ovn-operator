@@ -76,6 +76,12 @@ func GetDBClusterVolumeMounts(name string) []corev1.VolumeMount {
 			ReadOnly:  false,
 		},
 		{
+			Name:      "config-data",
+			MountPath: "/var/lib/kolla/config_files/config.json",
+			SubPath:   "ovn-dbcluster.json",
+			ReadOnly:  true,
+		},
+		{
 			Name:      name,
 			MountPath: "/etc/ovn",
 			ReadOnly:  false,

@@ -6,7 +6,4 @@ const (
 
 	// ServiceNameSB -
 	ServiceNameSB = "ovsdbserver-sb"
-
-	// KollaConfigOVNDBCluster -
-	KollaConfigOVNDBCluster = "/var/lib/config-data/ovn-dbcluster.json"
 )

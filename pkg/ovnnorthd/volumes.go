@@ -58,6 +58,12 @@ func GetNorthdVolumeMounts() []corev1.VolumeMount {
 			MountPath: "/var/lib/config-data",
 			ReadOnly:  false,
 		},
+		{
+			Name:      "config-data",
+			MountPath: "/var/lib/kolla/config_files/config.json",
+			SubPath:   "ovn-northd.json",
+			ReadOnly:  true,
+		},
 	}
 
 }
