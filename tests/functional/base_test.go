@@ -18,18 +18,19 @@ package functional_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 )
 
@@ -101,42 +102,27 @@ func OVNDBClusterConditionGetter(name types.NamespacedName) condition.Conditions
 // CreateOVNDBClusters Creates NB and SB OVNDBClusters
 func CreateOVNDBClusters(namespace string) []types.NamespacedName {
 	dbs := []types.NamespacedName{}
-	for _, db := range []string{"NB", "SB"} {
-		ovndbcluster := &ovnv1.OVNDBCluster{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "ovn.openstack.org/v1beta1",
-				Kind:       "OVNDBCluster",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "ovn-" + uuid.New().String(),
-				Namespace: namespace,
-			},
-			Spec: ovnv1.OVNDBClusterSpec{
-				DBType:         db,
-				StorageRequest: "1G",
-			},
-		}
+	for _, db := range []string{v1beta1.NBDBType, v1beta1.SBDBType} {
+		name := fmt.Sprintf("ovn-%s", uuid.New().String())
+		spec := GetDefaultOVNDBClusterSpec()
+		spec["dbType"] = db
+		instance := CreateOVNDBCluster(namespace, name, spec)
 
-		Expect(k8sClient.Create(ctx, ovndbcluster.DeepCopy())).Should(Succeed())
-		name := types.NamespacedName{Namespace: namespace, Name: ovndbcluster.Name}
+		instance_name := types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 
 		dbaddr := "tcp:10.1.1.1:6641"
-		if db == "SB" {
+		if db == v1beta1.SBDBType {
 			dbaddr = "tcp:10.1.1.1:6642"
 		}
 
 		// the Status field needs to be written via a separate client
-		ovndbcluster = GetOVNDBCluster(name)
-		ovndbcluster.Status = ovnv1.OVNDBClusterStatus{
-			InternalDBAddress: dbaddr,
-		}
 		Eventually(func(g Gomega) {
-			ovndbcluster = GetOVNDBCluster(name)
+			ovndbcluster := GetOVNDBCluster(instance_name)
 			ovndbcluster.Status.InternalDBAddress = dbaddr
 			g.Expect(k8sClient.Status().Update(ctx, ovndbcluster)).Should(Succeed())
 		}, timeout, interval).Should(Succeed())
 
-		dbs = append(dbs, name)
+		dbs = append(dbs, instance_name)
 
 	}
 
