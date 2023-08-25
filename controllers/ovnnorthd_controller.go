@@ -40,6 +40,7 @@ import (
 	nad "github.com/openstack-k8s-operators/lib-common/modules/common/networkattachment"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
+	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovnnorthd"
 	appsv1 "k8s.io/api/apps/v1"
@@ -415,6 +416,23 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	return ctrl.Result{}, nil
 }
 
+func getInternalEndpoint(
+	ctx context.Context,
+	h *helper.Helper,
+	instance *ovnv1.OVNNorthd,
+	dbType string,
+) (string, error) {
+	cluster, err := ovnv1.GetDBClusterByType(ctx, h, instance.Namespace, map[string]string{}, dbType)
+	if err != nil {
+		return "", err
+	}
+	internalEndpoint, err := cluster.GetInternalEndpoint()
+	if err != nil {
+		return "", err
+	}
+	return internalEndpoint, nil
+}
+
 // generateServiceConfigMaps - create create configmaps which hold scripts and service configuration
 // TODO add DefaultConfigOverwrite
 func (r *OVNNorthdReconciler) generateServiceConfigMaps(
@@ -423,18 +441,22 @@ func (r *OVNNorthdReconciler) generateServiceConfigMaps(
 	instance *ovnv1.OVNNorthd,
 	envVars *map[string]env.Setter,
 ) error {
-	// Create/update configmaps from templates
-	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnnorthd.ServiceName), map[string]string{})
-	dbmap, err := ovnv1.GetDBEndpoints(ctx, h, instance.Namespace, map[string]string{})
+	nbEndpoint, err := getInternalEndpoint(ctx, h, instance, v1beta1.NBDBType)
 	if err != nil {
 		return err
 	}
-	templateParameters := make(map[string]interface{})
+	sbEndpoint, err := getInternalEndpoint(ctx, h, instance, v1beta1.SBDBType)
+	if err != nil {
+		return err
+	}
 
-	templateParameters["NBConnection"] = dbmap["internal-NB"]
-	templateParameters["SBConnection"] = dbmap["internal-SB"]
+	// Create/update configmaps from templates
+	templateParameters := make(map[string]interface{})
+	templateParameters["NBConnection"] = nbEndpoint
+	templateParameters["SBConnection"] = sbEndpoint
 	templateParameters["OVN_LOG_LEVEL"] = instance.Spec.LogLevel
 
+	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnnorthd.ServiceName), map[string]string{})
 	cms := []util.Template{
 		// ConfigMap
 		{

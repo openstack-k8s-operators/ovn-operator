@@ -17,6 +17,8 @@ limitations under the License.
 package v1beta1
 
 import (
+	"fmt"
+
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 
 	corev1 "k8s.io/api/core/v1"
@@ -185,4 +187,18 @@ func (instance OVNDBCluster) RbacNamespace() string {
 // RbacResourceName - return the name to be used for rbac objects (serviceaccount, role, rolebinding)
 func (instance OVNDBCluster) RbacResourceName() string {
 	return "ovncluster-" + instance.Name
+}
+
+func (instance OVNDBCluster) GetInternalEndpoint() (string, error) {
+	if instance.Status.InternalDBAddress == "" {
+		return "", fmt.Errorf("internal DBEndpoint not ready yet for %s", instance.Spec.DBType)
+	}
+	return instance.Status.InternalDBAddress, nil
+}
+
+func (instance OVNDBCluster) GetExternalEndpoint() (string, error) {
+	if instance.Status.DBAddress == "" {
+		return "", fmt.Errorf("external DBEndpoint not ready yet for %s", instance.Spec.DBType)
+	}
+	return instance.Status.DBAddress, nil
 }

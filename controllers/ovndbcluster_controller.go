@@ -40,6 +40,7 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/service"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/statefulset"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
+	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovndbcluster"
 	appsv1 "k8s.io/api/apps/v1"
@@ -263,7 +264,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	}
 
 	serviceName := ovndbcluster.ServiceNameNB
-	if instance.Spec.DBType == "SB" {
+	if instance.Spec.DBType == v1beta1.SBDBType {
 		serviceName = ovndbcluster.ServiceNameSB
 	}
 	serviceLabels := map[string]string{
@@ -586,7 +587,7 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 	templateParameters["DB_TYPE"] = strings.ToLower(instance.Spec.DBType)
 	templateParameters["DB_PORT"] = 6641
 	templateParameters["RAFT_PORT"] = 6643
-	if instance.Spec.DBType == "SB" {
+	if instance.Spec.DBType == v1beta1.SBDBType {
 		templateParameters["DB_PORT"] = 6642
 		templateParameters["RAFT_PORT"] = 6644
 	}

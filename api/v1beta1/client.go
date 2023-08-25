@@ -32,13 +32,12 @@ const (
 	expectedNumDBClusters = 2
 )
 
-// GetDBEndpoints - get DB Endpoints
-func GetDBEndpoints(
+func getDBClusters(
 	ctx context.Context,
 	h *helper.Helper,
 	namespace string,
 	labelSelector map[string]string,
-) (map[string]string, error) {
+) (*OVNDBClusterList, error) {
 	ovnDBList := &OVNDBClusterList{}
 
 	listOpts := []client.ListOption{
@@ -54,28 +53,26 @@ func GetDBEndpoints(
 	if err != nil {
 		return nil, err
 	}
+	return ovnDBList, nil
+}
 
-	numDBClusters := len(ovnDBList.Items)
-	if numDBClusters != expectedNumDBClusters {
-		return nil, fmt.Errorf("Invalid number of OVNDBCluster objects found in namespace %s. " +
-		                       "Expected %d, got %d.", namespace, expectedNumDBClusters, numDBClusters)
+func GetDBClusterByType(
+	ctx context.Context,
+	h *helper.Helper,
+	namespace string,
+	labelSelector map[string]string,
+	dbType string,
+) (*OVNDBCluster, error) {
+	ovnDBList, err := getDBClusters(ctx, h, namespace, labelSelector)
+	if err != nil {
+		return nil, err
 	}
-
-	DBEndpointsMap := make(map[string]string)
 	for _, ovndb := range ovnDBList.Items {
-		if ovndb.Status.InternalDBAddress == "" {
-			return DBEndpointsMap, fmt.Errorf("internal DBEndpoint not ready yet for %s", ovndb.Spec.DBType)
-		}
-		DBEndpointsMap["internal-"+ovndb.Spec.DBType] = ovndb.Status.InternalDBAddress
-		//External DB address is available only if NetworkAttachment are configured
-		if ovndb.Spec.NetworkAttachment != "" {
-			if ovndb.Status.DBAddress == "" {
-				return DBEndpointsMap, fmt.Errorf("external DBEndpoint not ready yet for %s", ovndb.Spec.DBType)
-			}
-			DBEndpointsMap[ovndb.Spec.DBType] = ovndb.Status.DBAddress
+		if ovndb.Spec.DBType == dbType {
+			return &ovndb, nil
 		}
 	}
-	return DBEndpointsMap, nil
+	return nil, fmt.Errorf("failed to find DBCluster of type %s", dbType)
 }
 
 func getItems(list client.ObjectList) []client.Object {
