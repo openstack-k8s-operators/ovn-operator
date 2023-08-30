@@ -11,13 +11,13 @@ spec:
       containers:
       - name: manager
         env:
-        - name: OVN_NB_DBCLUSTER_IMAGE_URL_DEFAULT
+        - name: RELATED_IMAGE_OVN_NB_DBCLUSTER_IMAGE_URL_DEFAULT
           value: quay.io/podified-antelope-centos9/openstack-ovn-nb-db-server:current-podified
-        - name: OVN_SB_DBCLUSTER_IMAGE_URL_DEFAULT
+        - name: RELATED_IMAGE_OVN_SB_DBCLUSTER_IMAGE_URL_DEFAULT
           value: quay.io/podified-antelope-centos9/openstack-ovn-sb-db-server:current-podified
-        - name: OVN_NORTHD_IMAGE_URL_DEFAULT
+        - name: RELATED_IMAGE_OVN_NORTHD_IMAGE_URL_DEFAULT
           value: quay.io/podified-antelope-centos9/openstack-ovn-northd:current-podified
-        - name: OVN_CONTROLLER_IMAGE_URL_DEFAULT
+        - name: RELATED_IMAGE_OVN_CONTROLLER_IMAGE_URL_DEFAULT
           value: quay.io/podified-antelope-centos9/openstack-ovn-controller:current-podified
-        - name: OVN_CONTROLLER_OVS_IMAGE_URL_DEFAULT
+        - name: RELATED_IMAGE_OVN_CONTROLLER_OVS_IMAGE_URL_DEFAULT
           value: quay.io/podified-antelope-centos9/openstack-ovn-base:current-podified

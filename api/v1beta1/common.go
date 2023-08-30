@@ -22,23 +22,23 @@ import "github.com/openstack-k8s-operators/lib-common/modules/common/util"
 func SetupDefaults() {
 	// Acquire environmental defaults and initialize OVNDBCluster defaults with them
 	ovnDbClusterDefaults := OVNDBClusterDefaults{
-		NBContainerImageURL: util.GetEnvVar("OVN_NB_DBCLUSTER_IMAGE_URL_DEFAULT", OvnNBContainerImage),
-		SBContainerImageURL: util.GetEnvVar("OVN_SB_DBCLUSTER_IMAGE_URL_DEFAULT", OvnSBContainerImage),
+		NBContainerImageURL: util.GetEnvVar("RELATED_IMAGE_OVN_NB_DBCLUSTER_IMAGE_URL_DEFAULT", OvnNBContainerImage),
+		SBContainerImageURL: util.GetEnvVar("RELATED_IMAGE_OVN_SB_DBCLUSTER_IMAGE_URL_DEFAULT", OvnSBContainerImage),
 	}
 
 	SetupOVNDBClusterDefaults(ovnDbClusterDefaults)
 
 	// Acquire environmental defaults and initialize OVNNorthd defaults with them
 	ovnNorthdDefaults := OVNNorthdDefaults{
-		ContainerImageURL: util.GetEnvVar("OVN_NORTHD_IMAGE_URL_DEFAULT", OvnNorthdContainerImage),
+		ContainerImageURL: util.GetEnvVar("RELATED_IMAGE_OVN_NORTHD_IMAGE_URL_DEFAULT", OvnNorthdContainerImage),
 	}
 
 	SetupOVNNorthdDefaults(ovnNorthdDefaults)
 
 	// Acquire environmental defaults and initialize OVNController defaults with them
 	ovnControllerDefaults := OvnControllerDefaults{
-		OvsContainerImageURL:           util.GetEnvVar("OVN_CONTROLLER_OVS_IMAGE_URL_DEFAULT", OvnControllerOvsContainerImage),
-		OvnControllerContainerImageURL: util.GetEnvVar("OVN_CONTROLLER_IMAGE_URL_DEFAULT", OvnControllerContainerImage),
+		OvsContainerImageURL:           util.GetEnvVar("RELATED_IMAGE_OVN_CONTROLLER_OVS_IMAGE_URL_DEFAULT", OvnControllerOvsContainerImage),
+		OvnControllerContainerImageURL: util.GetEnvVar("RELATED_IMAGE_OVN_CONTROLLER_IMAGE_URL_DEFAULT", OvnControllerContainerImage),
 	}
 
 	SetupOVNControllerDefaults(ovnControllerDefaults)
