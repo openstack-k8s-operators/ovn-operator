@@ -43,7 +43,7 @@ func ConfigJob(
 	// configuration job automatically right after it will be finished
 	jobTTLAfterFinished := int32(0)
 
-	ovsNodes, err := getOvsPodsNodes(
+	ovsNodes, err := getOVNControllerPodsNodes(
 		ctx,
 		k8sClient,
 		instance,

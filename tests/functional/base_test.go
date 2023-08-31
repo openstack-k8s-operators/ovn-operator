@@ -232,7 +232,7 @@ func SimulateDaemonsetNumberReadyWithPods(name types.NamespacedName, networkIPs 
 			"service": "ovn-controller",
 		}
 
-		// NodeName required for getOvsPodsNodes
+		// NodeName required for getOVNControllerPodsNodes
 		pod.Spec.NodeName = name.Name
 
 		var netStatus []networkv1.NetworkStatus
