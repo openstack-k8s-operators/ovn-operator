@@ -36,7 +36,7 @@ func getPhysicalNetworks(
 	)
 }
 
-func getOvsPodsNodes(
+func getOVNControllerPodsNodes(
 	ctx context.Context,
 	k8sClient client.Client,
 	instance *v1beta1.OVNController,
