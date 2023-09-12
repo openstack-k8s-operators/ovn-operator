@@ -51,7 +51,7 @@ type OVNControllerSpec struct {
 	// +kubebuilder:validation:Optional
 	// Debug - enable debug for different deploy stages. If an init container is used, it runs and the
 	// actual action pod gets started with sleep infinity
-	Debug OVNControllerdDebug `json:"debug,omitempty"`
+	Debug OVNControllerDebug `json:"debug,omitempty"`
 
 	// +kubebuilder:validation:Optional
 	// +optional
@@ -72,8 +72,8 @@ type OVNControllerSpec struct {
 	NetworkAttachment string `json:"networkAttachment"`
 }
 
-// OVNControllerdDebug defines the observed state of OVNControllerdDebug
-type OVNControllerdDebug struct {
+// OVNControllerDebug defines the observed state of OVNControllerDebug
+type OVNControllerDebug struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=false
 	// Service enable debug
