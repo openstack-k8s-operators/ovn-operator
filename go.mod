@@ -12,7 +12,7 @@ require (
 	github.com/openstack-k8s-operators/lib-common/modules/common v0.1.1-0.20230824094610-976b18ca2875
 	github.com/openstack-k8s-operators/lib-common/modules/test v0.1.2-0.20230824094610-976b18ca2875
 	github.com/openstack-k8s-operators/ovn-operator/api v0.0.0-20230418071801-b5843d9e05fb
-	go.uber.org/zap v1.25.0
+	go.uber.org/zap v1.26.0
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	k8s.io/api v0.26.8
 	k8s.io/apimachinery v0.26.8
