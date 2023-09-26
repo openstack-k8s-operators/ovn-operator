@@ -314,10 +314,14 @@ gowork: ## Generate go.work file to support our multi module repository
 	go work use .
 	go work use ./api
 
+# Skip C003: "Field 'XXX' has both a 'Optional' kubebuilder marker with a
+# default value and an 'omitempty' tag. Either remove the default value or
+# remove 'omitempty'" since spec.external-ids struct in OVNController CRD
+# relies on both being present to fill in the defaults.
 .PHONY: operator-lint
 operator-lint: gowork ## Runs operator-lint
-	GOBIN=$(LOCALBIN) go install github.com/gibizer/operator-lint@v0.3.0
-	go vet -vettool=$(LOCALBIN)/operator-lint ./... ./api/...
+	GOBIN=$(LOCALBIN) go install github.com/gibizer/operator-lint@v0.4.0
+	go vet -vettool=$(LOCALBIN)/operator-lint -C003.skip ./... ./api/...
 
 # Used for webhook testing
 # Please ensure the ovn-controller-manager deployment and

@@ -592,4 +592,25 @@ var _ = Describe("OVNController controller", func() {
 			)
 		})
 	})
+
+	When("OVNController is created with empty spec", func() {
+		var ovnControllerName types.NamespacedName
+
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
+			ovnControllerName = types.NamespacedName{Namespace: namespace, Name: name}
+
+			instance := CreateOVNController(namespace, name, map[string]interface{}{})
+			DeferCleanup(th.DeleteInstance, instance)
+		})
+
+		It("applies meaningful defaults", func() {
+			ovnController := GetOVNController(ovnControllerName)
+			Expect(ovnController.Spec.ExternalIDS.OvnEncapType).To(Equal("geneve"))
+			Expect(ovnController.Spec.ExternalIDS.OvnBridge).To(Equal("br-int"))
+			Expect(ovnController.Spec.ExternalIDS.SystemID).To(Equal("random"))
+		})
+	})
 })

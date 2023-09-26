@@ -38,6 +38,7 @@ const (
 // OVNControllerSpec defines the desired state of OVNController
 type OVNControllerSpec struct {
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:default={}
 	ExternalIDS OVSExternalIDs `json:"external-ids"`
 
 	// +kubebuilder:validation:Required
@@ -132,14 +133,18 @@ func (instance OVNController) IsReady() bool {
 
 // OVSExternalIDs is a set of configuration options for OVS external-ids table
 type OVSExternalIDs struct {
-	SystemID  string `json:"system-id"`
-	OvnBridge string `json:"ovn-bridge"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default="random"
+	SystemID  string `json:"system-id,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default="br-int"
+	OvnBridge string `json:"ovn-bridge,omitempty"`
 
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default="geneve"
 	// +kubebuilder:validation:Enum={"geneve","vxlan"}
-	// OvnEncapType - geneve or vxlan
-	OvnEncapType string `json:"ovn-encap-type"`
+	OvnEncapType string `json:"ovn-encap-type,omitempty"`
 
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=true
