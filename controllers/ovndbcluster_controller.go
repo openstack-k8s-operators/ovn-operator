@@ -501,11 +501,14 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 	// Ensure the ovndbcluster headless service Exists
 	//
 
-	headlesssvc := service.NewService(
+	headlesssvc, err := service.NewService(
 		ovndbcluster.HeadlessService(serviceName, instance, serviceLabels),
-		serviceLabels,
 		time.Duration(5)*time.Second,
+		nil,
 	)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	ctrlResult, err := headlesssvc.CreateOrPatch(ctx, helper)
 	if err != nil {
@@ -527,11 +530,14 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 			common.AppSelector:                   serviceName,
 			"statefulset.kubernetes.io/pod-name": ovnPod.Name,
 		}
-		svc := service.NewService(
+		svc, err := service.NewService(
 			ovndbcluster.Service(ovnPod.Name, instance, ovndbServiceLabels),
-			ovndbServiceLabels,
 			time.Duration(5)*time.Second,
+			nil,
 		)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 		ctrlResult, err := svc.CreateOrPatch(ctx, helper)
 		if err != nil {
 			return ctrl.Result{}, err
