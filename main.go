@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	infranetworkv1 "github.com/openstack-k8s-operators/infra-operator/apis/network/v1beta1"
 
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/controllers"
@@ -53,6 +54,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(ovnv1.AddToScheme(scheme))
 	utilruntime.Must(networkv1.AddToScheme(scheme))
+	utilruntime.Must(infranetworkv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 

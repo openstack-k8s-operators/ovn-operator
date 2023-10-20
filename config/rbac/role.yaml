@@ -119,6 +119,18 @@ rules:
   - update
   - watch
 - apiGroups:
+  - network.openstack.org
+  resources:
+  - dnsdata
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - ovn.openstack.org
   resources:
   - ovncontrollers

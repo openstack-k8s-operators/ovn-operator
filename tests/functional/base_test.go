@@ -19,6 +19,7 @@ package functional_test
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	infranetworkv1 "github.com/openstack-k8s-operators/infra-operator/apis/network/v1beta1"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
@@ -94,37 +96,77 @@ func CreateOVNDBCluster(namespace string, OVNDBClusterName string, spec map[stri
 	return th.CreateUnstructured(raw)
 }
 
+func UpdateOVNDBCluster(cluster *ovnv1.OVNDBCluster) {
+	k8sClient.Update(ctx, cluster)
+}
+
 func OVNDBClusterConditionGetter(name types.NamespacedName) condition.Conditions {
 	instance := GetOVNDBCluster(name)
 	return instance.Status.Conditions
 }
 
+func ScaleDBCluster(name types.NamespacedName, replicas int32) {
+	Eventually(func(g Gomega) {
+		c := GetOVNDBCluster(name)
+		*c.Spec.Replicas = replicas
+		g.Expect(k8sClient.Update(ctx, c)).Should(Succeed())
+	}).Should(Succeed())
+}
+
 // CreateOVNDBClusters Creates NB and SB OVNDBClusters
-func CreateOVNDBClusters(namespace string, nad string) []types.NamespacedName {
+func CreateOVNDBClusters(namespace string, nad map[string][]string, replicas int32) []types.NamespacedName {
 	dbs := []types.NamespacedName{}
 	for _, db := range []string{v1beta1.NBDBType, v1beta1.SBDBType} {
 		name := fmt.Sprintf("ovn-%s", uuid.New().String())
 		spec := GetDefaultOVNDBClusterSpec()
+		stringNad := ""
+		// OVNDBCluster doesn't allow multiple NADs, hence map len
+		// must be <= 1
+		Expect(len(nad)).Should(BeNumerically("<=", 1))
+		for k, _ := range nad {
+			if strings.Contains(k, "/") {
+				// k = namespace/nad_name, split[1] will return nad_name (e.g. internalapi)
+				stringNad = strings.Split(k, "/")[1]
+			}
+		}
+		if len(nad) != 0 {
+			// nad format needs to be map[string][]string{namespace + "/" + nad_name: ...} or empty
+			Expect(stringNad).ToNot(Equal(""))
+		}
 		spec["dbType"] = db
-		spec["networkAttachment"] = nad
+		spec["networkAttachment"] = stringNad
+		spec["replicas"] = replicas
 
 		instance := CreateOVNDBCluster(namespace, name, spec)
 
 		instance_name := types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 
-		dbaddr := "tcp:10.1.1.1:6641"
+		dbName := "nb"
 		if db == v1beta1.SBDBType {
-			dbaddr = "tcp:10.1.1.1:6642"
+			dbName = "sb"
 		}
-		// the Status field needs to be written via a separate client
+		statefulSetName := types.NamespacedName{
+			Namespace: instance.GetNamespace(),
+			Name:      "ovsdbserver-" + dbName,
+		}
+		th.SimulateStatefulSetReplicaReadyWithPods(
+			statefulSetName,
+			nad,
+		)
+		// Ensure that PODs are ready and DBCluster have been reconciled
+		// with all information (Status.DBAddress and internalDBAddress
+		// are set at the end of the reconcileService)
 		Eventually(func(g Gomega) {
 			ovndbcluster := GetOVNDBCluster(instance_name)
-			ovndbcluster.Status.InternalDBAddress = dbaddr
-			if nad != "" {
-				ovndbcluster.Status.DBAddress = dbaddr
+			endpoint := ""
+			// Check External endpoint when NAD is set
+			if len(nad) == 0 {
+				endpoint, _ = ovndbcluster.GetInternalEndpoint()
+			} else {
+				endpoint, _ = ovndbcluster.GetExternalEndpoint()
 			}
-			g.Expect(k8sClient.Status().Update(ctx, ovndbcluster)).Should(Succeed())
-		}, timeout, interval).Should(Succeed())
+			g.Expect(endpoint).ToNot(BeEmpty())
+		}).Should(Succeed())
 
 		dbs = append(dbs, instance_name)
 
@@ -211,14 +253,6 @@ func OVNControllerConditionGetter(name types.NamespacedName) condition.Condition
 	return instance.Status.Conditions
 }
 
-func SetExternalEndpoint(name types.NamespacedName, endpoint string) {
-	Eventually(func(g Gomega) {
-		cluster := GetOVNDBCluster(name)
-		cluster.Status.DBAddress = endpoint
-		g.Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
-	}, timeout, interval).Should(Succeed())
-}
-
 func SimulateDaemonsetNumberReadyWithPods(name types.NamespacedName, networkIPs map[string][]string) {
 	ds := GetDaemonSet(name)
 
@@ -261,4 +295,54 @@ func SimulateDaemonsetNumberReadyWithPods(name types.NamespacedName, networkIPs 
 	}, timeout, interval).Should(Succeed())
 
 	logger.Info("Simulated daemonset success", "on", name)
+}
+
+func GetDNSData(name types.NamespacedName) *infranetworkv1.DNSData {
+	dns := &infranetworkv1.DNSData{}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, name, dns)).Should(Succeed())
+	}).Should(Succeed())
+
+	return dns
+}
+
+func GetDNSDataList(name types.NamespacedName, labelSelector string) *infranetworkv1.DNSDataList {
+	dnsList := &infranetworkv1.DNSDataList{}
+	dnsListOpts := client.ListOptions{
+		Namespace: name.Namespace,
+	}
+	ml := client.MatchingLabels{
+		"service": labelSelector,
+	}
+	ml.ApplyToList(&dnsListOpts)
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.List(ctx, dnsList, &dnsListOpts)).Should(Succeed())
+	}).Should(Succeed())
+
+	return dnsList
+}
+
+func GetDNSDataHostnameIP(dnsDataName string, namespace string, dnsHostname string) string {
+	dnsEntry := GetDNSData(types.NamespacedName{Name: dnsDataName, Namespace: namespace})
+	for _, host := range dnsEntry.Spec.Hosts {
+		for i, hostname := range host.Hostnames {
+			if hostname == dnsHostname {
+				return dnsEntry.Spec.Hosts[i].IP
+			}
+		}
+	}
+	return ""
+}
+
+func GetPod(name types.NamespacedName) *corev1.Pod {
+	pod := &corev1.Pod{}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, name, pod)).Should(Succeed())
+	}).Should(Succeed())
+
+	return pod
+}
+
+func UpdatePod(pod *corev1.Pod) {
+	k8sClient.Update(ctx, pod)
 }
