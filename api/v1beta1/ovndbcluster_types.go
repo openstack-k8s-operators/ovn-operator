@@ -31,6 +31,10 @@ const (
 	// SBDBType - Southbound database type
 	SBDBType = "SB"
 
+	// DNSSuffix : hardcoded value on how DNSCore domain is configured
+	DNSSuffix = "cluster.local"
+	// TODO: retrieve it from environment
+
 	// Container image fall-back defaults
 
 	// OvnNBContainerImage is the fall-back container image for OVNDBCluster NB
@@ -189,6 +193,7 @@ func (instance OVNDBCluster) RbacResourceName() string {
 	return "ovncluster-" + instance.Name
 }
 
+// GetInternalEndpoint - return the DNS name that openshift coreDNS can resolve
 func (instance OVNDBCluster) GetInternalEndpoint() (string, error) {
 	if instance.Status.InternalDBAddress == "" {
 		return "", fmt.Errorf("internal DBEndpoint not ready yet for %s", instance.Spec.DBType)
@@ -196,6 +201,7 @@ func (instance OVNDBCluster) GetInternalEndpoint() (string, error) {
 	return instance.Status.InternalDBAddress, nil
 }
 
+// GetExternalEndpoint - return the DNS that openstack dnsmasq can resolve
 func (instance OVNDBCluster) GetExternalEndpoint() (string, error) {
 	if instance.Spec.NetworkAttachment != "" && instance.Status.DBAddress == "" {
 		return "", fmt.Errorf("external DBEndpoint not ready yet for %s", instance.Spec.DBType)
