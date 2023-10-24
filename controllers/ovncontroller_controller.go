@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
@@ -53,22 +54,21 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 )
 
+// getlog returns a logger object with a prefix of "conroller.name" and aditional controller context fields
+func (r *OVNControllerReconciler) GetLogger(ctx context.Context) logr.Logger {
+	return log.FromContext(ctx).WithName("Controllers").WithName("OVNController")
+}
+
 // OVNControllerReconciler reconciles a OVNController object
 type OVNControllerReconciler struct {
 	client.Client
 	Kclient kubernetes.Interface
-	Log     logr.Logger
 	Scheme  *runtime.Scheme
 }
 
 // GetClient -
 func (r *OVNControllerReconciler) GetClient() client.Client {
 	return r.Client
-}
-
-// GetLogger -
-func (r *OVNControllerReconciler) GetLogger() logr.Logger {
-	return r.Log
 }
 
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovncontrollers,verbs=get;list;watch;create;update;patch;delete
@@ -90,7 +90,8 @@ func (r *OVNControllerReconciler) GetLogger() logr.Logger {
 // +kubebuilder:rbac:groups="",resources=pods,verbs=create;delete;get;list;patch;update;watch
 
 func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, _err error) {
-	_ = r.Log.WithValues("ovncontroller", req.NamespacedName)
+
+	Log := r.GetLogger(ctx)
 
 	// Fetch OVNController instance
 	instance := &v1beta1.OVNController{}
@@ -111,7 +112,7 @@ func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		r.Client,
 		r.Kclient,
 		r.Scheme,
-		r.Log,
+		Log,
 	)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -182,7 +183,7 @@ func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager, ctx context.Context) error {
 	crs := &v1beta1.OVNControllerList{}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1beta1.OVNController{}).
@@ -193,16 +194,18 @@ func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
-		Watches(&source.Kind{Type: &v1beta1.OVNDBCluster{}}, handler.EnqueueRequestsFromMapFunc(v1beta1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), r.Log))).
+		Watches(&source.Kind{Type: &v1beta1.OVNDBCluster{}}, handler.EnqueueRequestsFromMapFunc(v1beta1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), r.GetLogger(ctx)))).
 		Complete(r)
 }
 
 func (r *OVNControllerReconciler) reconcileDelete(ctx context.Context, instance *v1beta1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
-	r.Log.Info("Reconciling Service delete")
+	Log := r.GetLogger(ctx)
+
+	Log.Info("Reconciling Service delete")
 
 	// Service is deleted so remove the finalizer.
 	controllerutil.RemoveFinalizer(instance, helper.GetFinalizer())
-	r.Log.Info("Reconciled Service delete successfully")
+	Log.Info("Reconciled Service delete successfully")
 
 	return ctrl.Result{}, nil
 }
@@ -212,31 +215,39 @@ func (r *OVNControllerReconciler) reconcileInit(
 	instance *v1beta1.OVNController,
 	helper *helper.Helper,
 ) (ctrl.Result, error) {
-	r.Log.Info("Reconciling Service init")
+	Log := r.GetLogger(ctx)
+
+	Log.Info("Reconciling Service init")
 
 	//TODO(slaweq):
 	// * read status of the external IDs
 	// * if external IDs are different than required once, change them
-	r.Log.Info("Reconciled Service init successfully")
+	Log.Info("Reconciled Service init successfully")
 	return ctrl.Result{}, nil
 }
 
 func (r *OVNControllerReconciler) reconcileUpdate(ctx context.Context, instance *v1beta1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
-	r.Log.Info("Reconciling Service update")
+	Log := r.GetLogger(ctx)
 
-	r.Log.Info("Reconciled Service update successfully")
+	Log.Info("Reconciling Service update")
+
+	Log.Info("Reconciled Service update successfully")
 	return ctrl.Result{}, nil
 }
 
 func (r *OVNControllerReconciler) reconcileUpgrade(ctx context.Context, instance *v1beta1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
-	r.Log.Info("Reconciling Service upgrade")
+	Log := r.GetLogger(ctx)
 
-	r.Log.Info("Reconciled Service upgrade successfully")
+	Log.Info("Reconciling Service upgrade")
+
+	Log.Info("Reconciled Service upgrade successfully")
 	return ctrl.Result{}, nil
 }
 
 func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance *v1beta1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
-	r.Log.Info("Reconciling Service")
+	Log := r.GetLogger(ctx)
+
+	Log.Info("Reconciling Service")
 
 	// Service account, role, binding
 	rbacRules := []rbacv1.PolicyRule{
@@ -311,7 +322,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	// Create additional Physical Network Attachments
 	networkAttachments, err := ovncontroller.CreateAdditionalNetworks(ctx, helper, instance, serviceLabels)
 	if err != nil {
-		r.Log.Info(fmt.Sprintf("Failed to create additional networks: %s", err))
+		Log.Info(fmt.Sprintf("Failed to create additional networks: %s", err))
 		return ctrl.Result{}, err
 	}
 
@@ -378,7 +389,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	// Define a new DaemonSet object
 	ovnDaemonSet, err := ovncontroller.DaemonSet(instance, inputHash, serviceLabels, serviceAnnotations)
 	if err != nil {
-		r.Log.Error(err, "Failed to create OVNController DaemonSet")
+		Log.Error(err, "Failed to create OVNController DaemonSet")
 		return ctrl.Result{}, err
 	}
 	dset := daemonset.NewDaemonSet(
@@ -435,10 +446,10 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 
 	sbCluster, err := v1beta1.GetDBClusterByType(ctx, helper, instance.Namespace, map[string]string{}, v1beta1.SBDBType)
 	if err != nil {
-		r.Log.Info("No SB OVNDBCluster defined, deleting external ConfigMap")
+		Log.Info("No SB OVNDBCluster defined, deleting external ConfigMap")
 		cleanupConfigMapErr := r.deleteExternalConfigMaps(ctx, helper, instance)
 		if cleanupConfigMapErr != nil {
-			r.Log.Error(cleanupConfigMapErr, "Failed to delete external ConfigMap")
+			Log.Error(cleanupConfigMapErr, "Failed to delete external ConfigMap")
 			return ctrl.Result{}, cleanupConfigMapErr
 		}
 		return ctrl.Result{}, nil
@@ -446,10 +457,10 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 
 	_, err = sbCluster.GetExternalEndpoint()
 	if err != nil {
-		r.Log.Info("No external endpoint defined for SB OVNDBCluster, deleting external ConfigMap")
+		Log.Info("No external endpoint defined for SB OVNDBCluster, deleting external ConfigMap")
 		cleanupConfigMapErr := r.deleteExternalConfigMaps(ctx, helper, instance)
 		if cleanupConfigMapErr != nil {
-			r.Log.Error(cleanupConfigMapErr, "Failed to delete external ConfigMap")
+			Log.Error(cleanupConfigMapErr, "Failed to delete external ConfigMap")
 			return ctrl.Result{}, cleanupConfigMapErr
 		}
 		return ctrl.Result{}, nil
@@ -459,7 +470,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	// TODO(ihar) - is there any hashing mechanism for EDP config? do we trigger deploy somehow?
 	err = r.generateExternalConfigMaps(ctx, helper, instance, sbCluster, &configMapVars)
 	if err != nil {
-		r.Log.Error(err, "Failed to generate external ConfigMap")
+		Log.Error(err, "Failed to generate external ConfigMap")
 		return ctrl.Result{}, err
 	}
 
@@ -467,7 +478,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	if instance.Status.NumberReady == instance.Status.DesiredNumberScheduled {
 		jobsDef, err := ovncontroller.ConfigJob(ctx, helper, r.Client, instance, sbCluster, serviceLabels)
 		if err != nil {
-			r.Log.Error(err, "Failed to create OVN controller configuration Job")
+			Log.Error(err, "Failed to create OVN controller configuration Job")
 			return ctrl.Result{}, err
 		}
 		for _, jobDef := range jobsDef {
@@ -493,7 +504,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 				return ctrlResult, nil
 			}
 			if err != nil {
-				r.Log.Error(err, "Failed to configure OVN controller")
+				Log.Error(err, "Failed to configure OVN controller")
 				instance.Status.Conditions.Set(
 					condition.FalseCondition(
 						condition.ServiceConfigReadyCondition,
@@ -507,17 +518,17 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 			}
 			if configJob.HasChanged() {
 				instance.Status.Hash[configHashKey] = configJob.GetHash()
-				r.Log.Info(fmt.Sprintf("Job %s hash added - %s", jobDef.Name, instance.Status.Hash[configHashKey]))
+				Log.Info(fmt.Sprintf("Job %s hash added - %s", jobDef.Name, instance.Status.Hash[configHashKey]))
 			}
 		}
 		instance.Status.Conditions.MarkTrue(condition.ServiceConfigReadyCondition, condition.ServiceConfigReadyMessage)
 	} else {
-		r.Log.Info("OVNController DaemonSet not ready yet. Configuration job cannot be started.")
+		Log.Info("OVNController DaemonSet not ready yet. Configuration job cannot be started.")
 		return ctrl.Result{Requeue: true}, nil
 	}
 	// create OVN Config Job - end
 
-	r.Log.Info("Reconciled Service successfully")
+	Log.Info("Reconciled Service successfully")
 
 	return ctrl.Result{}, nil
 }
@@ -616,6 +627,8 @@ func (r *OVNControllerReconciler) createHashOfInputHashes(
 	instance *v1beta1.OVNController,
 	envVars map[string]env.Setter,
 ) (string, bool, error) {
+	Log := r.GetLogger(ctx)
+
 	var hashMap map[string]string
 	changed := false
 	mergedMapVars := env.MergeEnvs([]corev1.EnvVar{}, envVars)
@@ -625,7 +638,7 @@ func (r *OVNControllerReconciler) createHashOfInputHashes(
 	}
 	if hashMap, changed = util.SetHash(instance.Status.Hash, common.InputHashName, hash); changed {
 		instance.Status.Hash = hashMap
-		r.Log.Info(fmt.Sprintf("Input maps hash %s - %s", common.InputHashName, hash))
+		Log.Info(fmt.Sprintf("Input maps hash %s - %s", common.InputHashName, hash))
 	}
 	return hash, changed, nil
 }

@@ -21,15 +21,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/go-logr/logr"
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/configmap"
@@ -53,7 +54,6 @@ import (
 type OVNNorthdReconciler struct {
 	client.Client
 	Kclient kubernetes.Interface
-	Log     logr.Logger
 	Scheme  *runtime.Scheme
 }
 
@@ -62,14 +62,14 @@ func (r *OVNNorthdReconciler) GetClient() client.Client {
 	return r.Client
 }
 
-// GetLogger -
-func (r *OVNNorthdReconciler) GetLogger() logr.Logger {
-	return r.Log
-}
-
 // GetScheme -
 func (r *OVNNorthdReconciler) GetScheme() *runtime.Scheme {
 	return r.Scheme
+}
+
+// getlog returns a logger object with a prefix of "conroller.name" and aditional controller context fields
+func (r *OVNNorthdReconciler) GetLogger(ctx context.Context) logr.Logger {
+	return log.FromContext(ctx).WithName("Controllers").WithName("OVNNorthd")
 }
 
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovnnorthds,verbs=get;list;watch;create;update;patch;delete
@@ -93,7 +93,7 @@ func (r *OVNNorthdReconciler) GetScheme() *runtime.Scheme {
 // Reconcile - OVN Northd
 func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, _err error) {
 	_ = context.Background()
-	_ = r.Log.WithValues("ovnnorthd", req.NamespacedName)
+	Log := r.GetLogger(ctx)
 
 	// Fetch the OVNNorthd instance
 	instance := &ovnv1.OVNNorthd{}
@@ -143,7 +143,7 @@ func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		r.Client,
 		r.Kclient,
 		r.Scheme,
-		r.Log,
+		Log,
 	)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -180,7 +180,8 @@ func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OVNNorthdReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OVNNorthdReconciler) SetupWithManager(mgr ctrl.Manager, ctx context.Context) error {
+	Log := r.GetLogger(ctx)
 	crs := &ovnv1.OVNNorthdList{}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ovnv1.OVNNorthd{}).
@@ -189,16 +190,18 @@ func (r *OVNNorthdReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
-		Watches(&source.Kind{Type: &ovnv1.OVNDBCluster{}}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), r.Log))).
+		Watches(&source.Kind{Type: &ovnv1.OVNDBCluster{}}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), Log))).
 		Complete(r)
 }
 
 func (r *OVNNorthdReconciler) reconcileDelete(ctx context.Context, instance *ovnv1.OVNNorthd, helper *helper.Helper) (ctrl.Result, error) {
-	r.Log.Info("Reconciling Service delete")
+	Log := r.GetLogger(ctx)
+
+	Log.Info("Reconciling Service delete")
 
 	// Service is deleted so remove the finalizer.
 	controllerutil.RemoveFinalizer(instance, helper.GetFinalizer())
-	r.Log.Info("Reconciled Service delete successfully")
+	Log.Info("Reconciled Service delete successfully")
 	if err := r.Update(ctx, instance); err != nil && !k8s_errors.IsNotFound(err) {
 		return ctrl.Result{}, err
 	}
@@ -207,27 +210,33 @@ func (r *OVNNorthdReconciler) reconcileDelete(ctx context.Context, instance *ovn
 }
 
 func (r *OVNNorthdReconciler) reconcileUpdate(ctx context.Context, instance *ovnv1.OVNNorthd, helper *helper.Helper) (ctrl.Result, error) {
-	r.Log.Info("Reconciling Service update")
+	Log := r.GetLogger(ctx)
+
+	Log.Info("Reconciling Service update")
 
 	// TODO: should have minor update tasks if required
 	// - delete dbsync hash from status to rerun it?
 
-	r.Log.Info("Reconciled Service update successfully")
+	Log.Info("Reconciled Service update successfully")
 	return ctrl.Result{}, nil
 }
 
 func (r *OVNNorthdReconciler) reconcileUpgrade(ctx context.Context, instance *ovnv1.OVNNorthd, helper *helper.Helper) (ctrl.Result, error) {
-	r.Log.Info("Reconciling Service upgrade")
+	Log := r.GetLogger(ctx)
+
+	Log.Info("Reconciling Service upgrade")
 
 	// TODO: should have major version upgrade tasks
 	// -delete dbsync hash from status to rerun it?
 
-	r.Log.Info("Reconciled Service upgrade successfully")
+	Log.Info("Reconciled Service upgrade successfully")
 	return ctrl.Result{}, nil
 }
 
 func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovnv1.OVNNorthd, helper *helper.Helper) (ctrl.Result, error) {
-	r.Log.Info("Reconciling Service")
+	Log := r.GetLogger(ctx)
+
+	Log.Info("Reconciling Service")
 
 	if !controllerutil.ContainsFinalizer(instance, helper.GetFinalizer()) {
 		// If the service object doesn't have our finalizer, add it.
@@ -412,7 +421,7 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	}
 	// create Deployment - end
 
-	r.Log.Info("Reconciled Service successfully")
+	Log.Info("Reconciled Service successfully")
 	return ctrl.Result{}, nil
 }
 
@@ -478,6 +487,8 @@ func (r *OVNNorthdReconciler) createHashOfInputHashes(
 	instance *ovnv1.OVNNorthd,
 	envVars map[string]env.Setter,
 ) (string, error) {
+	Log := r.GetLogger(ctx)
+
 	mergedMapVars := env.MergeEnvs([]corev1.EnvVar{}, envVars)
 	hash, err := util.ObjectHash(mergedMapVars)
 	if err != nil {
@@ -488,7 +499,7 @@ func (r *OVNNorthdReconciler) createHashOfInputHashes(
 		if err := r.Client.Status().Update(ctx, instance); err != nil {
 			return hash, err
 		}
-		r.Log.Info(fmt.Sprintf("Input maps hash %s - %s", common.InputHashName, hash))
+		Log.Info(fmt.Sprintf("Input maps hash %s - %s", common.InputHashName, hash))
 	}
 	return hash, nil
 }
