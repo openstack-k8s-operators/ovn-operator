@@ -3,20 +3,20 @@ module github.com/openstack-k8s-operators/ovn-operator
 go 1.19
 
 require (
-	github.com/go-logr/logr v1.2.4
-	github.com/google/uuid v1.3.1
+	github.com/go-logr/logr v1.3.0
+	github.com/google/uuid v1.4.0
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.4.0
 	github.com/onsi/ginkgo/v2 v2.13.0
 	github.com/onsi/gomega v1.29.0
-	github.com/openstack-k8s-operators/lib-common/modules/common v0.3.1-0.20231019091705-f3aa3d057b0f
-	github.com/openstack-k8s-operators/lib-common/modules/test v0.3.1-0.20231019091705-f3aa3d057b0f
+	github.com/openstack-k8s-operators/lib-common/modules/common v0.3.1-0.20231027113646-46f2fdbf77f1
+	github.com/openstack-k8s-operators/lib-common/modules/test v0.3.1-0.20231027113646-46f2fdbf77f1
 	github.com/openstack-k8s-operators/ovn-operator/api v0.0.0-20230418071801-b5843d9e05fb
 	go.uber.org/zap v1.26.0
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 	k8s.io/api v0.26.10
 	k8s.io/apimachinery v0.26.10
 	k8s.io/client-go v0.26.10
-	sigs.k8s.io/controller-runtime v0.14.6
+	sigs.k8s.io/controller-runtime v0.14.7
 )
 
 require (
