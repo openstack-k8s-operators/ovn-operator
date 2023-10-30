@@ -81,9 +81,6 @@ type OVNNorthdStatus struct {
 	// ReadyCount of OVN Northd instances
 	ReadyCount int32 `json:"readyCount,omitempty"`
 
-	// Map of hashes to track e.g. job status
-	Hash map[string]string `json:"hash,omitempty"`
-
 	// Conditions
 	Conditions condition.Conditions `json:"conditions,omitempty" optional:"true"`
 

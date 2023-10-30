@@ -126,9 +126,6 @@ func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return ctrl.Result{}, err
 		}
 	}
-	if instance.Status.Hash == nil {
-		instance.Status.Hash = map[string]string{}
-	}
 	if instance.Status.NetworkAttachments == nil {
 		instance.Status.NetworkAttachments = map[string][]string{}
 	}
@@ -209,9 +206,6 @@ func (r *OVNNorthdReconciler) reconcileUpdate(ctx context.Context, instance *ovn
 
 	Log.Info("Reconciling Service update")
 
-	// TODO: should have minor update tasks if required
-	// - delete dbsync hash from status to rerun it?
-
 	Log.Info("Reconciled Service update successfully")
 	return ctrl.Result{}, nil
 }
@@ -220,9 +214,6 @@ func (r *OVNNorthdReconciler) reconcileUpgrade(ctx context.Context, instance *ov
 	Log := r.GetLogger(ctx)
 
 	Log.Info("Reconciling Service upgrade")
-
-	// TODO: should have major version upgrade tasks
-	// -delete dbsync hash from status to rerun it?
 
 	Log.Info("Reconciled Service upgrade successfully")
 	return ctrl.Result{}, nil

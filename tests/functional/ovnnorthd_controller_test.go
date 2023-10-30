@@ -49,7 +49,6 @@ var _ = Describe("OVNNorthd controller", func() {
 
 		It("should have the Status fields initialized", func() {
 			OVNNorthd := GetOVNNorthd(OVNNorthdName)
-			Expect(OVNNorthd.Status.Hash).To(BeEmpty())
 			Expect(OVNNorthd.Status.ReadyCount).To(Equal(int32(0)))
 		})
 

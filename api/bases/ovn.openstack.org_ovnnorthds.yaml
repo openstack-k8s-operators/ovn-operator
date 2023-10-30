@@ -181,11 +181,6 @@ spec:
                   - type
                   type: object
                 type: array
-              hash:
-                additionalProperties:
-                  type: string
-                description: Map of hashes to track e.g. job status
-                type: object
               networkAttachments:
                 additionalProperties:
                   items:
