@@ -19,7 +19,6 @@ package functional_test
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
@@ -62,12 +61,6 @@ var _ = Describe("OVNNorthd controller", func() {
 			}, timeout, interval).Should(ContainElement("OVNNorthd"))
 		})
 
-		It("should not create a config map", func() {
-			Eventually(func() []corev1.ConfigMap {
-				return th.ListConfigMaps(fmt.Sprintf("%s-%s", OVNNorthdName.Name, "config-data")).Items
-			}, timeout, interval).Should(BeEmpty())
-		})
-
 		It("should be in input ready condition", func() {
 			th.ExpectCondition(
 				OVNNorthdName,
@@ -77,66 +70,21 @@ var _ = Describe("OVNNorthd controller", func() {
 			)
 		})
 
-		When("OVNDBCluster instance is not available", func() {
-			It("should not create a config map", func() {
-				Eventually(func() []corev1.ConfigMap {
-					return th.ListConfigMaps(fmt.Sprintf("%s-%s", OVNNorthdName.Name, "config-data")).Items
-				}, timeout, interval).Should(BeEmpty())
-			})
-			It("should not set ServiceConfigReadyCondition condition", func() {
-				th.ExpectCondition(
-					OVNNorthdName,
-					ConditionGetterFunc(OVNNorthdConditionGetter),
-					condition.ServiceConfigReadyCondition,
-					corev1.ConditionFalse,
-				)
-			})
-		})
-
 		When("OVNDBCluster instances are available", func() {
-			It("should create a ConfigMap for ovn-northd.json with the ovn connection config option set based on the OVNDBCluster", func() {
+			It("should create a Deployment with the ovn connection CLI args set based on the OVNDBCluster", func() {
 				dbs := CreateOVNDBClusters(namespace)
 				DeferCleanup(DeleteOVNDBClusters, dbs)
-				configataCM := types.NamespacedName{
-					Namespace: OVNNorthdName.Namespace,
-					Name:      fmt.Sprintf("%s-%s", OVNNorthdName.Name, "config-data"),
+
+				deplName := types.NamespacedName{
+					Namespace: namespace,
+					Name:      "ovn-northd",
 				}
-
-				Eventually(func() corev1.ConfigMap {
-					return *th.GetConfigMap(configataCM)
-				}, timeout, interval).ShouldNot(BeNil())
-				for _, db := range dbs {
-					ovndb := GetOVNDBCluster(db)
-					Expect(th.GetConfigMap(configataCM).Data["ovn-northd.json"]).Should(
-						ContainSubstring("ovn%s-db=%s", strings.ToLower(string(ovndb.Spec.DBType)), ovndb.Status.DBAddress))
-				}
-
-				th.ExpectCondition(
-					OVNNorthdName,
-					ConditionGetterFunc(OVNNorthdConditionGetter),
-					condition.ServiceConfigReadyCondition,
-					corev1.ConditionTrue,
-				)
-			})
-		})
-
-		When("OVNNorthd CR is deleted", func() {
-			It("removes the Config MAP", func() {
-				DeferCleanup(DeleteOVNDBClusters, CreateOVNDBClusters(namespace))
-				configataCM := types.NamespacedName{
-					Namespace: OVNNorthdName.Namespace,
-					Name:      fmt.Sprintf("%s-%s", OVNNorthdName.Name, "config-data"),
-				}
-
-				Eventually(func() corev1.ConfigMap {
-					return *th.GetConfigMap(configataCM)
-				}, timeout, interval).ShouldNot(BeNil())
-
-				th.DeleteInstance(GetOVNNorthd(OVNNorthdName))
-
-				Eventually(func() []corev1.ConfigMap {
-					return th.ListConfigMaps(configataCM.Name).Items
-				}, timeout, interval).Should(BeEmpty())
+				depl := th.GetDeployment(deplName)
+				Expect(depl.Spec.Template.Spec.Containers[0].Args).To(Equal([]string{
+					"-vfile:off", "-vconsole:info",
+					"--ovnnb-db=tcp:10.1.1.1:6641",
+					"--ovnsb-db=tcp:10.1.1.1:6642",
+				}))
 			})
 		})
 
@@ -166,7 +114,8 @@ var _ = Describe("OVNNorthd controller", func() {
 				Equal([]string{"/bin/true"}))
 			Expect(depl.Spec.Template.Spec.Containers[0].ReadinessProbe.Exec.Command).To(
 				Equal([]string{"/bin/true"}))
-			Expect(depl.Spec.Template.Spec.Containers[0].Args[1]).Should(ContainSubstring("sleep infinity"))
+			Expect(depl.Spec.Template.Spec.Containers[0].Command[0]).Should(ContainSubstring("/bin/sleep"))
+			Expect(depl.Spec.Template.Spec.Containers[0].Args[0]).Should(ContainSubstring("infinity"))
 		})
 	})
 

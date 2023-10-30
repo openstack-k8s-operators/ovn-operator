@@ -13,6 +13,8 @@ limitations under the License.
 package ovnnorthd
 
 import (
+	"fmt"
+
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/affinity"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
@@ -25,17 +27,17 @@ import (
 
 const (
 	// ServiceCommand -
-	ServiceCommand = "/usr/local/bin/kolla_set_configs && /usr/local/bin/kolla_start"
+	ServiceCommand = "/usr/bin/ovn-northd"
 )
 
 // Deployment func
 func Deployment(
 	instance *ovnv1.OVNNorthd,
-	configHash string,
 	labels map[string]string,
 	annotations map[string]string,
+	nbEndpoint string,
+	sbEndpoint string,
 ) *appsv1.Deployment {
-	runAsUser := int64(0)
 
 	livenessProbe := &corev1.Probe{
 		// TODO might need tuning
@@ -49,13 +51,21 @@ func Deployment(
 		PeriodSeconds:       5,
 		InitialDelaySeconds: 5,
 	}
-
-	noopCmd := []string{
-		"/bin/true",
+	cmd := ServiceCommand
+	args := []string{
+		"-vfile:off",
+		fmt.Sprintf("-vconsole:%s", instance.Spec.LogLevel),
+		fmt.Sprintf("--ovnnb-db=%s", nbEndpoint),
+		fmt.Sprintf("--ovnsb-db=%s", sbEndpoint),
 	}
-	args := []string{"-c"}
+
 	if instance.Spec.Debug.Service {
-		args = append(args, common.DebugCommand)
+		cmd = "/bin/sleep"
+		args = []string{"infinity"}
+
+		noopCmd := []string{
+			"/bin/true",
+		}
 		livenessProbe.Exec = &corev1.ExecAction{
 			Command: noopCmd,
 		}
@@ -64,7 +74,6 @@ func Deployment(
 			Command: noopCmd,
 		}
 	} else {
-		args = append(args, ServiceCommand)
 		//
 		// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 		//
@@ -77,8 +86,6 @@ func Deployment(
 	}
 
 	envVars := map[string]env.Setter{}
-	envVars["KOLLA_CONFIG_STRATEGY"] = env.SetValue("COPY_ALWAYS")
-	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 	// TODO: Make confs customizable
 	envVars["OVN_RUNDIR"] = env.SetValue("/tmp")
 
@@ -101,17 +108,12 @@ func Deployment(
 					ServiceAccountName: instance.RbacResourceName(),
 					Containers: []corev1.Container{
 						{
-							Name: ServiceName,
-							Command: []string{
-								"/bin/bash",
-							},
-							Args:  args,
-							Image: instance.Spec.ContainerImage,
-							SecurityContext: &corev1.SecurityContext{
-								RunAsUser: &runAsUser,
-							},
+							Name:                     ServiceName,
+							Command:                  []string{cmd},
+							Args:                     args,
+							Image:                    instance.Spec.ContainerImage,
+							SecurityContext:          getOVNNorthdSecurityContext(),
 							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-							VolumeMounts:             GetNorthdVolumeMounts(),
 							Resources:                instance.Spec.Resources,
 							ReadinessProbe:           readinessProbe,
 							LivenessProbe:            livenessProbe,
@@ -122,7 +124,6 @@ func Deployment(
 			},
 		},
 	}
-	deployment.Spec.Template.Spec.Volumes = GetNorthdVolumes(instance.Name)
 	// If possible two pods of the same service should not
 	// run on the same worker node. If this is not possible
 	// the get still created on the same worker node.

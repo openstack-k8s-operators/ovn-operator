@@ -33,14 +33,10 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
-	"github.com/openstack-k8s-operators/lib-common/modules/common/configmap"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/deployment"
-	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
-	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
 	nad "github.com/openstack-k8s-operators/lib-common/modules/common/networkattachment"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
-	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
 	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovnnorthd"
@@ -87,7 +83,7 @@ func (r *OVNNorthdReconciler) GetLogger(ctx context.Context) logr.Logger {
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;update
 // service account permissions that are needed to grant permission to the above
-// +kubebuilder:rbac:groups="security.openshift.io",resourceNames=anyuid;privileged,resources=securitycontextconstraints,verbs=use
+// +kubebuilder:rbac:groups="security.openshift.io",resourceNames=anyuid,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:groups="",resources=pods,verbs=create;delete;get;list;patch;update;watch
 
 // Reconcile - OVN Northd
@@ -116,7 +112,6 @@ func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// initialize conditions used later as Status=Unknown
 		cl := condition.CreateList(
 			condition.UnknownCondition(condition.InputReadyCondition, condition.InitReason, condition.InputReadyInitMessage),
-			condition.UnknownCondition(condition.ServiceConfigReadyCondition, condition.InitReason, condition.ServiceConfigReadyInitMessage),
 			condition.UnknownCondition(condition.NetworkAttachmentsReadyCondition, condition.InitReason, condition.NetworkAttachmentsReadyInitMessage),
 			condition.UnknownCondition(condition.DeploymentReadyCondition, condition.InitReason, condition.DeploymentReadyInitMessage),
 			condition.UnknownCondition(condition.ServiceAccountReadyCondition, condition.InitReason, condition.ServiceAccountReadyInitMessage),
@@ -251,7 +246,7 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	rbacRules := []rbacv1.PolicyRule{
 		{
 			APIGroups:     []string{"security.openshift.io"},
-			ResourceNames: []string{"anyuid", "privileged"},
+			ResourceNames: []string{"anyuid"},
 			Resources:     []string{"securitycontextconstraints"},
 			Verbs:         []string{"use"},
 		},
@@ -268,49 +263,7 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 		return rbacResult, nil
 	}
 
-	// ConfigMap
-	configMapVars := make(map[string]env.Setter)
-
 	instance.Status.Conditions.MarkTrue(condition.InputReadyCondition, condition.InputReadyMessage)
-
-	//
-	// Create ConfigMaps required as input for the Service and calculate an overall hash of hashes
-	//
-
-	//
-	// create Configmap required for northd input
-	// - %-scripts configmap holding scripts to e.g. bootstrap the service
-	// - %-config configmap holding minimal northd config required to get the service up, user can add additional files to be added to the service
-	// - parameters which has passwords gets added from the OpenStack secret via the init container
-	//
-	err = r.generateServiceConfigMaps(ctx, helper, instance, &configMapVars)
-	if err != nil {
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			condition.ServiceConfigReadyCondition,
-			condition.ErrorReason,
-			condition.SeverityWarning,
-			condition.ServiceConfigReadyErrorMessage,
-			err.Error()))
-		return ctrl.Result{}, err
-	}
-
-	//
-	// create hash over all the different input resources to identify if any those changed
-	// and a restart/recreate is required.
-	//
-	inputHash, err := r.createHashOfInputHashes(ctx, instance, configMapVars)
-	if err != nil {
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			condition.ServiceConfigReadyCondition,
-			condition.ErrorReason,
-			condition.SeverityWarning,
-			condition.ServiceConfigReadyErrorMessage,
-			err.Error()))
-		return ctrl.Result{}, err
-	}
-	// Create ConfigMaps and Secrets - end
-
-	instance.Status.Conditions.MarkTrue(condition.ServiceConfigReadyCondition, condition.ServiceConfigReadyMessage)
 
 	//
 	// TODO check when/if Init, Update, or Upgrade should/could be skipped
@@ -369,9 +322,18 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 		return ctrlResult, nil
 	}
 
+	nbEndpoint, err := getInternalEndpoint(ctx, helper, instance, v1beta1.NBDBType)
+	if err != nil {
+		return ctrlResult, err
+	}
+	sbEndpoint, err := getInternalEndpoint(ctx, helper, instance, v1beta1.SBDBType)
+	if err != nil {
+		return ctrlResult, err
+	}
+
 	// Define a new Deployment object
 	depl := deployment.NewDeployment(
-		ovnnorthd.Deployment(instance, inputHash, serviceLabels, serviceAnnotations),
+		ovnnorthd.Deployment(instance, serviceLabels, serviceAnnotations, nbEndpoint, sbEndpoint),
 		time.Duration(5)*time.Second,
 	)
 
@@ -440,66 +402,4 @@ func getInternalEndpoint(
 		return "", err
 	}
 	return internalEndpoint, nil
-}
-
-// generateServiceConfigMaps - create create configmaps which hold scripts and service configuration
-// TODO add DefaultConfigOverwrite
-func (r *OVNNorthdReconciler) generateServiceConfigMaps(
-	ctx context.Context,
-	h *helper.Helper,
-	instance *ovnv1.OVNNorthd,
-	envVars *map[string]env.Setter,
-) error {
-	nbEndpoint, err := getInternalEndpoint(ctx, h, instance, v1beta1.NBDBType)
-	if err != nil {
-		return err
-	}
-	sbEndpoint, err := getInternalEndpoint(ctx, h, instance, v1beta1.SBDBType)
-	if err != nil {
-		return err
-	}
-
-	// Create/update configmaps from templates
-	templateParameters := make(map[string]interface{})
-	templateParameters["NBConnection"] = nbEndpoint
-	templateParameters["SBConnection"] = sbEndpoint
-	templateParameters["OVN_LOG_LEVEL"] = instance.Spec.LogLevel
-
-	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnnorthd.ServiceName), map[string]string{})
-	cms := []util.Template{
-		// ConfigMap
-		{
-			Name:          fmt.Sprintf("%s-config-data", instance.Name),
-			Namespace:     instance.Namespace,
-			Type:          util.TemplateTypeConfig,
-			InstanceType:  instance.Kind,
-			Labels:        cmLabels,
-			ConfigOptions: templateParameters,
-		},
-	}
-	return configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
-}
-
-// createHashOfInputHashes - creates a hash of hashes which gets added to the resources which requires a restart
-// if any of the input resources change, like configs, passwords, ...
-func (r *OVNNorthdReconciler) createHashOfInputHashes(
-	ctx context.Context,
-	instance *ovnv1.OVNNorthd,
-	envVars map[string]env.Setter,
-) (string, error) {
-	Log := r.GetLogger(ctx)
-
-	mergedMapVars := env.MergeEnvs([]corev1.EnvVar{}, envVars)
-	hash, err := util.ObjectHash(mergedMapVars)
-	if err != nil {
-		return hash, err
-	}
-	if hashMap, changed := util.SetHash(instance.Status.Hash, common.InputHashName, hash); changed {
-		instance.Status.Hash = hashMap
-		if err := r.Client.Status().Update(ctx, instance); err != nil {
-			return hash, err
-		}
-		Log.Info(fmt.Sprintf("Input maps hash %s - %s", common.InputHashName, hash))
-	}
-	return hash, nil
 }

@@ -127,11 +127,8 @@ spec:
               topologyKey: kubernetes.io/hostname
             weight: 1
       containers:
-      - args:
-        - -c
-        - /usr/local/bin/kolla_set_configs && /usr/local/bin/kolla_start
-        command:
-        - /bin/bash
+      - command:
+        - /usr/bin/ovn-northd
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -144,7 +141,10 @@ spec:
           successThreshold: 1
           timeoutSeconds: 5
         securityContext:
-          runAsUser: 0
+          allowPrivilegeEscalation: false
+          runAsGroup: 995
+          runAsNonRoot: true
+          runAsUser: 997
         name: ovn-northd
         readinessProbe:
           exec:
@@ -176,7 +176,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   annotations:
-    openshift.io/scc: privileged
+    openshift.io/scc: anyuid
   labels:
     service: ovn-northd
 ---
