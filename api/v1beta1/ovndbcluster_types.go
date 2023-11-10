@@ -197,7 +197,7 @@ func (instance OVNDBCluster) GetInternalEndpoint() (string, error) {
 }
 
 func (instance OVNDBCluster) GetExternalEndpoint() (string, error) {
-	if instance.Status.DBAddress == "" {
+	if instance.Spec.NetworkAttachment != "" && instance.Status.DBAddress == "" {
 		return "", fmt.Errorf("external DBEndpoint not ready yet for %s", instance.Spec.DBType)
 	}
 	return instance.Status.DBAddress, nil

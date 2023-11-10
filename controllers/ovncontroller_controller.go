@@ -455,8 +455,8 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		return ctrl.Result{}, nil
 	}
 
-	_, err = sbCluster.GetExternalEndpoint()
-	if err != nil {
+	ep, err := sbCluster.GetExternalEndpoint()
+	if err != nil || ep == "" {
 		Log.Info("No external endpoint defined for SB OVNDBCluster, deleting external ConfigMap")
 		cleanupConfigMapErr := r.deleteExternalConfigMaps(ctx, helper, instance)
 		if cleanupConfigMapErr != nil {
@@ -466,12 +466,14 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		return ctrl.Result{}, nil
 	}
 
-	// Create ConfigMap for external dataplane consumption
-	// TODO(ihar) - is there any hashing mechanism for EDP config? do we trigger deploy somehow?
-	err = r.generateExternalConfigMaps(ctx, helper, instance, sbCluster, &configMapVars)
-	if err != nil {
-		Log.Error(err, "Failed to generate external ConfigMap")
-		return ctrl.Result{}, err
+	if sbCluster.Spec.NetworkAttachment != "" {
+		// Create ConfigMap for external dataplane consumption
+		// TODO(ihar) - is there any hashing mechanism for EDP config? do we trigger deploy somehow?
+		err = r.generateExternalConfigMaps(ctx, helper, instance, sbCluster, &configMapVars)
+		if err != nil {
+			Log.Error(err, "Failed to generate external ConfigMap")
+			return ctrl.Result{}, err
+		}
 	}
 
 	// create OVN Config Job - start

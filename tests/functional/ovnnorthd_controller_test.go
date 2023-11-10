@@ -71,7 +71,7 @@ var _ = Describe("OVNNorthd controller", func() {
 
 		When("OVNDBCluster instances are available", func() {
 			It("should create a Deployment with the ovn connection CLI args set based on the OVNDBCluster", func() {
-				dbs := CreateOVNDBClusters(namespace)
+				dbs := CreateOVNDBClusters(namespace, "")
 				DeferCleanup(DeleteOVNDBClusters, dbs)
 
 				deplName := types.NamespacedName{
@@ -91,7 +91,7 @@ var _ = Describe("OVNNorthd controller", func() {
 
 	When("A OVNNorthd instance is created with debug on", func() {
 		BeforeEach(func() {
-			dbs := CreateOVNDBClusters(namespace)
+			dbs := CreateOVNDBClusters(namespace, "")
 			DeferCleanup(DeleteOVNDBClusters, dbs)
 			name := fmt.Sprintf("ovnnorthd-%s", uuid.New().String())
 			spec := GetDefaultOVNNorthdSpec()
@@ -121,7 +121,7 @@ var _ = Describe("OVNNorthd controller", func() {
 	When("OVNNorthd is created with networkAttachments", func() {
 		var OVNNorthdName types.NamespacedName
 		BeforeEach(func() {
-			dbs := CreateOVNDBClusters(namespace)
+			dbs := CreateOVNDBClusters(namespace, "")
 			DeferCleanup(DeleteOVNDBClusters, dbs)
 			name := fmt.Sprintf("ovnnorthd-%s", uuid.New().String())
 			spec := GetDefaultOVNNorthdSpec()
