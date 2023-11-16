@@ -66,46 +66,32 @@ var _ = Describe("OVNDBCluster controller", func() {
 
 		DescribeTable("should not create the config map",
 			func(cmName string) {
-				Eventually(func() []corev1.ConfigMap {
-					return th.ListConfigMaps(fmt.Sprintf("%s-%s", OVNDBClusterName.Name, cmName)).Items
-				}, timeout, interval).Should(BeEmpty())
+				cm := types.NamespacedName{
+					Namespace: namespace,
+					Name:      fmt.Sprintf("%s-%s", OVNDBClusterName.Name, cmName),
+				}
+				th.AssertConfigMapDoesNotExist(cm)
 			},
 			Entry("config-data CM", "config-data"),
 			Entry("scripts CM", "scripts"),
 		)
-		DescribeTable("should eventually create the config maps",
+		DescribeTable("should eventually create the config maps with OwnerReferences set",
 			func(cmName string) {
+				cm := types.NamespacedName{
+					Namespace: OVNDBClusterName.Namespace,
+					Name:      fmt.Sprintf("%s-%s", OVNDBClusterName.Name, cmName),
+				}
 				Eventually(func() corev1.ConfigMap {
-					cm := types.NamespacedName{
-						Namespace: OVNDBClusterName.Namespace,
-						Name:      fmt.Sprintf("%s-%s", OVNDBClusterName.Name, cmName),
-					}
+
 					return *th.GetConfigMap(cm)
 				}, timeout, interval).ShouldNot(BeNil())
+				// Check OwnerReferences set correctly for the Config Map
+				Expect(th.GetConfigMap(cm).ObjectMeta.OwnerReferences[0].Name).To(Equal(OVNDBClusterName.Name))
+				Expect(th.GetConfigMap(cm).ObjectMeta.OwnerReferences[0].Kind).To(Equal("OVNDBCluster"))
 			},
 			Entry("config-data CM", "config-data"),
 			Entry("scripts CM", "scripts"),
 		)
-		When("OVNDBCluster CR is deleted, config maps should be removed", func() {
-			BeforeEach(func() {
-				th.DeleteInstance(GetOVNDBCluster(OVNDBClusterName))
-			})
-
-			DescribeTable("should delete the config map",
-				func(cmName string) {
-					Eventually(func() []corev1.ConfigMap {
-						cm := types.NamespacedName{
-							Namespace: OVNDBClusterName.Namespace,
-							Name:      fmt.Sprintf("%s-%s", OVNDBClusterName.Name, cmName),
-						}
-						return th.ListConfigMaps(cm.Name).Items
-					}, timeout, interval).Should(BeEmpty())
-				},
-				Entry("config-data CM", "config-data"),
-				Entry("scripts CM", "scripts"),
-			)
-		})
-
 	})
 
 	When("A OVNDBCluster instance is created with debug on", func() {
