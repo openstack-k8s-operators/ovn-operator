@@ -100,12 +100,14 @@ func OVNDBClusterConditionGetter(name types.NamespacedName) condition.Conditions
 }
 
 // CreateOVNDBClusters Creates NB and SB OVNDBClusters
-func CreateOVNDBClusters(namespace string) []types.NamespacedName {
+func CreateOVNDBClusters(namespace string, nad string) []types.NamespacedName {
 	dbs := []types.NamespacedName{}
 	for _, db := range []string{v1beta1.NBDBType, v1beta1.SBDBType} {
 		name := fmt.Sprintf("ovn-%s", uuid.New().String())
 		spec := GetDefaultOVNDBClusterSpec()
 		spec["dbType"] = db
+		spec["networkAttachment"] = nad
+
 		instance := CreateOVNDBCluster(namespace, name, spec)
 
 		instance_name := types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
@@ -114,11 +116,13 @@ func CreateOVNDBClusters(namespace string) []types.NamespacedName {
 		if db == v1beta1.SBDBType {
 			dbaddr = "tcp:10.1.1.1:6642"
 		}
-
 		// the Status field needs to be written via a separate client
 		Eventually(func(g Gomega) {
 			ovndbcluster := GetOVNDBCluster(instance_name)
 			ovndbcluster.Status.InternalDBAddress = dbaddr
+			if nad != "" {
+				ovndbcluster.Status.DBAddress = dbaddr
+			}
 			g.Expect(k8sClient.Status().Update(ctx, ovndbcluster)).Should(Succeed())
 		}, timeout, interval).Should(Succeed())
 
