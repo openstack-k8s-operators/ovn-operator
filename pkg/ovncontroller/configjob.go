@@ -43,7 +43,7 @@ func ConfigJob(
 	// configuration job automatically right after it will be finished
 	jobTTLAfterFinished := int32(0)
 
-	ovsNodes, err := getOVNControllerPodsNodes(
+	ovnPods, err := getOVNControllerPods(
 		ctx,
 		k8sClient,
 		instance,
@@ -65,12 +65,12 @@ func ConfigJob(
 	envVars["PhysicalNetworks"] = env.SetValue(getPhysicalNetworks(instance))
 	envVars["OvnHostName"] = EnvDownwardAPI("spec.nodeName")
 
-	for _, ovsNode := range ovsNodes {
+	for _, ovnPod := range ovnPods.Items {
 		jobs = append(
 			jobs,
 			&batchv1.Job{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      instance.Name + "-configuration-" + ovsNode,
+					Name:      ovnPod.Name + "-config",
 					Namespace: instance.Namespace,
 					Labels:    labels,
 				},
@@ -82,7 +82,7 @@ func ConfigJob(
 							ServiceAccountName: instance.RbacResourceName(),
 							Containers: []corev1.Container{
 								{
-									Name:  instance.Name + "-ovn-configuration-sync",
+									Name:  "ovn-config",
 									Image: instance.Spec.OvnContainerImage,
 									Command: []string{
 										"/usr/local/bin/container-scripts/init.sh",
@@ -98,7 +98,7 @@ func ConfigJob(
 								},
 							},
 							Volumes:  GetVolumes(instance.Name),
-							NodeName: ovsNode,
+							NodeName: ovnPod.Spec.NodeName,
 						},
 					},
 				},

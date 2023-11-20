@@ -228,12 +228,12 @@ func SimulateDaemonsetNumberReadyWithPods(name types.NamespacedName, networkIPs 
 			Spec:       ds.Spec.Template.Spec,
 		}
 		pod.ObjectMeta.Namespace = name.Namespace
-		pod.ObjectMeta.GenerateName = name.Name
+		pod.ObjectMeta.Name = name.Name
 		pod.ObjectMeta.Labels = map[string]string{
 			"service": "ovn-controller",
 		}
 
-		// NodeName required for getOVNControllerPodsNodes
+		// NodeName required for getOVNControllerPods
 		pod.Spec.NodeName = name.Name
 
 		var netStatus []networkv1.NetworkStatus

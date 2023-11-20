@@ -36,13 +36,12 @@ func getPhysicalNetworks(
 	)
 }
 
-func getOVNControllerPodsNodes(
+func getOVNControllerPods(
 	ctx context.Context,
 	k8sClient client.Client,
 	instance *v1beta1.OVNController,
-) ([]string, error) {
+) (*corev1.PodList, error) {
 
-	var nodes []string
 	podList := &corev1.PodList{}
 	podListOpts := &client.ListOptions{
 		Namespace: instance.Namespace,
@@ -53,14 +52,10 @@ func getOVNControllerPodsNodes(
 
 	if err := k8sClient.List(ctx, podList, podListOpts); err != nil {
 		err = fmt.Errorf("error listing pods for instance %s: %w", instance.Name, err)
-		return []string{}, err
+		return podList, err
 	}
 
-	for _, pod := range podList.Items {
-		nodes = append(nodes, pod.Spec.NodeName)
-	}
-
-	return nodes, nil
+	return podList, nil
 }
 
 // EnvDownwardAPI - set env from FieldRef->FieldPath, e.g. status.podIP
