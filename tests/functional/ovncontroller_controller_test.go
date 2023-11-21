@@ -63,16 +63,32 @@ var _ = Describe("OVNController controller", func() {
 			}, timeout, interval).Should(ContainElement("OVNController"))
 		})
 
-		It("should not create a scripts config map", func() {
-			Eventually(func() []corev1.ConfigMap {
-				return th.ListConfigMaps(fmt.Sprintf("%s-%s", OVNControllerName.Name, "scripts")).Items
-			}, timeout, interval).Should(BeEmpty())
+		It("should create a ConfigMap for net_setup.sh with eth0 as Interface Name", func() {
+			scriptsCM := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "scripts"),
+			}
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(scriptsCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			Expect(th.GetConfigMap(scriptsCM).Data["net_setup.sh"]).Should(
+				ContainSubstring("addr show dev eth0"))
+
+			th.ExpectCondition(
+				OVNControllerName,
+				ConditionGetterFunc(OVNControllerConditionGetter),
+				condition.ServiceConfigReadyCondition,
+				corev1.ConditionTrue,
+			)
 		})
 
 		It("should not create an external config map", func() {
-			Eventually(func() []corev1.ConfigMap {
-				return th.ListConfigMaps(fmt.Sprintf("%s-%s", OVNControllerName.Name, "config")).Items
-			}, timeout, interval).Should(BeEmpty())
+			externalCM := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "config"),
+			}
+			th.AssertConfigMapDoesNotExist(externalCM)
 		})
 
 		It("should not create a config job", func() {
@@ -149,10 +165,11 @@ var _ = Describe("OVNController controller", func() {
 			})
 
 			It("should not create an external config map", func() {
-				Eventually(func() []corev1.ConfigMap {
-					return th.ListConfigMaps(fmt.Sprintf("%s-%s", OVNControllerName.Name, "config")).Items
-				}, timeout, interval).Should(BeEmpty())
-
+				externalCM := types.NamespacedName{
+					Namespace: OVNControllerName.Namespace,
+					Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "config"),
+				}
+				th.AssertConfigMapDoesNotExist(externalCM)
 			})
 		})
 
@@ -209,27 +226,6 @@ var _ = Describe("OVNController controller", func() {
 				th.AssertConfigMapDoesNotExist(configCM)
 			})
 		})
-
-		When("OVNController CR is deleted", func() {
-			It("removes the Config MAP", func() {
-				DeferCleanup(DeleteOVNDBClusters, CreateOVNDBClusters(namespace, ""))
-				scriptsCM := types.NamespacedName{
-					Namespace: OVNControllerName.Namespace,
-					Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "scripts"),
-				}
-
-				Eventually(func() corev1.ConfigMap {
-					return *th.GetConfigMap(scriptsCM)
-				}, timeout, interval).ShouldNot(BeNil())
-
-				th.DeleteInstance(GetOVNController(OVNControllerName))
-
-				Eventually(func() []corev1.ConfigMap {
-					return th.ListConfigMaps(scriptsCM.Name).Items
-				}, timeout, interval).Should(BeEmpty())
-			})
-		})
-
 	})
 
 	When("A OVNController instance is created with debug on", func() {
@@ -407,7 +403,7 @@ var _ = Describe("OVNController controller", func() {
 
 			}, timeout, interval).Should(Succeed())
 		})
-		It("should create a ConfigMap for net_setup.sh with nic name as Network Attachment", func() {
+		It("should create a ConfigMap for net_setup.sh with nic name as Network Attachment and OwnerReferences set", func() {
 
 			scriptsCM := types.NamespacedName{
 				Namespace: OVNControllerName.Namespace,
@@ -418,11 +414,15 @@ var _ = Describe("OVNController controller", func() {
 				return *th.GetConfigMap(scriptsCM)
 			}, timeout, interval).ShouldNot(BeNil())
 
+			// Check OwnerReferences set correctly for the Config Map
+			Expect(th.GetConfigMap(scriptsCM).ObjectMeta.OwnerReferences[0].Name).To(Equal(OVNControllerName.Name))
+			Expect(th.GetConfigMap(scriptsCM).ObjectMeta.OwnerReferences[0].Kind).To(Equal("OVNController"))
+
 			ovncontroller := GetOVNController(OVNControllerName)
 			Expect(th.GetConfigMap(scriptsCM).Data["net_setup.sh"]).Should(
 				ContainSubstring("addr show dev %s", ovncontroller.Spec.NetworkAttachment))
 		})
-		It("should create an external ConfigMap with expected key-value pairs", func() {
+		It("should create an external ConfigMap with expected key-value pairs and OwnerReferences set", func() {
 
 			externalCM := types.NamespacedName{
 				Namespace: OVNControllerName.Namespace,
@@ -443,6 +443,10 @@ var _ = Describe("OVNController controller", func() {
 			Eventually(func() corev1.ConfigMap {
 				return *th.GetConfigMap(externalCM)
 			}, timeout, interval).ShouldNot(BeNil())
+
+			// Check OwnerReferences set correctly for the Config Map
+			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Name).To(Equal(OVNControllerName.Name))
+			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Kind).To(Equal("OVNController"))
 
 			Eventually(func(g Gomega) {
 				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
@@ -477,9 +481,7 @@ var _ = Describe("OVNController controller", func() {
 			}, timeout, interval).ShouldNot(BeNil())
 
 			DeleteOVNDBClusters(dbs)
-			Eventually(func() []corev1.ConfigMap {
-				return th.ListConfigMaps(fmt.Sprintf("%s-%s", OVNControllerName.Name, "config")).Items
-			}, timeout, interval).Should(BeEmpty())
+			th.AssertConfigMapDoesNotExist(externalCM)
 		})
 
 		It("should delete an external ConfigMap once SB DBCluster is detached from NAD", func() {
@@ -505,9 +507,7 @@ var _ = Describe("OVNController controller", func() {
 			}, timeout, interval).ShouldNot(BeNil())
 
 			SetExternalEndpoint(dbs[1], "")
-			Eventually(func() []corev1.ConfigMap {
-				return th.ListConfigMaps(fmt.Sprintf("%s-%s", OVNControllerName.Name, "config")).Items
-			}, timeout, interval).Should(BeEmpty())
+			th.AssertConfigMapDoesNotExist(externalCM)
 		})
 
 		It("should update the external ConfigMap once SB DBCluster is updated", func() {
