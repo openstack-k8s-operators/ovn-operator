@@ -463,7 +463,6 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 			Log.Error(cleanupConfigMapErr, "Failed to delete external ConfigMap")
 			return ctrl.Result{}, cleanupConfigMapErr
 		}
-		return ctrl.Result{}, nil
 	}
 
 	if sbCluster.Spec.NetworkAttachment != "" {

@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -74,6 +75,18 @@ var _ = Describe("OVNController controller", func() {
 			}, timeout, interval).Should(BeEmpty())
 		})
 
+		It("should not create a config job", func() {
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			configJob := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      daemonSetName.Name + "-config",
+			}
+			th.AssertJobDoesNotExist(configJob)
+		})
+
 		// TODO(ihar) introduce a new condition for the external config?
 		It("should be in input ready condition", func() {
 			th.ExpectCondition(
@@ -99,6 +112,24 @@ var _ = Describe("OVNController controller", func() {
 					Namespace: OVNControllerName.Namespace,
 					Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "scripts"),
 				}
+			})
+
+			It("should create a config job", func() {
+				daemonSetName := types.NamespacedName{
+					Namespace: namespace,
+					Name:      "ovn-controller",
+				}
+				SimulateDaemonsetNumberReadyWithPods(
+					daemonSetName,
+					map[string][]string{},
+				)
+				configJob := types.NamespacedName{
+					Namespace: OVNControllerName.Namespace,
+					Name:      daemonSetName.Name + "-config",
+				}
+				Eventually(func() batchv1.Job {
+					return *th.GetJob(configJob)
+				}, timeout, interval).ShouldNot(BeNil())
 			})
 
 			It("should create a ConfigMap for net_setup.sh with eth0 as Interface Name", func() {
@@ -127,6 +158,7 @@ var _ = Describe("OVNController controller", func() {
 
 		When("OVNDBCluster instances with networkAttachments are available", func() {
 			var configCM types.NamespacedName
+			var daemonSetName types.NamespacedName
 			var dbs []types.NamespacedName
 			BeforeEach(func() {
 				internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
@@ -134,15 +166,28 @@ var _ = Describe("OVNController controller", func() {
 				DeferCleanup(th.DeleteInstance, nad)
 				dbs = CreateOVNDBClusters(namespace, "internalapi")
 				DeferCleanup(DeleteOVNDBClusters, dbs)
-				daemonSetName := types.NamespacedName{
+				daemonSetName = types.NamespacedName{
 					Namespace: namespace,
 					Name:      "ovn-controller",
 				}
-				SimulateDaemonsetNumberReady(daemonSetName)
+				SimulateDaemonsetNumberReadyWithPods(
+					daemonSetName,
+					map[string][]string{},
+				)
 				configCM = types.NamespacedName{
 					Namespace: OVNControllerName.Namespace,
 					Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "config"),
 				}
+			})
+
+			It("should create a config job", func() {
+				configJob := types.NamespacedName{
+					Namespace: OVNControllerName.Namespace,
+					Name:      daemonSetName.Name + "-config",
+				}
+				Eventually(func() batchv1.Job {
+					return *th.GetJob(configJob)
+				}, timeout, interval).ShouldNot(BeNil())
 			})
 
 			It("should create an external config map", func() {
@@ -243,6 +288,25 @@ var _ = Describe("OVNController controller", func() {
 			instance := CreateOVNController(namespace, name, spec)
 			OVNControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
+		})
+
+		It("should create a config job", func() {
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+			configJob := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      daemonSetName.Name + "-config",
+			}
+			Eventually(func() batchv1.Job {
+				return *th.GetJob(configJob)
+			}, timeout, interval).ShouldNot(BeNil())
 		})
 
 		It("reports that network attachment is missing", func() {
