@@ -600,6 +600,7 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 
 	templateParameters["OVN_LOG_LEVEL"] = instance.Spec.LogLevel
 	templateParameters["SERVICE_NAME"] = serviceName
+	templateParameters["NAMESPACE"] = instance.GetNamespace()
 	templateParameters["DB_TYPE"] = strings.ToLower(instance.Spec.DBType)
 	templateParameters["DB_PORT"] = 6641
 	templateParameters["RAFT_PORT"] = 6643
