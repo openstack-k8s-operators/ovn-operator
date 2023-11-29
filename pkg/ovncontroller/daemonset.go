@@ -231,7 +231,7 @@ func DaemonSet(
 			},
 		},
 	}
-	daemonset.Spec.Template.Spec.Volumes = GetVolumes(instance.Name)
+	daemonset.Spec.Template.Spec.Volumes = GetVolumes(instance.Name, instance.Namespace)
 
 	if instance.Spec.NodeSelector != nil && len(instance.Spec.NodeSelector) > 0 {
 		daemonset.Spec.Template.Spec.NodeSelector = instance.Spec.NodeSelector

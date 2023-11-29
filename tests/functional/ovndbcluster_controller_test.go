@@ -92,6 +92,19 @@ var _ = Describe("OVNDBCluster controller", func() {
 			Entry("config-data CM", "config-data"),
 			Entry("scripts CM", "scripts"),
 		)
+
+		It("should create a scripts ConfigMap with namespace from CR", func() {
+			cm := types.NamespacedName{
+				Namespace: namespace,
+				Name:      fmt.Sprintf("%s-%s", OVNDBClusterName.Name, "scripts"),
+			}
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(cm)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			Expect(th.GetConfigMap(cm).Data["setup.sh"]).Should(
+				ContainSubstring(fmt.Sprintf("NAMESPACE=\"%s\"", namespace)))
+		})
 	})
 
 	When("A OVNDBCluster instance is created with debug on", func() {
