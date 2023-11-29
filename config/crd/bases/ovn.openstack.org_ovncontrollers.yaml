@@ -16,9 +16,9 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: NetworkAttachment
-      jsonPath: .spec.networkAttachment
-      name: NetworkAttachment
+    - description: NetworkAttachments
+      jsonPath: .status.networkAttachments
+      name: NetworkAttachments
       type: string
     - description: Status
       jsonPath: .status.conditions[0].status
