@@ -60,7 +60,8 @@ func StatefulSet(
 	}
 	var preStopCmd []string
 	var postStartCmd []string
-	args := []string{"-c"}
+	cmd := []string{"/usr/bin/dumb-init"}
+	args := []string{"--single-child", "--", "/bin/bash", "-c"}
 	if instance.Spec.Debug.Service {
 		args = append(args, common.DebugCommand)
 		livenessProbe.Exec = &corev1.ExecAction{
@@ -135,12 +136,10 @@ func StatefulSet(
 					ServiceAccountName: instance.RbacResourceName(),
 					Containers: []corev1.Container{
 						{
-							Name: serviceName,
-							Command: []string{
-								"/bin/bash",
-							},
-							Args:  args,
-							Image: instance.Spec.ContainerImage,
+							Name:    serviceName,
+							Command: cmd,
+							Args:    args,
+							Image:   instance.Spec.ContainerImage,
 							SecurityContext: &corev1.SecurityContext{
 								RunAsUser: &runAsUser,
 							},

@@ -127,7 +127,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 			Expect(ss.Spec.Template.Spec.Containers).To(HaveLen(1))
 			Expect(ss.Spec.Template.Spec.Containers[0].LivenessProbe.Exec.Command).To(
 				Equal([]string{"/bin/true"}))
-			Expect(ss.Spec.Template.Spec.Containers[0].Args[1]).Should(ContainSubstring("sleep infinity"))
+			Expect(ss.Spec.Template.Spec.Containers[0].Args[4]).Should(ContainSubstring("sleep infinity"))
 			Expect(ss.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(
 				Equal([]string{"/bin/true"}))
 			Expect(ss.Spec.Template.Spec.Containers[0].Lifecycle.PostStart.Exec.Command).To(

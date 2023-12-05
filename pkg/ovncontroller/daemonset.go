@@ -56,6 +56,7 @@ func DaemonSet(
 
 	var ovsDbPreStopCmd []string
 	var ovsDbCmd []string
+	var ovsDbArgs []string
 
 	var ovsVswitchdCmd []string
 	var ovsVswitchdArgs []string
@@ -71,8 +72,8 @@ func DaemonSet(
 		ovsDbCmd = []string{
 			common.DebugCommand,
 		}
+		ovsDbArgs = []string{}
 		ovsDbPreStopCmd = noopCmd
-
 		ovsVswitchdLivenessProbe.Exec = &corev1.ExecAction{
 			Command: noopCmd,
 		}
@@ -94,10 +95,14 @@ func DaemonSet(
 			},
 		}
 		ovsDbCmd = []string{
-			"/usr/local/bin/container-scripts/start-ovsdb-server.sh",
+			"/usr/bin/dumb-init",
 		}
+		ovsDbArgs = []string{
+			"--single-child", "--", "/usr/local/bin/container-scripts/start-ovsdb-server.sh",
+		}
+		// sleep is required as workaround for https://github.com/kubernetes/kubernetes/issues/39170
 		ovsDbPreStopCmd = []string{
-			"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovs-vswitchd",
+			"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovs-vswitchd", ";", "sleep", "2",
 		}
 
 		ovsVswitchdLivenessProbe.Exec = &corev1.ExecAction{
@@ -112,15 +117,17 @@ func DaemonSet(
 		ovsVswitchdArgs = []string{
 			"--pidfile", "--mlockall",
 		}
+		// sleep is required as workaround for https://github.com/kubernetes/kubernetes/issues/39170
 		ovsVswitchdPreStopCmd = []string{
-			"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovsdb-server",
+			"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovsdb-server", ";", "sleep", "2",
 		}
 
 		ovnControllerArgs = []string{
 			"/usr/local/bin/container-scripts/net_setup.sh && ovn-controller --pidfile unix:/run/openvswitch/db.sock",
 		}
+		// sleep is required as workaround for https://github.com/kubernetes/kubernetes/issues/39170
 		ovnControllerPreStopCmd = []string{
-			"/usr/share/ovn/scripts/ovn-ctl", "stop_controller",
+			"/usr/share/ovn/scripts/ovn-ctl", "stop_controller", ";", "sleep", "2",
 		}
 	}
 
@@ -148,6 +155,7 @@ func DaemonSet(
 						{
 							Name:    "ovsdb-server",
 							Command: ovsDbCmd,
+							Args:    ovsDbArgs,
 							Lifecycle: &corev1.Lifecycle{
 								PreStop: &corev1.LifecycleHandler{
 									Exec: &corev1.ExecAction{
