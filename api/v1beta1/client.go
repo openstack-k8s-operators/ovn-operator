@@ -28,10 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-const (
-	expectedNumDBClusters = 2
-)
-
 func getDBClusters(
 	ctx context.Context,
 	h *helper.Helper,
