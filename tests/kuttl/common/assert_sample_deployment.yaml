@@ -142,9 +142,7 @@ spec:
           timeoutSeconds: 5
         securityContext:
           allowPrivilegeEscalation: false
-          runAsGroup: 995
           runAsNonRoot: true
-          runAsUser: 997
         name: ovn-northd
         readinessProbe:
           exec:
@@ -176,7 +174,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   annotations:
-    openshift.io/scc: anyuid
+    openshift.io/scc: restricted-v2
   labels:
     service: ovn-northd
 ---

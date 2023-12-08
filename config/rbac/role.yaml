@@ -222,6 +222,7 @@ rules:
   - security.openshift.io
   resourceNames:
   - anyuid
+  - privileged
   resources:
   - securitycontextconstraints
   verbs:
@@ -229,8 +230,7 @@ rules:
 - apiGroups:
   - security.openshift.io
   resourceNames:
-  - anyuid
-  - privileged
+  - restricted-v2
   resources:
   - securitycontextconstraints
   verbs:
