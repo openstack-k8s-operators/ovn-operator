@@ -54,6 +54,23 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 )
 
+const (
+	// TunnelNetworkAttachment is the name of the network attachment
+	// that will be used for overlay tenant networking. If present in
+	// the list of attachments, OvnEncapIP is set to this interface's
+	// IP.
+	TunnelNetworkAttachmentName = "tenant"
+)
+
+func contains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+	return false
+}
+
 // getlog returns a logger object with a prefix of "conroller.name" and aditional controller context fields
 func (r *OVNControllerReconciler) GetLogger(ctx context.Context) logr.Logger {
 	return log.FromContext(ctx).WithName("Controllers").WithName("OVNController")
@@ -326,12 +343,14 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		return ctrl.Result{}, err
 	}
 
-	// network to attach to
 	networkAttachmentsNoPhysNet := []string{}
-	if instance.Spec.NetworkAttachment != "" {
-		networkAttachments = append(networkAttachments, instance.Spec.NetworkAttachment)
+	if instance.Spec.NetworkAttachments != nil && len(instance.Spec.NetworkAttachments) > 0 {
+		networkAttachmentsNoPhysNet = append(networkAttachmentsNoPhysNet, instance.Spec.NetworkAttachments...)
+	}
+	if instance.Spec.NetworkAttachment != "" && !contains(networkAttachmentsNoPhysNet, instance.Spec.NetworkAttachment) {
 		networkAttachmentsNoPhysNet = append(networkAttachmentsNoPhysNet, instance.Spec.NetworkAttachment)
 	}
+	networkAttachments = append(networkAttachments, networkAttachmentsNoPhysNet...)
 	sort.Strings(networkAttachments)
 
 	for _, netAtt := range networkAttachments {
@@ -428,7 +447,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	if networkReady {
 		instance.Status.Conditions.MarkTrue(condition.NetworkAttachmentsReadyCondition, condition.NetworkAttachmentsReadyMessage)
 	} else {
-		err := fmt.Errorf("not all pods have interfaces with ips as configured in NetworkAttachments: %s", instance.Spec.NetworkAttachment)
+		err := fmt.Errorf("not all pods have interfaces with ips as configured in NetworkAttachments: %v", networkAttachmentsNoPhysNet)
 		instance.Status.Conditions.Set(condition.FalseCondition(
 			condition.NetworkAttachmentsReadyCondition,
 			condition.ErrorReason,
@@ -545,7 +564,9 @@ func (r *OVNControllerReconciler) generateServiceConfigMaps(
 	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovncontroller.ServiceName), map[string]string{})
 
 	templateParameters := make(map[string]interface{})
-	if instance.Spec.NetworkAttachment != "" {
+	if contains(instance.Spec.NetworkAttachments, TunnelNetworkAttachmentName) {
+		templateParameters["OvnEncapNIC"] = nad.GetNetworkIFName(TunnelNetworkAttachmentName)
+	} else if instance.Spec.NetworkAttachment != "" {
 		templateParameters["OvnEncapNIC"] = nad.GetNetworkIFName(instance.Spec.NetworkAttachment)
 	} else {
 		templateParameters["OvnEncapNIC"] = "eth0"
