@@ -337,7 +337,7 @@ var _ = Describe("OVNController controller", func() {
 				corev1.ConditionFalse,
 				condition.ErrorReason,
 				"NetworkAttachments error occurred "+
-					"not all pods have interfaces with ips as configured in NetworkAttachments: internalapi",
+					"not all pods have interfaces with ips as configured in NetworkAttachments: [internalapi]",
 			)
 		})
 		It("reports that an IP is missing", func() {
@@ -375,7 +375,7 @@ var _ = Describe("OVNController controller", func() {
 				corev1.ConditionFalse,
 				condition.ErrorReason,
 				"NetworkAttachments error occurred "+
-					"not all pods have interfaces with ips as configured in NetworkAttachments: internalapi",
+					"not all pods have interfaces with ips as configured in NetworkAttachments: [internalapi]",
 			)
 		})
 		It("reports NetworkAttachmentsReady if the Pods got the proper annotations", func() {
@@ -680,6 +680,212 @@ var _ = Describe("OVNController controller", func() {
 						Name:             "physnet1",
 						Namespace:        namespace,
 						InterfaceRequest: "physnet1",
+					},
+				})
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(
+				HaveKeyWithValue("k8s.v1.cni.cncf.io/networks", string(expectedAnnotation)),
+			)
+		})
+	})
+
+	When("OVNController is created with networkAttachments and nic configs", func() {
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, "")
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
+			spec := GetDefaultOVNControllerSpec()
+			spec["networkAttachments"] = []string{"internalapi"}
+			spec["nicMappings"] = map[string]interface{}{
+				"physnet1": "enp2s0.100",
+			}
+			instance := CreateOVNController(namespace, name, spec)
+			DeferCleanup(th.DeleteInstance, instance)
+		})
+
+		It("reports that daemonset has annotations for both Networkattachment and nic-configs", func() {
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			ds := GetDaemonSet(daemonSetName)
+
+			expectedAnnotation, err := json.Marshal(
+				[]networkv1.NetworkSelectionElement{
+					{
+						Name:             "internalapi",
+						Namespace:        namespace,
+						InterfaceRequest: "internalapi",
+					},
+					{
+						Name:             "physnet1",
+						Namespace:        namespace,
+						InterfaceRequest: "physnet1",
+					},
+				})
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(
+				HaveKeyWithValue("k8s.v1.cni.cncf.io/networks", string(expectedAnnotation)),
+			)
+		})
+	})
+
+	When("OVNController is created with old networkAttachment and new networkAttachments and nic configs", func() {
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, "")
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
+			spec := GetDefaultOVNControllerSpec()
+			spec["networkAttachment"] = "tenant"
+			spec["networkAttachments"] = []string{"internalapi"}
+			spec["nicMappings"] = map[string]interface{}{
+				"physnet1": "enp2s0.100",
+			}
+			instance := CreateOVNController(namespace, name, spec)
+			DeferCleanup(th.DeleteInstance, instance)
+		})
+
+		It("reports that daemonset has annotations for both Networkattachment and nic-configs", func() {
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+			tenantNADName := types.NamespacedName{Namespace: namespace, Name: "tenant"}
+			nad = th.CreateNetworkAttachmentDefinition(tenantNADName)
+			DeferCleanup(th.DeleteInstance, nad)
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			ds := GetDaemonSet(daemonSetName)
+
+			expectedAnnotation, err := json.Marshal(
+				[]networkv1.NetworkSelectionElement{
+					{
+						Name:             "internalapi",
+						Namespace:        namespace,
+						InterfaceRequest: "internalapi",
+					},
+					{
+						Name:             "physnet1",
+						Namespace:        namespace,
+						InterfaceRequest: "physnet1",
+					},
+					{
+						Name:             "tenant",
+						Namespace:        namespace,
+						InterfaceRequest: "tenant",
+					},
+				})
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(
+				HaveKeyWithValue("k8s.v1.cni.cncf.io/networks", string(expectedAnnotation)),
+			)
+		})
+	})
+
+	When("OVNController is created with networkAttachments and nic configs", func() {
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, "")
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
+			spec := GetDefaultOVNControllerSpec()
+			spec["networkAttachments"] = []string{"internalapi", "tenant"}
+			spec["nicMappings"] = map[string]interface{}{
+				"physnet1": "enp2s0.100",
+			}
+			instance := CreateOVNController(namespace, name, spec)
+			DeferCleanup(th.DeleteInstance, instance)
+		})
+
+		It("reports that daemonset has annotations for both Networkattachment and nic-configs", func() {
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+			tenantNADName := types.NamespacedName{Namespace: namespace, Name: "tenant"}
+			nad = th.CreateNetworkAttachmentDefinition(tenantNADName)
+			DeferCleanup(th.DeleteInstance, nad)
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			ds := GetDaemonSet(daemonSetName)
+
+			expectedAnnotation, err := json.Marshal(
+				[]networkv1.NetworkSelectionElement{
+					{
+						Name:             "internalapi",
+						Namespace:        namespace,
+						InterfaceRequest: "internalapi",
+					},
+					{
+						Name:             "physnet1",
+						Namespace:        namespace,
+						InterfaceRequest: "physnet1",
+					},
+					{
+						Name:             "tenant",
+						Namespace:        namespace,
+						InterfaceRequest: "tenant",
+					},
+				})
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(
+				HaveKeyWithValue("k8s.v1.cni.cncf.io/networks", string(expectedAnnotation)),
+			)
+		})
+	})
+
+	When("OVNController is created with old networkAttachment and new networkAttachments (shared value) and nic configs", func() {
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, "")
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
+			spec := GetDefaultOVNControllerSpec()
+			spec["networkAttachment"] = "tenant"
+			spec["networkAttachments"] = []string{"internalapi", "tenant"}
+			spec["nicMappings"] = map[string]interface{}{
+				"physnet1": "enp2s0.100",
+			}
+			instance := CreateOVNController(namespace, name, spec)
+			DeferCleanup(th.DeleteInstance, instance)
+		})
+
+		It("reports that daemonset has annotations for both Networkattachment  and nic-configs", func() {
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+			tenantNADName := types.NamespacedName{Namespace: namespace, Name: "tenant"}
+			nad = th.CreateNetworkAttachmentDefinition(tenantNADName)
+			DeferCleanup(th.DeleteInstance, nad)
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			ds := GetDaemonSet(daemonSetName)
+
+			expectedAnnotation, err := json.Marshal(
+				[]networkv1.NetworkSelectionElement{
+					{
+						Name:             "internalapi",
+						Namespace:        namespace,
+						InterfaceRequest: "internalapi",
+					},
+					{
+						Name:             "physnet1",
+						Namespace:        namespace,
+						InterfaceRequest: "physnet1",
+					},
+					{
+						Name:             "tenant",
+						Namespace:        namespace,
+						InterfaceRequest: "tenant",
 					},
 				})
 			Expect(err).ShouldNot(HaveOccurred())
