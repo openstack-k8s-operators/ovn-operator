@@ -72,10 +72,9 @@ var _ = Describe("OVNDBCluster controller", func() {
 				}
 				th.AssertConfigMapDoesNotExist(cm)
 			},
-			Entry("config-data CM", "config-data"),
 			Entry("scripts CM", "scripts"),
 		)
-		DescribeTable("should eventually create the config maps with OwnerReferences set",
+		DescribeTable("should eventually create the config map with OwnerReferences set",
 			func(cmName string) {
 				cm := types.NamespacedName{
 					Namespace: OVNDBClusterName.Namespace,
@@ -89,7 +88,6 @@ var _ = Describe("OVNDBCluster controller", func() {
 				Expect(th.GetConfigMap(cm).ObjectMeta.OwnerReferences[0].Name).To(Equal(OVNDBClusterName.Name))
 				Expect(th.GetConfigMap(cm).ObjectMeta.OwnerReferences[0].Kind).To(Equal("OVNDBCluster"))
 			},
-			Entry("config-data CM", "config-data"),
 			Entry("scripts CM", "scripts"),
 		)
 

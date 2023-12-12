@@ -27,7 +27,7 @@ import (
 
 const (
 	// ServiceCommand -
-	ServiceCommand = "/usr/local/bin/kolla_set_configs && /usr/local/bin/kolla_start"
+	ServiceCommand = "/usr/local/bin/container-scripts/setup.sh"
 
 	// PvcSuffixEtcOvn -
 	PvcSuffixEtcOvn = "-etc-ovn"
@@ -40,8 +40,6 @@ func StatefulSet(
 	labels map[string]string,
 	annotations map[string]string,
 ) *appsv1.StatefulSet {
-	runAsUser := int64(0)
-
 	livenessProbe := &corev1.Probe{
 		// TODO might need tuning
 		TimeoutSeconds:      5,
@@ -111,7 +109,6 @@ func StatefulSet(
 		serviceName = ServiceNameSB
 	}
 	envVars := map[string]env.Setter{}
-	envVars["KOLLA_CONFIG_STRATEGY"] = env.SetValue("COPY_ALWAYS")
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 	// TODO: Make confs customizable
 	envVars["OVN_RUNDIR"] = env.SetValue("/tmp")
@@ -136,13 +133,10 @@ func StatefulSet(
 					ServiceAccountName: instance.RbacResourceName(),
 					Containers: []corev1.Container{
 						{
-							Name:    serviceName,
-							Command: cmd,
-							Args:    args,
-							Image:   instance.Spec.ContainerImage,
-							SecurityContext: &corev1.SecurityContext{
-								RunAsUser: &runAsUser,
-							},
+							Name:                     serviceName,
+							Command:                  cmd,
+							Args:                     args,
+							Image:                    instance.Spec.ContainerImage,
 							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
 							VolumeMounts:             GetDBClusterVolumeMounts(instance.Name + PvcSuffixEtcOvn),
 							Resources:                instance.Spec.Resources,
