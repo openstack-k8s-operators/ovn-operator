@@ -31,4 +31,4 @@ fi
 /usr/local/bin/start-${DB_TYPE}-db-server --db-${DB_TYPE}-election-timer={{ .OVN_ELECTION_TIMER }} --db-${DB_TYPE}-cluster-local-proto=tcp \
 --db-${DB_TYPE}-cluster-local-addr=$(hostname).{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local --db-${DB_TYPE}-probe-interval-to-active={{ .OVN_PROBE_INTERVAL_TO_ACTIVE }} \
 --db-${DB_TYPE}-cluster-local-port=${RAFT_PORT} --db-${DB_TYPE}-addr=0.0.0.0 --db-${DB_TYPE}-port=${DB_PORT} \
---ovn-${DB_TYPE}-log=-vfile:{{ .OVN_LOG_LEVEL }} ${OPTS}
+--ovn-${DB_TYPE}-log=-vfile:{{ .OVN_LOG_LEVEL }} --ovn-${DB_TYPE}-logfile=/tmp/ovsdb-server-${DB_TYPE}.log ${OPTS}
