@@ -30,9 +30,6 @@ func DaemonSet(
 	annotations map[string]string,
 ) (*appsv1.DaemonSet, error) {
 
-	runAsUser := int64(0)
-	privileged := true
-
 	//
 	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 	//
@@ -163,15 +160,7 @@ func DaemonSet(
 									},
 								},
 							},
-							Image: instance.Spec.OvsContainerImage,
-							SecurityContext: &corev1.SecurityContext{
-								Capabilities: &corev1.Capabilities{
-									Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN"},
-									Drop: []corev1.Capability{},
-								},
-								RunAsUser:  &runAsUser,
-								Privileged: &privileged,
-							},
+							Image:                    instance.Spec.OvsContainerImage,
 							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
 							VolumeMounts:             GetOvsDbVolumeMounts(),
 							Resources:                instance.Spec.Resources,
@@ -189,15 +178,7 @@ func DaemonSet(
 									},
 								},
 							},
-							Image: instance.Spec.OvsContainerImage,
-							SecurityContext: &corev1.SecurityContext{
-								Capabilities: &corev1.Capabilities{
-									Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN"},
-									Drop: []corev1.Capability{},
-								},
-								RunAsUser:  &runAsUser,
-								Privileged: &privileged,
-							},
+							Image:                    instance.Spec.OvsContainerImage,
 							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
 							VolumeMounts:             GetVswitchdVolumeMounts(),
 							Resources:                instance.Spec.Resources,
@@ -219,16 +200,7 @@ func DaemonSet(
 									},
 								},
 							},
-							Image: instance.Spec.OvnContainerImage,
-							// TODO(slaweq): to check if ovn-controller really needs such security contexts
-							SecurityContext: &corev1.SecurityContext{
-								Capabilities: &corev1.Capabilities{
-									Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN"},
-									Drop: []corev1.Capability{},
-								},
-								RunAsUser:  &runAsUser,
-								Privileged: &privileged,
-							},
+							Image:                    instance.Spec.OvnContainerImage,
 							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
 							VolumeMounts:             GetOvnControllerVolumeMounts(),
 							Resources:                instance.Spec.Resources,
