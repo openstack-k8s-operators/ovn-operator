@@ -141,6 +141,7 @@ func DaemonSet(
 
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
+	envVars["OVN_RUNDIR"] = env.SetValue("/tmp")
 	envVars["OvnBridge"] = env.SetValue(instance.Spec.ExternalIDS.OvnBridge)
 	envVars["OvnRemote"] = env.SetValue(internalEndpoint)
 	envVars["OvnEncapType"] = env.SetValue(instance.Spec.ExternalIDS.OvnEncapType)

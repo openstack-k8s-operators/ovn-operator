@@ -39,15 +39,6 @@ func GetVolumes(name string, namespace string) []corev1.Volume {
 			},
 		},
 		{
-			Name: "var-run-ovn",
-			VolumeSource: corev1.VolumeSource{
-				HostPath: &corev1.HostPathVolumeSource{
-					Path: fmt.Sprintf("/var/home/core/%s/var/run/ovn", namespace),
-					Type: &directoryOrCreate,
-				},
-			},
-		},
-		{
 			Name: "scripts",
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -110,11 +101,6 @@ func GetOvnControllerVolumeMounts() []corev1.VolumeMount {
 		{
 			Name:      "var-run",
 			MountPath: "/var/run/openvswitch",
-			ReadOnly:  false,
-		},
-		{
-			Name:      "var-run-ovn",
-			MountPath: "/var/run/ovn",
 			ReadOnly:  false,
 		},
 		{
