@@ -16,23 +16,33 @@ import (
 	"fmt"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/affinity"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// DaemonSet func
-func DaemonSet(
-	instance *v1beta1.OVNController,
+const (
+	// ServiceCommand -
+	ServiceCommand = "/usr/local/bin/container-scripts/setup.sh"
+
+	// PvcSuffixEtcOvn -
+	PvcSuffixEtcOvn = "-etc-ovs"
+)
+
+// StatefulSet func
+func StatefulSet(
+	instance *ovnv1.OVNController,
 	sbCluster *v1beta1.OVNDBCluster,
 	configHash string,
 	labels map[string]string,
 	annotations map[string]string,
-) (*appsv1.DaemonSet, error) {
-
+) (*appsv1.StatefulSet, error) {
 	runAsUser := int64(0)
 	privileged := true
 
@@ -149,15 +159,21 @@ func DaemonSet(
 	envVars["PhysicalNetworks"] = env.SetValue(getPhysicalNetworks(instance))
 	envVars["OvnHostName"] = EnvDownwardAPI("spec.nodeName")
 
-	daemonset := &appsv1.DaemonSet{
+	// TODO
+	replicas := int32(1)
+
+	statefulset := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ServiceName,
 			Namespace: instance.Namespace,
 		},
-		Spec: appsv1.DaemonSetSpec{
+		Spec: appsv1.StatefulSetSpec{
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
+			ServiceName: ServiceName,
+			// Replicas:    instance.Spec.Replicas,
+			Replicas: &replicas,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
@@ -188,7 +204,7 @@ func DaemonSet(
 								Privileged: &privileged,
 							},
 							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-							VolumeMounts:             GetOvsDbVolumeMounts(),
+							VolumeMounts:             GetOvsDbVolumeMounts(instance.Name + PvcSuffixEtcOvn),
 							Resources:                instance.Spec.Resources,
 							LivenessProbe:            ovsDbLivenessProbe,
 							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
@@ -254,12 +270,56 @@ func DaemonSet(
 			},
 		},
 	}
-	daemonset.Spec.Template.Spec.Volumes = GetVolumes(instance.Name, instance.Namespace)
 
-	if instance.Spec.NodeSelector != nil && len(instance.Spec.NodeSelector) > 0 {
-		daemonset.Spec.Template.Spec.NodeSelector = instance.Spec.NodeSelector
+	// https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#persistentvolumeclaim-retention
+	statefulset.Spec.PersistentVolumeClaimRetentionPolicy = &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+		WhenDeleted: appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+		WhenScaled:  appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
 	}
 
-	return daemonset, nil
+	blockOwnerDeletion := false
+	ownerRef := metav1.NewControllerRef(instance, instance.GroupVersionKind())
+	ownerRef.BlockOwnerDeletion = &blockOwnerDeletion
 
+	// TODO
+	storageClass := "local-storage"
+
+	statefulset.Spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            instance.Name + PvcSuffixEtcOvn,
+				Namespace:       instance.Namespace,
+				Labels:          labels,
+				OwnerReferences: []metav1.OwnerReference{*ownerRef},
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
+				},
+				StorageClassName: &storageClass,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						// TODO
+						corev1.ResourceStorage: resource.MustParse("10G"),
+					},
+				},
+			},
+		},
+	}
+	statefulset.Spec.Template.Spec.Volumes = GetVolumes(instance.Name)
+	// If possible two pods of the same service should not
+	// run on the same worker node. If this is not possible
+	// the get still created on the same worker node.
+	statefulset.Spec.Template.Spec.Affinity = affinity.DistributePods(
+		common.AppSelector,
+		[]string{
+			ServiceName,
+		},
+		corev1.LabelHostname,
+	)
+	if instance.Spec.NodeSelector != nil && len(instance.Spec.NodeSelector) > 0 {
+		statefulset.Spec.Template.Spec.NodeSelector = instance.Spec.NodeSelector
+	}
+
+	return statefulset, nil
 }

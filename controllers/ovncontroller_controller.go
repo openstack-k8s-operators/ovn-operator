@@ -38,12 +38,12 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/configmap"
-	"github.com/openstack-k8s-operators/lib-common/modules/common/daemonset"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
 	nad "github.com/openstack-k8s-operators/lib-common/modules/common/networkattachment"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/statefulset"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
 	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovncontroller"
@@ -203,7 +203,7 @@ func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager, ctx context
 		For(&v1beta1.OVNController{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&netattdefv1.NetworkAttachmentDefinition{}).
-		Owns(&appsv1.DaemonSet{}).
+		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
@@ -412,18 +412,18 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		return ctrl.Result{}, err
 	}
 
-	// Define a new DaemonSet object
-	ovnDaemonSet, err := ovncontroller.DaemonSet(instance, sbCluster, inputHash, serviceLabels, serviceAnnotations)
+	// Define a new StatefulSet object
+	ovnStatefulSet, err := ovncontroller.StatefulSet(instance, sbCluster, inputHash, serviceLabels, serviceAnnotations)
 	if err != nil {
-		Log.Error(err, "Failed to create OVNController DaemonSet")
 		return ctrl.Result{}, err
 	}
-	dset := daemonset.NewDaemonSet(
-		ovnDaemonSet,
+
+	sset := statefulset.NewStatefulSet(
+		ovnStatefulSet,
 		time.Duration(5)*time.Second,
 	)
 
-	ctrlResult, err = dset.CreateOrPatch(ctx, helper)
+	ctrlResult, err = sset.CreateOrPatch(ctx, helper)
 	if err != nil {
 		instance.Status.Conditions.Set(condition.FalseCondition(
 			condition.DeploymentReadyCondition,
@@ -441,8 +441,8 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		return ctrlResult, nil
 	}
 
-	instance.Status.DesiredNumberScheduled = dset.GetDaemonSet().Status.DesiredNumberScheduled
-	instance.Status.NumberReady = dset.GetDaemonSet().Status.NumberReady
+	instance.Status.DesiredNumberScheduled = sset.GetStatefulSet().Status.Replicas
+	instance.Status.NumberReady = sset.GetStatefulSet().Status.ReadyReplicas
 
 	// verify if network attachment matches expectations
 	networkReady, networkAttachmentStatus, err := nad.VerifyNetworkStatusFromAnnotation(ctx, helper, networkAttachmentsNoPhysNet, serviceLabels, instance.Status.NumberReady)

@@ -1,27 +1,15 @@
 package ovncontroller
 
 import (
-	"fmt"
-
 	corev1 "k8s.io/api/core/v1"
 )
 
 // GetVolumes -
-func GetVolumes(name string, namespace string) []corev1.Volume {
+func GetVolumes(name string) []corev1.Volume {
 
 	var scriptsVolumeDefaultMode int32 = 0755
-	directoryOrCreate := corev1.HostPathDirectoryOrCreate
 
 	return []corev1.Volume{
-		{
-			Name: "etc-ovs",
-			VolumeSource: corev1.VolumeSource{
-				HostPath: &corev1.HostPathVolumeSource{
-					Path: fmt.Sprintf("/var/home/core/%s/etc/ovs", namespace),
-					Type: &directoryOrCreate,
-				},
-			},
-		},
 		{
 			Name: "var-run",
 			VolumeSource: corev1.VolumeSource{
@@ -44,10 +32,10 @@ func GetVolumes(name string, namespace string) []corev1.Volume {
 }
 
 // GetOvsDbVolumeMounts - ovsdb-server VolumeMounts
-func GetOvsDbVolumeMounts() []corev1.VolumeMount {
+func GetOvsDbVolumeMounts(name string) []corev1.VolumeMount {
 	return []corev1.VolumeMount{
 		{
-			Name:      "etc-ovs",
+			Name:      name,
 			MountPath: "/etc/openvswitch",
 			ReadOnly:  false,
 		},
