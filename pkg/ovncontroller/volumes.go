@@ -12,7 +12,6 @@ func GetVolumes(name string, namespace string) []corev1.Volume {
 	var scriptsVolumeDefaultMode int32 = 0755
 	directoryOrCreate := corev1.HostPathDirectoryOrCreate
 
-	//source_type := corev1.HostPathDirectoryOrCreate
 	return []corev1.Volume{
 		{
 			Name: "etc-ovs",
