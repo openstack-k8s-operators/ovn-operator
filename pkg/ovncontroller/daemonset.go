@@ -166,7 +166,7 @@ func DaemonSet(
 							Image: instance.Spec.OvsContainerImage,
 							SecurityContext: &corev1.SecurityContext{
 								Capabilities: &corev1.Capabilities{
-									Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
+									Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN"},
 									Drop: []corev1.Capability{},
 								},
 								RunAsUser:  &runAsUser,
@@ -192,7 +192,7 @@ func DaemonSet(
 							Image: instance.Spec.OvsContainerImage,
 							SecurityContext: &corev1.SecurityContext{
 								Capabilities: &corev1.Capabilities{
-									Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
+									Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN"},
 									Drop: []corev1.Capability{},
 								},
 								RunAsUser:  &runAsUser,
@@ -223,7 +223,7 @@ func DaemonSet(
 							// TODO(slaweq): to check if ovn-controller really needs such security contexts
 							SecurityContext: &corev1.SecurityContext{
 								Capabilities: &corev1.Capabilities{
-									Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
+									Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN"},
 									Drop: []corev1.Capability{},
 								},
 								RunAsUser:  &runAsUser,
