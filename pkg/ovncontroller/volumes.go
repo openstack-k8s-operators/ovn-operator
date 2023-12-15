@@ -30,15 +30,6 @@ func GetVolumes(name string, namespace string) []corev1.Volume {
 			},
 		},
 		{
-			Name: "var-lib",
-			VolumeSource: corev1.VolumeSource{
-				HostPath: &corev1.HostPathVolumeSource{
-					Path: fmt.Sprintf("/var/home/core/%s/var/lib/openvswitch", namespace),
-					Type: &directoryOrCreate,
-				},
-			},
-		},
-		{
 			Name: "scripts",
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -67,11 +58,6 @@ func GetOvsDbVolumeMounts() []corev1.VolumeMount {
 			ReadOnly:  false,
 		},
 		{
-			Name:      "var-lib",
-			MountPath: "/var/lib/openvswitch",
-			ReadOnly:  false,
-		},
-		{
 			Name:      "scripts",
 			MountPath: "/usr/local/bin/container-scripts",
 			ReadOnly:  true,
@@ -85,11 +71,6 @@ func GetVswitchdVolumeMounts() []corev1.VolumeMount {
 		{
 			Name:      "var-run",
 			MountPath: "/var/run/openvswitch",
-			ReadOnly:  false,
-		},
-		{
-			Name:      "var-lib",
-			MountPath: "/var/lib/openvswitch",
 			ReadOnly:  false,
 		},
 	}
