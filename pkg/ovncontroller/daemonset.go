@@ -13,6 +13,8 @@ limitations under the License.
 package ovncontroller
 
 import (
+	"fmt"
+
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
@@ -25,6 +27,7 @@ import (
 // DaemonSet func
 func DaemonSet(
 	instance *v1beta1.OVNController,
+	sbCluster *v1beta1.OVNDBCluster,
 	configHash string,
 	labels map[string]string,
 	annotations map[string]string,
@@ -123,7 +126,7 @@ func DaemonSet(
 		}
 
 		ovnControllerArgs = []string{
-			"/usr/local/bin/container-scripts/net_setup.sh && ovn-controller --pidfile unix:/run/openvswitch/db.sock",
+			"/usr/local/bin/container-scripts/init.sh && /usr/local/bin/container-scripts/net_setup.sh && ovn-controller --pidfile unix:/run/openvswitch/db.sock",
 		}
 		// sleep is required as workaround for https://github.com/kubernetes/kubernetes/issues/39170
 		ovnControllerPreStopCmd = []string{
@@ -131,8 +134,19 @@ func DaemonSet(
 		}
 	}
 
+	internalEndpoint, err := sbCluster.GetInternalEndpoint()
+	if err != nil {
+		return nil, err
+	}
+
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
+	envVars["OvnBridge"] = env.SetValue(instance.Spec.ExternalIDS.OvnBridge)
+	envVars["OvnRemote"] = env.SetValue(internalEndpoint)
+	envVars["OvnEncapType"] = env.SetValue(instance.Spec.ExternalIDS.OvnEncapType)
+	envVars["EnableChassisAsGateway"] = env.SetValue(fmt.Sprintf("%t", instance.Spec.ExternalIDS.EnableChassisAsGateway))
+	envVars["PhysicalNetworks"] = env.SetValue(getPhysicalNetworks(instance))
+	envVars["OvnHostName"] = EnvDownwardAPI("spec.nodeName")
 
 	daemonset := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
