@@ -28,7 +28,26 @@ if [[ "$(hostname)" != "{{ .SERVICE_NAME }}-0" ]]; then
     #ovsdb-tool join-cluster /etc/ovn/ovn${DB_TYPE}_db.db ${DB_NAME} tcp:$(hostname).{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local:${RAFT_PORT} tcp:{{ .SERVICE_NAME }}-0.{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local:${RAFT_PORT}
     OPTS="--db-${DB_TYPE}-cluster-remote-proto=tcp --db-${DB_TYPE}-cluster-remote-addr={{ .SERVICE_NAME }}-0.{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local --db-${DB_TYPE}-cluster-remote-port=${RAFT_PORT}"
 fi
-/usr/local/bin/start-${DB_TYPE}-db-server --db-${DB_TYPE}-election-timer={{ .OVN_ELECTION_TIMER }} --db-${DB_TYPE}-cluster-local-proto=tcp \
---db-${DB_TYPE}-cluster-local-addr=$(hostname).{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local --db-${DB_TYPE}-probe-interval-to-active={{ .OVN_PROBE_INTERVAL_TO_ACTIVE }} \
---db-${DB_TYPE}-cluster-local-port=${RAFT_PORT} --db-${DB_TYPE}-addr=0.0.0.0 --db-${DB_TYPE}-port=${DB_PORT} \
---ovn-${DB_TYPE}-log=-vfile:{{ .OVN_LOG_LEVEL }} --ovn-${DB_TYPE}-logfile=/tmp/ovsdb-server-${DB_TYPE}.log ${OPTS}
+
+# call to ovn-ctl directly instead of start-${DB_TYPE}-db-server to pass
+# extra_args after --
+set /usr/share/ovn/scripts/ovn-ctl --no-monitor
+
+set "$@" --db-${DB_TYPE}-election-timer={{ .OVN_ELECTION_TIMER }}
+set "$@" --db-${DB_TYPE}-cluster-local-proto=tcp
+set "$@" --db-${DB_TYPE}-cluster-local-addr=$(hostname).{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local
+set "$@" --db-${DB_TYPE}-cluster-local-port=${RAFT_PORT}
+set "$@" --db-${DB_TYPE}-probe-interval-to-active={{ .OVN_PROBE_INTERVAL_TO_ACTIVE }}
+set "$@" --db-${DB_TYPE}-addr=0.0.0.0
+set "$@" --db-${DB_TYPE}-port=${DB_PORT}
+
+# log to console
+set "$@" --ovn-${DB_TYPE}-log=-vconsole:{{ .OVN_LOG_LEVEL }}
+
+# we have to pass --ovn-${DB_TYPE}-log regardless of vfile:off because
+# ovsdb-server will still attempt to write a line into the file before seizing
+# file logging, and the default log file location is not available for write
+set "$@" --ovn-${DB_TYPE}-logfile=/tmp/ovsdb-server-${DB_TYPE}.log
+
+# don't log to file (we already log to console)
+$@ ${OPTS} run_${DB_TYPE}_ovsdb -- -vfile:off
