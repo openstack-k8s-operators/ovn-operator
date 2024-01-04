@@ -2,6 +2,7 @@ package ovncontroller
 
 import (
 	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -41,10 +42,7 @@ func GetVolumes(name string, namespace string) []corev1.Volume {
 		{
 			Name: "var-run",
 			VolumeSource: corev1.VolumeSource{
-				HostPath: &corev1.HostPathVolumeSource{
-					Path: fmt.Sprintf("/var/home/core/%s/var/run/openvswitch", namespace),
-					Type: &directoryOrCreate,
-				},
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
 		{
