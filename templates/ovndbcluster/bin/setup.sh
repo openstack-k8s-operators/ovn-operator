@@ -44,5 +44,12 @@ set "$@" --db-${DB_TYPE}-port=${DB_PORT}
 # log to console
 set "$@" --ovn-${DB_TYPE}-log=-vconsole:{{ .OVN_LOG_LEVEL }}
 
+# if server attempts to log to file, ignore
+#
+# note: even with -vfile:off (see below), the server sometimes attempts to
+# create a log file -> this argument makes sure it doesn't polute OVN_LOGDIR
+# with a nearly empty log file
+set "$@" --ovn-${DB_TYPE}-logfile=/dev/null
+
 # don't log to file (we already log to console)
 $@ ${OPTS} run_${DB_TYPE}_ovsdb -- -vfile:off
