@@ -44,10 +44,5 @@ set "$@" --db-${DB_TYPE}-port=${DB_PORT}
 # log to console
 set "$@" --ovn-${DB_TYPE}-log=-vconsole:{{ .OVN_LOG_LEVEL }}
 
-# we have to pass --ovn-${DB_TYPE}-log regardless of vfile:off because
-# ovsdb-server will still attempt to write a line into the file before seizing
-# file logging, and the default log file location is not available for write
-set "$@" --ovn-${DB_TYPE}-logfile=/tmp/ovsdb-server-${DB_TYPE}.log
-
 # don't log to file (we already log to console)
 $@ ${OPTS} run_${DB_TYPE}_ovsdb -- -vfile:off
