@@ -8,11 +8,11 @@ require (
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.4.0
 	github.com/onsi/ginkgo/v2 v2.13.2
 	github.com/onsi/gomega v1.30.0
-	github.com/openstack-k8s-operators/lib-common/modules/common v0.3.1-0.20231230095328-700482794743
-	github.com/openstack-k8s-operators/lib-common/modules/test v0.3.1-0.20231230095328-700482794743
+	github.com/openstack-k8s-operators/lib-common/modules/common v0.3.1-0.20240106101723-5f7aa263457f
+	github.com/openstack-k8s-operators/lib-common/modules/test v0.3.1-0.20240106101723-5f7aa263457f
 	github.com/openstack-k8s-operators/ovn-operator/api v0.0.0-20230418071801-b5843d9e05fb
 	go.uber.org/zap v1.26.0
-	golang.org/x/exp v0.0.0-20231226003508-02704c960a9b
+	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc
 	k8s.io/api v0.26.12
 	k8s.io/apimachinery v0.26.12
 	k8s.io/client-go v0.26.12
@@ -72,7 +72,7 @@ require (
 	k8s.io/component-base v0.26.12 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230327201221-f5883ff37f0c // indirect
-	k8s.io/utils v0.0.0-20231127182322-b307cd553661 // indirect
+	k8s.io/utils v0.0.0-20240102154912-e7106e64919e // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
