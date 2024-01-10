@@ -112,6 +112,11 @@ func StatefulSet(
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 	// TODO: Make confs customizable
 	envVars["OVN_RUNDIR"] = env.SetValue("/tmp")
+	// we have to set LOGDIR even though we don't want to log to file. This is
+	// because ovsdb-server will still attempt to write a line into the file
+	// before seizing file logging, and the default log file location is not
+	// available for write
+	envVars["OVN_LOGDIR"] = env.SetValue("/tmp")
 
 	statefulset := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
