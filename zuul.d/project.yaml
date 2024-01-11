@@ -1,0 +1,7 @@
+---
+- project:
+    name: openstack-k8s-operators/ovn-operator
+    github-check:
+      jobs:
+        - openstack-k8s-operators-content-provider
+        - ovn-operator-tempest-multinode
