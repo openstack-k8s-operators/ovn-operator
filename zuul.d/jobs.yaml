@@ -1,0 +1,8 @@
+---
+- job:
+    name: ovn-operator-tempest-multinode
+    parent: neutron-operator-tempest-multinode
+    dependencies: ["openstack-k8s-operators-content-provider"]
+    vars:
+      cifmw_tempest_tests_allowed:
+        - neutron_tempest_plugin.scenario
