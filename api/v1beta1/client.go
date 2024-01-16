@@ -52,6 +52,7 @@ func getDBClusters(
 	return ovnDBList, nil
 }
 
+// GetDBClusterByType - return OVNDBCluster for the given dbType
 func GetDBClusterByType(
 	ctx context.Context,
 	h *helper.Helper,
