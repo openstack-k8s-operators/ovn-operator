@@ -99,7 +99,7 @@ type OVNControllerStatus struct {
 	// Conditions
 	Conditions condition.Conditions `json:"conditions,omitempty" optional:"true"`
 
-	// Map of hashes to track e.g. job status
+	// Map of hashes to track
 	Hash map[string]string `json:"hash,omitempty"`
 
 	// NetworkAttachments status of the deployment pods
@@ -145,7 +145,7 @@ func (instance OVNController) IsReady() bool {
 type OVSExternalIDs struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default="random"
-	SystemID  string `json:"system-id,omitempty"`
+	SystemID string `json:"system-id,omitempty"`
 
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default="br-int"

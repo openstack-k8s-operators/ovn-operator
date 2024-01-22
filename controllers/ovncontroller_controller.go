@@ -41,7 +41,6 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/daemonset"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
-	"github.com/openstack-k8s-operators/lib-common/modules/common/job"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
 	nad "github.com/openstack-k8s-operators/lib-common/modules/common/networkattachment"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
@@ -49,7 +48,6 @@ import (
 	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovncontroller"
 	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 )
@@ -94,7 +92,6 @@ func (r *OVNControllerReconciler) GetClient() client.Client {
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
 //+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;get;list;patch;update;watch
-//+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;patch;update;delete;
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovndbclusters,verbs=get;list;watch;
 //+kubebuilder:rbac:groups=k8s.cni.cncf.io,resources=network-attachment-definitions,verbs=create;delete;get;list;patch;update;watch
 
@@ -205,7 +202,6 @@ func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager, ctx context
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1beta1.OVNController{}).
 		Owns(&corev1.ConfigMap{}).
-		Owns(&batchv1.Job{}).
 		Owns(&netattdefv1.NetworkAttachmentDefinition{}).
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&corev1.ServiceAccount{}).
@@ -405,8 +401,19 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		return ctrlResult, nil
 	}
 
+	sbCluster, err := v1beta1.GetDBClusterByType(ctx, helper, instance.Namespace, map[string]string{}, v1beta1.SBDBType)
+	if err != nil {
+		Log.Info("No SB OVNDBCluster defined, deleting external ConfigMap")
+		cleanupConfigMapErr := r.deleteExternalConfigMaps(ctx, helper, instance)
+		if cleanupConfigMapErr != nil {
+			Log.Error(cleanupConfigMapErr, "Failed to delete external ConfigMap")
+			return ctrl.Result{}, cleanupConfigMapErr
+		}
+		return ctrl.Result{}, err
+	}
+
 	// Define a new DaemonSet object
-	ovnDaemonSet, err := ovncontroller.DaemonSet(instance, inputHash, serviceLabels, serviceAnnotations)
+	ovnDaemonSet, err := ovncontroller.DaemonSet(instance, sbCluster, inputHash, serviceLabels, serviceAnnotations)
 	if err != nil {
 		Log.Error(err, "Failed to create OVNController DaemonSet")
 		return ctrl.Result{}, err
@@ -463,17 +470,6 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 	// create DaemonSet - end
 
-	sbCluster, err := v1beta1.GetDBClusterByType(ctx, helper, instance.Namespace, map[string]string{}, v1beta1.SBDBType)
-	if err != nil {
-		Log.Info("No SB OVNDBCluster defined, deleting external ConfigMap")
-		cleanupConfigMapErr := r.deleteExternalConfigMaps(ctx, helper, instance)
-		if cleanupConfigMapErr != nil {
-			Log.Error(cleanupConfigMapErr, "Failed to delete external ConfigMap")
-			return ctrl.Result{}, cleanupConfigMapErr
-		}
-		return ctrl.Result{}, nil
-	}
-
 	ep, err := sbCluster.GetExternalEndpoint()
 	if err != nil || ep == "" {
 		Log.Info("No external endpoint defined for SB OVNDBCluster, deleting external ConfigMap")
@@ -493,60 +489,6 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 			return ctrl.Result{}, err
 		}
 	}
-
-	// create OVN Config Job - start
-	if instance.Status.NumberReady == instance.Status.DesiredNumberScheduled {
-		jobsDef, err := ovncontroller.ConfigJob(ctx, helper, r.Client, instance, sbCluster, serviceLabels)
-		if err != nil {
-			Log.Error(err, "Failed to create OVN controller configuration Job")
-			return ctrl.Result{}, err
-		}
-		for _, jobDef := range jobsDef {
-			configHashKey := v1beta1.OvnConfigHash + "-" + jobDef.Spec.Template.Spec.NodeName
-			configHash := instance.Status.Hash[configHashKey]
-			configJob := job.NewJob(
-				jobDef,
-				configHashKey,
-				false,
-				time.Duration(5)*time.Second,
-				configHash,
-			)
-			ctrlResult, err = configJob.DoJob(ctx, helper)
-			if (ctrlResult != ctrl.Result{}) {
-				instance.Status.Conditions.Set(
-					condition.FalseCondition(
-						condition.ServiceConfigReadyCondition,
-						condition.RequestedReason,
-						condition.SeverityInfo,
-						condition.ServiceConfigReadyMessage,
-					),
-				)
-				return ctrlResult, nil
-			}
-			if err != nil {
-				Log.Error(err, "Failed to configure OVN controller")
-				instance.Status.Conditions.Set(
-					condition.FalseCondition(
-						condition.ServiceConfigReadyCondition,
-						condition.RequestedReason,
-						condition.SeverityInfo,
-						condition.ServiceConfigReadyErrorMessage,
-						err.Error(),
-					),
-				)
-				return ctrl.Result{}, err
-			}
-			if configJob.HasChanged() {
-				instance.Status.Hash[configHashKey] = configJob.GetHash()
-				Log.Info(fmt.Sprintf("Job %s hash added - %s", jobDef.Name, instance.Status.Hash[configHashKey]))
-			}
-		}
-		instance.Status.Conditions.MarkTrue(condition.ServiceConfigReadyCondition, condition.ServiceConfigReadyMessage)
-	} else {
-		Log.Info("OVNController DaemonSet not ready yet. Configuration job cannot be started.")
-		return ctrl.Result{Requeue: true}, nil
-	}
-	// create OVN Config Job - end
 
 	Log.Info("Reconciled Service successfully")
 
