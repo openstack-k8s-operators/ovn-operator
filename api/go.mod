@@ -4,6 +4,8 @@ go 1.19
 
 require (
 	github.com/go-logr/logr v1.4.1
+	github.com/google/uuid v1.5.0
+	github.com/onsi/gomega v1.30.0
 	github.com/openstack-k8s-operators/lib-common/modules/common v0.3.1-0.20240124141114-55d029e4658b
 	k8s.io/api v0.26.13
 	k8s.io/apimachinery v0.26.13
@@ -26,15 +28,16 @@ require (
 	github.com/google/gnostic v0.6.9 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/google/uuid v1.5.0 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.4.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/openshift/api v3.9.0+incompatible // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.14.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect

@@ -18,9 +18,7 @@ package functional_test
 
 import (
 	"encoding/json"
-	"fmt"
 
-	"github.com/google/uuid"
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -34,21 +32,19 @@ import (
 var _ = Describe("OVNNorthd controller", func() {
 
 	When("A OVNNorthd instance is created", func() {
-		var OVNNorthdName types.NamespacedName
+		var ovnNorthdName types.NamespacedName
 		BeforeEach(func() {
-			name := fmt.Sprintf("ovnnorthd-%s", uuid.New().String())
-			instance := CreateOVNNorthd(namespace, name, GetDefaultOVNNorthdSpec())
-			OVNNorthdName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
-			DeferCleanup(th.DeleteInstance, instance)
+			ovnNorthdName = ovn.CreateOVNNorthd(namespace, GetDefaultOVNNorthdSpec())
+			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
 		})
 
 		It("should have the Spec fields initialized", func() {
-			OVNNorthd := GetOVNNorthd(OVNNorthdName)
+			OVNNorthd := ovn.GetOVNNorthd(ovnNorthdName)
 			Expect(*(OVNNorthd.Spec.Replicas)).Should(Equal(int32(1)))
 		})
 
 		It("should have the Status fields initialized", func() {
-			OVNNorthd := GetOVNNorthd(OVNNorthdName)
+			OVNNorthd := ovn.GetOVNNorthd(ovnNorthdName)
 			Expect(OVNNorthd.Status.ReadyCount).To(Equal(int32(0)))
 		})
 
@@ -56,13 +52,13 @@ var _ = Describe("OVNNorthd controller", func() {
 			// the reconciler loop adds the finalizer so we have to wait for
 			// it to run
 			Eventually(func() []string {
-				return GetOVNNorthd(OVNNorthdName).Finalizers
+				return ovn.GetOVNNorthd(ovnNorthdName).Finalizers
 			}, timeout, interval).Should(ContainElement("OVNNorthd"))
 		})
 
 		It("should be in input ready condition", func() {
 			th.ExpectCondition(
-				OVNNorthdName,
+				ovnNorthdName,
 				ConditionGetterFunc(OVNNorthdConditionGetter),
 				condition.InputReadyCondition,
 				corev1.ConditionTrue,
@@ -78,6 +74,7 @@ var _ = Describe("OVNNorthd controller", func() {
 					Namespace: namespace,
 					Name:      "ovn-northd",
 				}
+
 				depl := th.GetDeployment(deplName)
 				Expect(depl.Spec.Template.Spec.Containers[0].Args).To(Equal([]string{
 					"-vfile:off", "-vconsole:info",
@@ -93,13 +90,10 @@ var _ = Describe("OVNNorthd controller", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
-			name := fmt.Sprintf("ovnnorthd-%s", uuid.New().String())
 			spec := GetDefaultOVNNorthdSpec()
-			spec["debug"] = map[string]interface{}{
-				"service": true,
-			}
-			instance := CreateOVNNorthd(namespace, name, spec)
-			DeferCleanup(th.DeleteInstance, instance)
+			spec.Debug.Service = true
+			ovnNorthdName := ovn.CreateOVNNorthd(namespace, spec)
+			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
 		})
 
 		It("Container commands to include debug commands", func() {
@@ -107,6 +101,7 @@ var _ = Describe("OVNNorthd controller", func() {
 				Namespace: namespace,
 				Name:      "ovn-northd",
 			}
+
 			depl := th.GetDeployment(deplName)
 			Expect(depl.Spec.Template.Spec.Containers).To(HaveLen(1))
 			Expect(depl.Spec.Template.Spec.Containers[0].LivenessProbe.Exec.Command).To(
@@ -119,21 +114,20 @@ var _ = Describe("OVNNorthd controller", func() {
 	})
 
 	When("OVNNorthd is created with networkAttachments", func() {
-		var OVNNorthdName types.NamespacedName
+		var ovnNorthdName types.NamespacedName
+
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
-			name := fmt.Sprintf("ovnnorthd-%s", uuid.New().String())
 			spec := GetDefaultOVNNorthdSpec()
-			spec["networkAttachment"] = "internalapi"
-			instance := CreateOVNNorthd(namespace, name, spec)
-			OVNNorthdName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
-			DeferCleanup(th.DeleteInstance, instance)
+			spec.NetworkAttachment = "internalapi"
+			ovnNorthdName = ovn.CreateOVNNorthd(namespace, spec)
+			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
 		})
 
 		It("reports that the definition is missing", func() {
 			th.ExpectConditionWithDetails(
-				OVNNorthdName,
+				ovnNorthdName,
 				ConditionGetterFunc(OVNNorthdConditionGetter),
 				condition.NetworkAttachmentsReadyCondition,
 				corev1.ConditionFalse,
@@ -146,11 +140,12 @@ var _ = Describe("OVNNorthd controller", func() {
 			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
 			DeferCleanup(th.DeleteInstance, nad)
 
-			statefulSetName := types.NamespacedName{
+			deplName := types.NamespacedName{
 				Namespace: namespace,
 				Name:      "ovn-northd",
 			}
-			depl := th.GetDeployment(statefulSetName)
+
+			depl := th.GetDeployment(deplName)
 
 			expectedAnnotation, err := json.Marshal(
 				[]networkv1.NetworkSelectionElement{
@@ -166,10 +161,10 @@ var _ = Describe("OVNNorthd controller", func() {
 
 			// We don't add network attachment status annotations to the Pods
 			// to simulate that the network attachments are missing.
-			//th.SimulateDeploymentReadyWithPods(statefulSetName, map[string][]string{})
+			//th.SimulateDeploymentReadyWithPods(deplName, map[string][]string{})
 
 			th.ExpectConditionWithDetails(
-				OVNNorthdName,
+				ovnNorthdName,
 				ConditionGetterFunc(OVNNorthdConditionGetter),
 				condition.NetworkAttachmentsReadyCondition,
 				corev1.ConditionFalse,
@@ -183,11 +178,12 @@ var _ = Describe("OVNNorthd controller", func() {
 			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
 			DeferCleanup(th.DeleteInstance, nad)
 
-			statefulSetName := types.NamespacedName{
+			deplName := types.NamespacedName{
 				Namespace: namespace,
 				Name:      "ovn-northd",
 			}
-			depl := th.GetDeployment(statefulSetName)
+
+			depl := th.GetDeployment(deplName)
 
 			expectedAnnotation, err := json.Marshal(
 				[]networkv1.NetworkSelectionElement{
@@ -204,12 +200,12 @@ var _ = Describe("OVNNorthd controller", func() {
 			// We simulate that there is no IP associated with the internalapi
 			// network attachment
 			th.SimulateDeploymentReadyWithPods(
-				statefulSetName,
+				deplName,
 				map[string][]string{namespace + "/internalapi": {}},
 			)
 
 			th.ExpectConditionWithDetails(
-				OVNNorthdName,
+				ovnNorthdName,
 				ConditionGetterFunc(OVNNorthdConditionGetter),
 				condition.NetworkAttachmentsReadyCondition,
 				corev1.ConditionFalse,
@@ -223,25 +219,26 @@ var _ = Describe("OVNNorthd controller", func() {
 			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
 			DeferCleanup(th.DeleteInstance, nad)
 
-			statefulSetName := types.NamespacedName{
+			deplName := types.NamespacedName{
 				Namespace: namespace,
 				Name:      "ovn-northd",
 			}
+
 			th.SimulateDeploymentReadyWithPods(
-				statefulSetName,
+				deplName,
 				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
 			)
 
 			th.ExpectCondition(
-				OVNNorthdName,
+				ovnNorthdName,
 				ConditionGetterFunc(OVNNorthdConditionGetter),
 				condition.NetworkAttachmentsReadyCondition,
 				corev1.ConditionTrue,
 			)
 
 			Eventually(func(g Gomega) {
-				OVNNorthd := GetOVNNorthd(OVNNorthdName)
-				g.Expect(OVNNorthd.Status.NetworkAttachments).To(
+				ovnNorthd := GetOVNNorthd(ovnNorthdName)
+				g.Expect(ovnNorthd.Status.NetworkAttachments).To(
 					Equal(map[string][]string{namespace + "/internalapi": {"10.0.0.1"}}))
 
 			}, timeout, interval).Should(Succeed())

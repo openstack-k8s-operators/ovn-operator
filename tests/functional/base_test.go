@@ -18,11 +18,9 @@ package functional_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -41,59 +39,42 @@ const (
 	interval = timeout / 100
 )
 
-func GetDefaultOVNNorthdSpec() map[string]interface{} {
-	return map[string]interface{}{
-		"containerImage": "test-ovnnorthd-container-image",
+func GetDefaultOVNNorthdSpec() ovnv1.OVNNorthdSpec {
+	return ovnv1.OVNNorthdSpec{
+		// TODO: Create() doesn't apply kubebuilder defaults, in contrast to
+		// CreateUnstructured for some reason; need to understand why
+		LogLevel: "info",
 	}
 }
 
-func CreateOVNNorthd(namespace string, OVNNorthdName string, spec map[string]interface{}) client.Object {
-
-	raw := map[string]interface{}{
-		"apiVersion": "ovn.openstack.org/v1beta1",
-		"kind":       "OVNNorthd",
-		"metadata": map[string]interface{}{
-			"name":      OVNNorthdName,
-			"namespace": namespace,
-		},
-		"spec": spec,
-	}
-	return th.CreateUnstructured(raw)
+func CreateOVNNorthd(namespace string, OVNNorthdName string, spec ovnv1.OVNNorthdSpec) client.Object {
+	name := ovn.CreateOVNNorthd(namespace, spec)
+	return ovn.GetOVNNorthd(name)
 }
 
 func GetOVNNorthd(name types.NamespacedName) *ovnv1.OVNNorthd {
-	instance := &ovnv1.OVNNorthd{}
-	Eventually(func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, name, instance)).Should(Succeed())
-	}, timeout, interval).Should(Succeed())
-	return instance
+	return ovn.GetOVNNorthd(name)
 }
 
 func OVNNorthdConditionGetter(name types.NamespacedName) condition.Conditions {
-	instance := GetOVNNorthd(name)
+	instance := ovn.GetOVNNorthd(name)
 	return instance.Status.Conditions
 }
 
-func GetDefaultOVNDBClusterSpec() map[string]interface{} {
-	return map[string]interface{}{
-		"containerImage": "test-ovn-nb-container-image",
-		"storageRequest": "1G",
-		"storageClass":   "local-storage",
+func GetDefaultOVNDBClusterSpec() ovnv1.OVNDBClusterSpec {
+	return ovnv1.OVNDBClusterSpec{
+		DBType: v1beta1.NBDBType,
+		// TODO: Create() doesn't apply kubebuilder defaults, in contrast to
+		// CreateUnstructured for some reason; need to understand why
+		LogLevel:       "info",
+		StorageRequest: "1G",
+		StorageClass:   "local-storage",
 	}
 }
 
-func CreateOVNDBCluster(namespace string, OVNDBClusterName string, spec map[string]interface{}) client.Object {
-
-	raw := map[string]interface{}{
-		"apiVersion": "ovn.openstack.org/v1beta1",
-		"kind":       "OVNDBCluster",
-		"metadata": map[string]interface{}{
-			"name":      OVNDBClusterName,
-			"namespace": namespace,
-		},
-		"spec": spec,
-	}
-	return th.CreateUnstructured(raw)
+func CreateOVNDBCluster(namespace string, spec ovnv1.OVNDBClusterSpec) client.Object {
+	name := ovn.CreateOVNDBCluster(namespace, spec)
+	return ovn.GetOVNDBCluster(name)
 }
 
 func UpdateOVNDBCluster(cluster *ovnv1.OVNDBCluster) {
@@ -101,13 +82,13 @@ func UpdateOVNDBCluster(cluster *ovnv1.OVNDBCluster) {
 }
 
 func OVNDBClusterConditionGetter(name types.NamespacedName) condition.Conditions {
-	instance := GetOVNDBCluster(name)
+	instance := ovn.GetOVNDBCluster(name)
 	return instance.Status.Conditions
 }
 
 func ScaleDBCluster(name types.NamespacedName, replicas int32) {
 	Eventually(func(g Gomega) {
-		c := GetOVNDBCluster(name)
+		c := ovn.GetOVNDBCluster(name)
 		*c.Spec.Replicas = replicas
 		g.Expect(k8sClient.Update(ctx, c)).Should(Succeed())
 	}).Should(Succeed())
@@ -117,7 +98,6 @@ func ScaleDBCluster(name types.NamespacedName, replicas int32) {
 func CreateOVNDBClusters(namespace string, nad map[string][]string, replicas int32) []types.NamespacedName {
 	dbs := []types.NamespacedName{}
 	for _, db := range []string{v1beta1.NBDBType, v1beta1.SBDBType} {
-		name := fmt.Sprintf("ovn-%s", uuid.New().String())
 		spec := GetDefaultOVNDBClusterSpec()
 		stringNad := ""
 		// OVNDBCluster doesn't allow multiple NADs, hence map len
@@ -133,12 +113,11 @@ func CreateOVNDBClusters(namespace string, nad map[string][]string, replicas int
 			// nad format needs to be map[string][]string{namespace + "/" + nad_name: ...} or empty
 			Expect(stringNad).ToNot(Equal(""))
 		}
-		spec["dbType"] = db
-		spec["networkAttachment"] = stringNad
-		spec["replicas"] = replicas
+		spec.DBType = db
+		spec.NetworkAttachment = stringNad
+		spec.Replicas = &replicas
 
-		instance := CreateOVNDBCluster(namespace, name, spec)
-
+		instance := CreateOVNDBCluster(namespace, spec)
 		instance_name := types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 
 		dbName := "nb"
@@ -157,7 +136,7 @@ func CreateOVNDBClusters(namespace string, nad map[string][]string, replicas int
 		// with all information (Status.DBAddress and internalDBAddress
 		// are set at the end of the reconcileService)
 		Eventually(func(g Gomega) {
-			ovndbcluster := GetOVNDBCluster(instance_name)
+			ovndbcluster := ovn.GetOVNDBCluster(instance_name)
 			endpoint := ""
 			// Check External endpoint when NAD is set
 			if len(nad) == 0 {
@@ -179,17 +158,13 @@ func CreateOVNDBClusters(namespace string, nad map[string][]string, replicas int
 // DeleteOVNDBClusters Delete OVN DBClusters
 func DeleteOVNDBClusters(names []types.NamespacedName) {
 	for _, db := range names {
-		th.DeleteInstance(GetOVNDBCluster(db))
+		th.DeleteInstance(ovn.GetOVNDBCluster(db))
 	}
 }
 
 // GetOVNDBCluster Get OVNDBCluster
 func GetOVNDBCluster(name types.NamespacedName) *ovnv1.OVNDBCluster {
-	instance := &ovnv1.OVNDBCluster{}
-	Eventually(func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, name, instance)).Should(Succeed())
-	}, timeout, interval).Should(Succeed())
-	return instance
+	return ovn.GetOVNDBCluster(name)
 }
 
 // GetDaemonSet -
@@ -220,36 +195,22 @@ func SimulateDaemonsetNumberReady(name types.NamespacedName) {
 	logger.Info("Simulated daemonset success", "on", name)
 }
 
-func GetDefaultOVNControllerSpec() map[string]interface{} {
-	return map[string]interface{}{}
+func GetDefaultOVNControllerSpec() v1beta1.OVNControllerSpec {
+	return v1beta1.OVNControllerSpec{}
 }
 
-func CreateOVNController(namespace string, OVNControllerName string, spec map[string]interface{}) client.Object {
+func CreateOVNController(namespace string, spec v1beta1.OVNControllerSpec) client.Object {
 
-	raw := map[string]interface{}{
-		"apiVersion": "ovn.openstack.org/v1beta1",
-		"kind":       "OVNController",
-		"metadata": map[string]interface{}{
-			"name":      OVNControllerName,
-			"namespace": namespace,
-		},
-	}
-	if len(spec) != 0 {
-		raw["spec"] = spec
-	}
-	return th.CreateUnstructured(raw)
+	name := ovn.CreateOVNController(namespace, spec)
+	return ovn.GetOVNController(name)
 }
 
 func GetOVNController(name types.NamespacedName) *ovnv1.OVNController {
-	instance := &ovnv1.OVNController{}
-	Eventually(func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, name, instance)).Should(Succeed())
-	}, timeout, interval).Should(Succeed())
-	return instance
+	return ovn.GetOVNController(name)
 }
 
 func OVNControllerConditionGetter(name types.NamespacedName) condition.Conditions {
-	instance := GetOVNController(name)
+	instance := ovn.GetOVNController(name)
 	return instance.Status.Conditions
 }
 
