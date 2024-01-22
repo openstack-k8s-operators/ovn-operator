@@ -212,7 +212,7 @@ spec:
               hash:
                 additionalProperties:
                   type: string
-                description: Map of hashes to track e.g. job status
+                description: Map of hashes to track
                 type: object
               networkAttachments:
                 additionalProperties:
