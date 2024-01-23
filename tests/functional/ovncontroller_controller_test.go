@@ -249,17 +249,20 @@ var _ = Describe("OVNController controller", func() {
 			Expect(ds.Spec.Template.Spec.Containers).To(HaveLen(3))
 			Expect(ds.Spec.Template.Spec.Containers[0].LivenessProbe.Exec.Command).To(
 				Equal([]string{"/bin/true"}))
-			Expect(ds.Spec.Template.Spec.Containers[0].Command[0]).Should(ContainSubstring("sleep infinity"))
+			Expect(ds.Spec.Template.Spec.Containers[0].Command[0]).Should(ContainSubstring("/bin/sleep"))
+			Expect(ds.Spec.Template.Spec.Containers[0].Args[0]).Should(ContainSubstring("infinity"))
 			Expect(ds.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(
 				Equal([]string{"/bin/true"}))
 
 			Expect(ds.Spec.Template.Spec.Containers[1].LivenessProbe.Exec.Command).To(
 				Equal([]string{"/bin/true"}))
-			Expect(ds.Spec.Template.Spec.Containers[1].Command[0]).Should(ContainSubstring("sleep infinity"))
+			Expect(ds.Spec.Template.Spec.Containers[1].Command[0]).Should(ContainSubstring("/bin/sleep"))
+			Expect(ds.Spec.Template.Spec.Containers[1].Args[0]).Should(ContainSubstring("infinity"))
 			Expect(ds.Spec.Template.Spec.Containers[1].Lifecycle.PreStop.Exec.Command).To(
 				Equal([]string{"/bin/true"}))
 
-			Expect(ds.Spec.Template.Spec.Containers[2].Args[0]).Should(ContainSubstring("sleep infinity"))
+			Expect(ds.Spec.Template.Spec.Containers[2].Command[0]).Should(ContainSubstring("/bin/sleep"))
+			Expect(ds.Spec.Template.Spec.Containers[2].Args[0]).Should(ContainSubstring("infinity"))
 			Expect(ds.Spec.Template.Spec.Containers[2].Lifecycle.PreStop.Exec.Command).To(
 				Equal([]string{"/bin/true"}))
 		})
