@@ -61,7 +61,7 @@ func StatefulSet(
 	cmd := []string{"/usr/bin/dumb-init"}
 	args := []string{"--single-child", "--", "/bin/bash", "-c"}
 	if instance.Spec.Debug.Service {
-		args = append(args, common.DebugCommand)
+		args = append(args, "/bin/sleep infinity")
 		livenessProbe.Exec = &corev1.ExecAction{
 			Command: noopCmd,
 		}

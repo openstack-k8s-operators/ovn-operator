@@ -13,7 +13,6 @@ limitations under the License.
 package ovncontroller
 
 import (
-	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 
@@ -62,6 +61,7 @@ func DaemonSet(
 	var ovsVswitchdArgs []string
 	var ovsVswitchdPreStopCmd []string
 
+	var ovnControllerCmd []string
 	var ovnControllerArgs []string
 	var ovnControllerPreStopCmd []string
 
@@ -70,22 +70,23 @@ func DaemonSet(
 			Command: noopCmd,
 		}
 		ovsDbCmd = []string{
-			common.DebugCommand,
+			"/bin/sleep",
 		}
-		ovsDbArgs = []string{}
+		ovsDbArgs = []string{"infinity"}
 		ovsDbPreStopCmd = noopCmd
 		ovsVswitchdLivenessProbe.Exec = &corev1.ExecAction{
 			Command: noopCmd,
 		}
 		ovsVswitchdCmd = []string{
-			common.DebugCommand,
+			"/bin/sleep",
 		}
-		ovsVswitchdArgs = noopCmd
+		ovsVswitchdArgs = []string{"infinity"}
 		ovsVswitchdPreStopCmd = noopCmd
 
-		ovnControllerArgs = []string{
-			common.DebugCommand,
+		ovnControllerCmd = []string{
+			"/bin/sleep",
 		}
+		ovnControllerArgs = []string{"infinity"}
 		ovnControllerPreStopCmd = noopCmd
 	} else {
 		ovsDbLivenessProbe.Exec = &corev1.ExecAction{
@@ -122,6 +123,9 @@ func DaemonSet(
 			"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovsdb-server", ";", "sleep", "2",
 		}
 
+		ovnControllerCmd = []string{
+			"/bin/bash", "-c",
+		}
 		ovnControllerArgs = []string{
 			"/usr/local/bin/container-scripts/net_setup.sh && ovn-controller --pidfile unix:/run/openvswitch/db.sock",
 		}
@@ -207,11 +211,9 @@ func DaemonSet(
 							// ovn-controller container
 							// NOTE(slaweq): for some reason, when ovn-controller is started without
 							// bash shell, it fails with error "unrecognized option --pidfile"
-							Name: "ovn-controller",
-							Command: []string{
-								"/bin/bash", "-c",
-							},
-							Args: ovnControllerArgs,
+							Name:    "ovn-controller",
+							Command: ovnControllerCmd,
+							Args:    ovnControllerArgs,
 							Lifecycle: &corev1.Lifecycle{
 								PreStop: &corev1.LifecycleHandler{
 									Exec: &corev1.ExecAction{
