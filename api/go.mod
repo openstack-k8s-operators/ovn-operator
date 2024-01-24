@@ -4,9 +4,9 @@ go 1.19
 
 require (
 	github.com/go-logr/logr v1.4.1
-	github.com/openstack-k8s-operators/lib-common/modules/common v0.3.1-0.20240106101723-5f7aa263457f
-	k8s.io/api v0.26.12
-	k8s.io/apimachinery v0.26.12
+	github.com/openstack-k8s-operators/lib-common/modules/common v0.3.1-0.20240124141114-55d029e4658b
+	k8s.io/api v0.26.13
+	k8s.io/apimachinery v0.26.13
 	sigs.k8s.io/controller-runtime v0.14.7
 )
 
@@ -41,10 +41,10 @@ require (
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	golang.org/x/net v0.19.0 // indirect
+	golang.org/x/net v0.20.0 // indirect
 	golang.org/x/oauth2 v0.7.0 // indirect
-	golang.org/x/sys v0.15.0 // indirect
-	golang.org/x/term v0.15.0 // indirect
+	golang.org/x/sys v0.16.0 // indirect
+	golang.org/x/term v0.16.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
@@ -53,9 +53,9 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.26.12 // indirect
-	k8s.io/client-go v0.26.12 // indirect
-	k8s.io/component-base v0.26.12 // indirect
+	k8s.io/apiextensions-apiserver v0.26.13 // indirect
+	k8s.io/client-go v0.26.13 // indirect
+	k8s.io/component-base v0.26.13 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230308215209-15aac26d736a // indirect
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e // indirect
