@@ -9,14 +9,14 @@ require (
 	github.com/onsi/ginkgo/v2 v2.14.0
 	github.com/onsi/gomega v1.30.0
 	github.com/openstack-k8s-operators/infra-operator/apis v0.3.0
-	github.com/openstack-k8s-operators/lib-common/modules/common v0.3.1-0.20240106101723-5f7aa263457f
-	github.com/openstack-k8s-operators/lib-common/modules/test v0.3.1-0.20240106101723-5f7aa263457f
+	github.com/openstack-k8s-operators/lib-common/modules/common v0.3.1-0.20240124141114-55d029e4658b
+	github.com/openstack-k8s-operators/lib-common/modules/test v0.3.1-0.20240124141114-55d029e4658b
 	github.com/openstack-k8s-operators/ovn-operator/api v0.0.0-20230418071801-b5843d9e05fb
 	go.uber.org/zap v1.26.0
 	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a
-	k8s.io/api v0.26.12
-	k8s.io/apimachinery v0.26.12
-	k8s.io/client-go v0.26.12
+	k8s.io/api v0.26.13
+	k8s.io/apimachinery v0.26.13
+	k8s.io/client-go v0.26.13
 	sigs.k8s.io/controller-runtime v0.14.7
 )
 
@@ -69,8 +69,8 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.26.12 // indirect
-	k8s.io/component-base v0.26.12 // indirect
+	k8s.io/apiextensions-apiserver v0.26.13 // indirect
+	k8s.io/component-base v0.26.13 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230327201221-f5883ff37f0c // indirect
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e // indirect
