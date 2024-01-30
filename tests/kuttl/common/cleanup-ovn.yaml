@@ -13,3 +13,9 @@ delete:
 - apiVersion: ovn.openstack.org/v1beta1
   kind: OVNController
   name: ovncontroller-sample
+- apiVersion: k8s.cni.cncf.io/v1
+  kind: NetworkAttachmentDefinition
+  name: datacentre2
+- apiVersion: k8s.cni.cncf.io/v1
+  kind: NetworkAttachmentDefinition
+  name: datacentre3
