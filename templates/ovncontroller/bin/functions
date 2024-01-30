@@ -49,34 +49,73 @@ function configure_external_ids {
     fi
 }
 
+# Returns the set difference between $1 and $2
+function set_difference {
+    echo "$(comm -23 <(sort <(echo $1 | xargs -n1)) <(sort <(echo $2 | xargs -n1)))"
+}
+
 # Configure bridge mappings and physical bridges
 function configure_physical_networks {
     local OvnBridgeMappings=""
+    local br_new=""
     for physicalNetwork in ${PhysicalNetworks}; do
         br_name="br-${physicalNetwork}"
-        ovs-vsctl --may-exist add-br ${br_name}
-        ovs-vsctl --may-exist add-port ${br_name} ${physicalNetwork}
         bridgeMapping="${physicalNetwork}:${br_name}"
         if [ -z "$OvnBridgeMappings"]; then
             OvnBridgeMappings=$bridgeMapping
+            br_new=$br_name
         else
             OvnBridgeMappings="${OvnBridgeMappings},${bridgeMapping}"
+            br_new="${br_new} ${br_name}"
         fi
     done
+
+    # Set or remove the local OVS Open vSwitch "external-ids:ovn-bridge-mappings"
     if [ -n "$OvnBridgeMappings" ]; then
         ovs-vsctl set open . external-ids:ovn-bridge-mappings=${OvnBridgeMappings}
     else
-        # If NicMappings not defined or cleared, let's ensure bridge and bridge-mappings are removed
-        ovn_bms=$(ovs-vsctl --if-exists get open . external_ids:ovn-bridge-mappings|tr -d '"')
-        for bm in ${ovn_bms/,/ }; do
-            ovs-vsctl --if-exists del-br ${bm##*:}
-        done
         ovs-vsctl --if-exists remove open . external_ids ovn-bridge-mappings
 
-        # If NicMappings not defined or cleared, let's ensure patch ports are removed
-        patch_ports=$(ovs-vsctl --columns=name --bare find interface type=patch)
-        for port in ${patch_ports}; do
-            ovs-vsctl --if-exists del-port br-int $port
+    # Current configured bridges.
+    ovn_bms=$(ovs-vsctl --if-exists get open . external_ids:ovn-bridge-mappings|tr -d '"')
+    local br_current=""
+    for bm in ${ovn_bms/,/ }; do
+        if [ -z "$br_current"]; then
+            br_current=${bm##*:}
+        else
+            br_current="${br_current} ${bm##*:}"
+        fi
+    done
+
+    # Bridges to add and delete.
+    local br_to_delete=$(set_difference "$br_current" "$br_new")
+    local br_to_add=$(set_difference "$br_new" "$br_current")
+
+    # Add the new bridges.
+    for br_name in ${br_to_add}; do
+        ovs-vsctl --may-exist add-br ${br_name}
+        ovs-vsctl --may-exist add-port ${br_name} ${br_name##*-}
+    done
+
+    # Delete the old bridges not longer present in "OvnBridgeMappings" and the
+    # patch ports in "br-int".
+    for br_name in ${br_to_delete}; do
+        # List all ports "type=patch", retrieve the "options:peer" parameter
+        # and delete the peer port. The "$port" will be deleted during the
+        # bridge deletion.
+        #   $ ovs-vsctl --column=options --bare find interface name=patch-provnet1-to-br-int type=patch
+        #     peer=patch-br-int-to-provnet1
+        for port in $(ovs-vsctl list-port ${br_name}); do
+            options=$(ovs-vsctl --column=options --bare find interface ${port} type=patch)
+            for option in ${options}; do
+                key=$(echo $option | cut -f1 -d "=")
+                peer_name=$(echo $option | cut -f2 -d "=")
+                if [[ "$key" == "peer" ]]; then
+                    ovs-vsctl --if-exists del-port br-int $port ${peer_name}
+                fi
+            done
         done
-    fi
+
+        ovs-vsctl --if-exists del-br ${br_name}
+    done
 }
