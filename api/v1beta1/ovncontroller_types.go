@@ -158,7 +158,7 @@ type OVSExternalIDs struct {
 
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=true
-	EnableChassisAsGateway bool `json:"enable-chassis-as-gateway"`
+	EnableChassisAsGateway *bool `json:"enable-chassis-as-gateway"`
 }
 
 // RbacConditionsSet - set the conditions for the rbac object
