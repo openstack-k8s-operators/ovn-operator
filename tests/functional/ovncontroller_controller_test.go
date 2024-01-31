@@ -20,11 +20,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/google/uuid"
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
+	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,8 +37,7 @@ var _ = Describe("OVNController controller", func() {
 	When("A OVNController instance is created", func() {
 		var OVNControllerName types.NamespacedName
 		BeforeEach(func() {
-			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
-			instance := CreateOVNController(namespace, name, GetDefaultOVNControllerSpec())
+			instance := CreateOVNController(namespace, GetDefaultOVNControllerSpec())
 			OVNControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
 		})
@@ -231,12 +230,11 @@ var _ = Describe("OVNController controller", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
-			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
 			spec := GetDefaultOVNControllerSpec()
-			spec["debug"] = map[string]interface{}{
-				"service": true,
+			spec.Debug = ovnv1.OVNControllerDebug{
+				Service: true,
 			}
-			instance := CreateOVNController(namespace, name, spec)
+			instance := CreateOVNController(namespace, spec)
 			DeferCleanup(th.DeleteInstance, instance)
 		})
 
@@ -280,10 +278,9 @@ var _ = Describe("OVNController controller", func() {
 			for _, db := range dbs {
 				DeferCleanup(th.DeleteInstance, GetOVNDBCluster(db))
 			}
-			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
 			spec := GetDefaultOVNControllerSpec()
-			spec["networkAttachment"] = "internalapi"
-			instance := CreateOVNController(namespace, name, spec)
+			spec.NetworkAttachment = "internalapi"
+			instance := CreateOVNController(namespace, spec)
 			OVNControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
 		})
@@ -521,10 +518,9 @@ var _ = Describe("OVNController controller", func() {
 			for _, db := range dbs {
 				DeferCleanup(th.DeleteInstance, GetOVNDBCluster(db))
 			}
-			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
 			spec := GetDefaultOVNControllerSpec()
-			spec["networkAttachment"] = "internalapi"
-			instance := CreateOVNController(namespace, name, spec)
+			spec.NetworkAttachment = "internalapi"
+			instance := CreateOVNController(namespace, spec)
 			OVNControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
 		})
@@ -546,12 +542,11 @@ var _ = Describe("OVNController controller", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
-			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
 			spec := GetDefaultOVNControllerSpec()
-			spec["nicMappings"] = map[string]interface{}{
+			spec.NicMappings = map[string]string{
 				"physnet1": "enp2s0.100",
 			}
-			instance := CreateOVNController(namespace, name, spec)
+			instance := CreateOVNController(namespace, spec)
 			OVNControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
 		})
@@ -614,13 +609,12 @@ var _ = Describe("OVNController controller", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
-			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
 			spec := GetDefaultOVNControllerSpec()
-			spec["networkAttachment"] = "internalapi"
-			spec["nicMappings"] = map[string]interface{}{
+			spec.NetworkAttachment = "internalapi"
+			spec.NicMappings = map[string]string{
 				"physnet1": "enp2s0.100",
 			}
-			instance := CreateOVNController(namespace, name, spec)
+			instance := CreateOVNController(namespace, spec)
 			DeferCleanup(th.DeleteInstance, instance)
 		})
 
@@ -659,13 +653,12 @@ var _ = Describe("OVNController controller", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
-			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
 			spec := GetDefaultOVNControllerSpec()
-			spec["networkAttachments"] = []string{"internalapi"}
-			spec["nicMappings"] = map[string]interface{}{
+			spec.NetworkAttachments = []string{"internalapi"}
+			spec.NicMappings = map[string]string{
 				"physnet1": "enp2s0.100",
 			}
-			instance := CreateOVNController(namespace, name, spec)
+			instance := CreateOVNController(namespace, spec)
 			DeferCleanup(th.DeleteInstance, instance)
 		})
 
@@ -704,14 +697,13 @@ var _ = Describe("OVNController controller", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
-			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
 			spec := GetDefaultOVNControllerSpec()
-			spec["networkAttachment"] = "tenant"
-			spec["networkAttachments"] = []string{"internalapi"}
-			spec["nicMappings"] = map[string]interface{}{
+			spec.NetworkAttachment = "tenant"
+			spec.NetworkAttachments = []string{"internalapi"}
+			spec.NicMappings = map[string]string{
 				"physnet1": "enp2s0.100",
 			}
-			instance := CreateOVNController(namespace, name, spec)
+			instance := CreateOVNController(namespace, spec)
 			DeferCleanup(th.DeleteInstance, instance)
 		})
 
@@ -758,13 +750,12 @@ var _ = Describe("OVNController controller", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
-			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
 			spec := GetDefaultOVNControllerSpec()
-			spec["networkAttachments"] = []string{"internalapi", "tenant"}
-			spec["nicMappings"] = map[string]interface{}{
+			spec.NetworkAttachments = []string{"internalapi", "tenant"}
+			spec.NicMappings = map[string]string{
 				"physnet1": "enp2s0.100",
 			}
-			instance := CreateOVNController(namespace, name, spec)
+			instance := CreateOVNController(namespace, spec)
 			DeferCleanup(th.DeleteInstance, instance)
 		})
 
@@ -811,14 +802,13 @@ var _ = Describe("OVNController controller", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
-			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
 			spec := GetDefaultOVNControllerSpec()
-			spec["networkAttachment"] = "tenant"
-			spec["networkAttachments"] = []string{"internalapi", "tenant"}
-			spec["nicMappings"] = map[string]interface{}{
+			spec.NetworkAttachment = "tenant"
+			spec.NetworkAttachments = []string{"internalapi", "tenant"}
+			spec.NicMappings = map[string]string{
 				"physnet1": "enp2s0.100",
 			}
-			instance := CreateOVNController(namespace, name, spec)
+			instance := CreateOVNController(namespace, spec)
 			DeferCleanup(th.DeleteInstance, instance)
 		})
 
@@ -867,11 +857,10 @@ var _ = Describe("OVNController controller", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
-			name := fmt.Sprintf("ovn-controller-%s", uuid.New().String())
-			ovnControllerName = types.NamespacedName{Namespace: namespace, Name: name}
-
-			instance := CreateOVNController(namespace, name, map[string]interface{}{})
+			instance := CreateOVNController(namespace, ovnv1.OVNControllerSpec{})
 			DeferCleanup(th.DeleteInstance, instance)
+
+			ovnControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 		})
 
 		It("applies meaningful defaults", func() {

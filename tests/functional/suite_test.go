@@ -45,10 +45,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	test "github.com/openstack-k8s-operators/lib-common/modules/test"
+	ovn_test "github.com/openstack-k8s-operators/ovn-operator/api/test/helpers"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/controllers"
 
-	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
+	common_test "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -62,7 +63,8 @@ var (
 	ctx       context.Context
 	cancel    context.CancelFunc
 	logger    logr.Logger
-	th        *TestHelper
+	th        *common_test.TestHelper
+	ovn       *ovn_test.TestHelper
 	namespace string
 )
 
@@ -133,8 +135,10 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
-	th = NewTestHelper(ctx, k8sClient, timeout, interval, logger)
+	th = common_test.NewTestHelper(ctx, k8sClient, timeout, interval, logger)
 	Expect(th).NotTo(BeNil())
+	ovn = ovn_test.NewTestHelper(ctx, k8sClient, timeout, interval, logger)
+	Expect(ovn).NotTo(BeNil())
 
 	// Start the controller-manager if goroutine
 	webhookInstallOptions := &testEnv.WebhookInstallOptions

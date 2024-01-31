@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/uuid"
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -149,8 +148,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 		var OVNDBClusterName types.NamespacedName
 
 		BeforeEach(func() {
-			name := fmt.Sprintf("ovndbcluster-%s", uuid.New().String())
-			instance := CreateOVNDBCluster(namespace, name, GetDefaultOVNDBClusterSpec())
+			instance := CreateOVNDBCluster(namespace, GetDefaultOVNDBClusterSpec())
 			OVNDBClusterName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
 		})
@@ -219,12 +217,9 @@ var _ = Describe("OVNDBCluster controller", func() {
 
 	When("A OVNDBCluster instance is created with debug on", func() {
 		BeforeEach(func() {
-			name := fmt.Sprintf("ovndbcluster-%s", uuid.New().String())
 			spec := GetDefaultOVNDBClusterSpec()
-			spec["debug"] = map[string]interface{}{
-				"service": true,
-			}
-			instance := CreateOVNDBCluster(namespace, name, spec)
+			spec.Debug.Service = true
+			instance := CreateOVNDBCluster(namespace, spec)
 			DeferCleanup(th.DeleteInstance, instance)
 		})
 
@@ -248,11 +243,10 @@ var _ = Describe("OVNDBCluster controller", func() {
 	When("OVNDBCluster is created with networkAttachments", func() {
 		var OVNDBClusterName types.NamespacedName
 		BeforeEach(func() {
-			name := fmt.Sprintf("ovndbcluster-%s", uuid.New().String())
 			spec := GetDefaultOVNDBClusterSpec()
-			spec["networkAttachment"] = "internalapi"
-			spec["dbType"] = v1beta1.SBDBType
-			instance := CreateOVNDBCluster(namespace, name, spec)
+			spec.NetworkAttachment = "internalapi"
+			spec.DBType = v1beta1.SBDBType
+			instance := CreateOVNDBCluster(namespace, spec)
 			OVNDBClusterName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
 		})
