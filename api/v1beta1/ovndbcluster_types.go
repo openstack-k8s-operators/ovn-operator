@@ -73,11 +73,6 @@ type OVNDBClusterSpec struct {
 	LogLevel string `json:"logLevel"`
 
 	// +kubebuilder:validation:Optional
-	// Debug - enable debug for different deploy stages. If an init container is used, it runs and the
-	// actual action pod gets started with sleep infinity
-	Debug OVNDBClusterDebug `json:"debug,omitempty"`
-
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=10000
 	// OVN Northbound and Southbound RAFT db election timer to use on db creation (in milliseconds)
 	ElectionTimer int32 `json:"electionTimer"`
@@ -109,14 +104,6 @@ type OVNDBClusterSpec struct {
 	// NetworkAttachment is a NetworkAttachment resource name to expose the service to the given network.
 	// If specified the IP address of this network is used as the dbAddress connection.
 	NetworkAttachment string `json:"networkAttachment"`
-}
-
-// OVNDBclusterDebug defines the observed state of OVNDBClusterDebug
-type OVNDBClusterDebug struct {
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=false
-	// Service enable debug
-	Service bool `json:"service"`
 }
 
 // OVNDBClusterStatus defines the observed state of OVNDBCluster

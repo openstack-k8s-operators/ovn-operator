@@ -86,33 +86,6 @@ var _ = Describe("OVNNorthd controller", func() {
 
 	})
 
-	When("A OVNNorthd instance is created with debug on", func() {
-		BeforeEach(func() {
-			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
-			DeferCleanup(DeleteOVNDBClusters, dbs)
-			spec := GetDefaultOVNNorthdSpec()
-			spec.Debug.Service = true
-			ovnNorthdName := ovn.CreateOVNNorthd(namespace, spec)
-			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
-		})
-
-		It("Container commands to include debug commands", func() {
-			deplName := types.NamespacedName{
-				Namespace: namespace,
-				Name:      "ovn-northd",
-			}
-
-			depl := th.GetDeployment(deplName)
-			Expect(depl.Spec.Template.Spec.Containers).To(HaveLen(1))
-			Expect(depl.Spec.Template.Spec.Containers[0].LivenessProbe.Exec.Command).To(
-				Equal([]string{"/bin/true"}))
-			Expect(depl.Spec.Template.Spec.Containers[0].ReadinessProbe.Exec.Command).To(
-				Equal([]string{"/bin/true"}))
-			Expect(depl.Spec.Template.Spec.Containers[0].Command[0]).Should(ContainSubstring("/bin/sleep"))
-			Expect(depl.Spec.Template.Spec.Containers[0].Args[0]).Should(ContainSubstring("infinity"))
-		})
-	})
-
 	When("OVNNorthd is created with networkAttachments", func() {
 		var ovnNorthdName types.NamespacedName
 

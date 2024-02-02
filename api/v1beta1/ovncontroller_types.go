@@ -50,11 +50,6 @@ type OVNControllerSpec struct {
 	OvnContainerImage string `json:"ovnContainerImage"`
 
 	// +kubebuilder:validation:Optional
-	// Debug - enable debug for different deploy stages. If an init container is used, it runs and the
-	// actual action pod gets started with sleep infinity
-	Debug OVNControllerDebug `json:"debug,omitempty"`
-
-	// +kubebuilder:validation:Optional
 	// +optional
 	NicMappings map[string]string `json:"nicMappings,omitempty"`
 
@@ -78,14 +73,6 @@ type OVNControllerSpec struct {
 	// If present, the IP of the attachment named "tenant", will be used as the OvnEncapIP.
 
 	NetworkAttachments []string `json:"networkAttachments,omitempty"`
-}
-
-// OVNControllerDebug defines the observed state of OVNControllerDebug
-type OVNControllerDebug struct {
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=false
-	// Service enable debug
-	Service bool `json:"service"`
 }
 
 // OVNControllerStatus defines the observed state of OVNController
@@ -145,7 +132,7 @@ func (instance OVNController) IsReady() bool {
 type OVSExternalIDs struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default="random"
-	SystemID  string `json:"system-id,omitempty"`
+	SystemID string `json:"system-id,omitempty"`
 
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default="br-int"

@@ -226,46 +226,6 @@ var _ = Describe("OVNController controller", func() {
 		})
 	})
 
-	When("A OVNController instance is created with debug on", func() {
-		BeforeEach(func() {
-			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
-			DeferCleanup(DeleteOVNDBClusters, dbs)
-			spec := GetDefaultOVNControllerSpec()
-			spec.Debug = ovnv1.OVNControllerDebug{
-				Service: true,
-			}
-			instance := CreateOVNController(namespace, spec)
-			DeferCleanup(th.DeleteInstance, instance)
-		})
-
-		It("Container commands to include debug commands", func() {
-			dsName := types.NamespacedName{
-				Namespace: namespace,
-				Name:      "ovn-controller",
-			}
-			ds := GetDaemonSet(dsName)
-			Expect(ds.Spec.Template.Spec.Containers).To(HaveLen(3))
-			Expect(ds.Spec.Template.Spec.Containers[0].LivenessProbe.Exec.Command).To(
-				Equal([]string{"/bin/true"}))
-			Expect(ds.Spec.Template.Spec.Containers[0].Command[0]).Should(ContainSubstring("/bin/sleep"))
-			Expect(ds.Spec.Template.Spec.Containers[0].Args[0]).Should(ContainSubstring("infinity"))
-			Expect(ds.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(
-				Equal([]string{"/bin/true"}))
-
-			Expect(ds.Spec.Template.Spec.Containers[1].LivenessProbe.Exec.Command).To(
-				Equal([]string{"/bin/true"}))
-			Expect(ds.Spec.Template.Spec.Containers[1].Command[0]).Should(ContainSubstring("/bin/sleep"))
-			Expect(ds.Spec.Template.Spec.Containers[1].Args[0]).Should(ContainSubstring("infinity"))
-			Expect(ds.Spec.Template.Spec.Containers[1].Lifecycle.PreStop.Exec.Command).To(
-				Equal([]string{"/bin/true"}))
-
-			Expect(ds.Spec.Template.Spec.Containers[2].Command[0]).Should(ContainSubstring("/bin/sleep"))
-			Expect(ds.Spec.Template.Spec.Containers[2].Args[0]).Should(ContainSubstring("infinity"))
-			Expect(ds.Spec.Template.Spec.Containers[2].Lifecycle.PreStop.Exec.Command).To(
-				Equal([]string{"/bin/true"}))
-		})
-	})
-
 	When("OVNController and OVNDBClusters are created with networkAttachments", func() {
 		var OVNControllerName types.NamespacedName
 		var dbs []types.NamespacedName

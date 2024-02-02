@@ -53,43 +53,25 @@ func StatefulSet(
 		InitialDelaySeconds: 5,
 	}
 
-	noopCmd := []string{
-		"/bin/true",
-	}
 	var preStopCmd []string
 	var postStartCmd []string
 	cmd := []string{"/usr/bin/dumb-init"}
-	args := []string{"--single-child", "--", "/bin/bash", "-c"}
-	if instance.Spec.Debug.Service {
-		args = append(args, "/bin/sleep infinity")
-		livenessProbe.Exec = &corev1.ExecAction{
-			Command: noopCmd,
-		}
+	args := []string{"--single-child", "--", "/bin/bash", "-c", ServiceCommand}
+	//
+	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+	//
+	livenessProbe.Exec = &corev1.ExecAction{
+		Command: []string{
+			"/usr/bin/pidof", "ovsdb-server",
+		},
+	}
+	readinessProbe.Exec = livenessProbe.Exec
 
-		readinessProbe.Exec = &corev1.ExecAction{
-			Command: noopCmd,
-		}
-
-		postStartCmd = noopCmd
-		preStopCmd = noopCmd
-	} else {
-		args = append(args, ServiceCommand)
-		//
-		// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
-		//
-		livenessProbe.Exec = &corev1.ExecAction{
-			Command: []string{
-				"/usr/bin/pidof", "ovsdb-server",
-			},
-		}
-		readinessProbe.Exec = livenessProbe.Exec
-
-		postStartCmd = []string{
-			"/usr/local/bin/container-scripts/settings.sh",
-		}
-		preStopCmd = []string{
-			"/usr/local/bin/container-scripts/cleanup.sh",
-		}
+	postStartCmd = []string{
+		"/usr/local/bin/container-scripts/settings.sh",
+	}
+	preStopCmd = []string{
+		"/usr/local/bin/container-scripts/cleanup.sh",
 	}
 
 	lifecycle := &corev1.Lifecycle{
