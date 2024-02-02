@@ -307,3 +307,25 @@ func GetPod(name types.NamespacedName) *corev1.Pod {
 func UpdatePod(pod *corev1.Pod) {
 	k8sClient.Update(ctx, pod)
 }
+
+func GetServicesListWithLabel(namespace string, labelSelectorMap ...map[string]string) *corev1.ServiceList {
+	serviceList := &corev1.ServiceList{}
+	serviceListOpts := client.ListOptions{
+		Namespace: namespace,
+	}
+	if len(labelSelectorMap) > 0 {
+		for i := 0; i < len(labelSelectorMap); i++ {
+			for key, value := range labelSelectorMap[i] {
+				ml := client.MatchingLabels{
+					key: value,
+				}
+				ml.ApplyToList(&serviceListOpts)
+			}
+		}
+	}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.List(ctx, serviceList, &serviceListOpts)).Should(Succeed())
+	}).Should(Succeed())
+
+	return serviceList
+}

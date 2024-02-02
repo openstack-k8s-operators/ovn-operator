@@ -533,9 +533,10 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 	//
 	// Ensure the ovndbcluster headless service Exists
 	//
+	headlessServiceLabels := util.MergeMaps(serviceLabels, map[string]string{"type": v1beta1.ServiceHeadlessType})
 
 	headlesssvc, err := service.NewService(
-		ovndbcluster.HeadlessService(serviceName, instance, serviceLabels),
+		ovndbcluster.HeadlessService(serviceName, instance, headlessServiceLabels, serviceLabels),
 		time.Duration(5)*time.Second,
 		nil,
 	)
@@ -559,12 +560,13 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 		//
 		// Create the ovndbcluster pod service if none exists
 		//
-		ovndbServiceLabels := map[string]string{
+		ovndbSelectorLabels := map[string]string{
 			common.AppSelector:                   serviceName,
 			"statefulset.kubernetes.io/pod-name": ovnPod.Name,
 		}
+		ovndbServiceLabels := util.MergeMaps(ovndbSelectorLabels, map[string]string{"type": v1beta1.ServiceClusterType})
 		svc, err := service.NewService(
-			ovndbcluster.Service(ovnPod.Name, instance, ovndbServiceLabels),
+			ovndbcluster.Service(ovnPod.Name, instance, ovndbServiceLabels, ovndbSelectorLabels),
 			time.Duration(5)*time.Second,
 			nil,
 		)
@@ -581,11 +583,12 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 	}
 
 	// Delete any extra services left after scale down
+	clusterServiceLabels := util.MergeMaps(serviceLabels, map[string]string{"type": v1beta1.ServiceClusterType})
 	svcList, err := service.GetServicesListWithLabel(
 		ctx,
 		helper,
 		helper.GetBeforeObject().GetNamespace(),
-		serviceLabels,
+		clusterServiceLabels,
 	)
 	if err == nil && len(svcList.Items) > int(*(instance.Spec.Replicas)) {
 		for i := len(svcList.Items) - 1; i >= int(*(instance.Spec.Replicas)); i-- {

@@ -31,6 +31,11 @@ const (
 	// SBDBType - Southbound database type
 	SBDBType = "SB"
 
+	// ServiceHeadlessType - Constant to identify Headless services
+	ServiceHeadlessType = "headless"
+	// ServiceClusterType - Constant to identify Cluster services
+	ServiceClusterType = "cluster"
+
 	// DNSSuffix : hardcoded value on how DNSCore domain is configured
 	DNSSuffix = "cluster.local"
 	// TODO: retrieve it from environment
