@@ -8,9 +8,9 @@ require (
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.4.0
 	github.com/onsi/ginkgo/v2 v2.14.0
 	github.com/onsi/gomega v1.30.0
-	github.com/openstack-k8s-operators/infra-operator/apis v0.3.1-0.20240125112246-15881e3c5305
-	github.com/openstack-k8s-operators/lib-common/modules/common v0.3.1-0.20240124141114-55d029e4658b
-	github.com/openstack-k8s-operators/lib-common/modules/test v0.3.1-0.20240124141114-55d029e4658b
+	github.com/openstack-k8s-operators/infra-operator/apis v0.3.1-0.20240202140528-33bde1d978ec
+	github.com/openstack-k8s-operators/lib-common/modules/common v0.3.1-0.20240129151020-c9467a8fbbfc
+	github.com/openstack-k8s-operators/lib-common/modules/test v0.3.1-0.20240129151020-c9467a8fbbfc
 	github.com/openstack-k8s-operators/ovn-operator/api v0.0.0-20230418071801-b5843d9e05fb
 	go.uber.org/zap v1.26.0
 	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a
