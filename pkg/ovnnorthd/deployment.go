@@ -59,31 +59,15 @@ func Deployment(
 		fmt.Sprintf("--ovnsb-db=%s", sbEndpoint),
 	}
 
-	if instance.Spec.Debug.Service {
-		cmd = "/bin/sleep"
-		args = []string{"infinity"}
-
-		noopCmd := []string{
-			"/bin/true",
-		}
-		livenessProbe.Exec = &corev1.ExecAction{
-			Command: noopCmd,
-		}
-
-		readinessProbe.Exec = &corev1.ExecAction{
-			Command: noopCmd,
-		}
-	} else {
-		//
-		// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
-		//
-		livenessProbe.Exec = &corev1.ExecAction{
-			Command: []string{
-				"/usr/bin/pidof", "ovn-northd",
-			},
-		}
-		readinessProbe.Exec = livenessProbe.Exec
+	//
+	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+	//
+	livenessProbe.Exec = &corev1.ExecAction{
+		Command: []string{
+			"/usr/bin/pidof", "ovn-northd",
+		},
 	}
+	readinessProbe.Exec = livenessProbe.Exec
 
 	envVars := map[string]env.Setter{}
 	// TODO: Make confs customizable

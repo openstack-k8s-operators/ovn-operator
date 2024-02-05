@@ -215,31 +215,6 @@ var _ = Describe("OVNDBCluster controller", func() {
 		})
 	})
 
-	When("A OVNDBCluster instance is created with debug on", func() {
-		BeforeEach(func() {
-			spec := GetDefaultOVNDBClusterSpec()
-			spec.Debug.Service = true
-			instance := CreateOVNDBCluster(namespace, spec)
-			DeferCleanup(th.DeleteInstance, instance)
-		})
-
-		It("Container commands to include debug commands", func() {
-			ssName := types.NamespacedName{
-				Namespace: namespace,
-				Name:      "ovsdbserver-nb",
-			}
-			ss := th.GetStatefulSet(ssName)
-			Expect(ss.Spec.Template.Spec.Containers).To(HaveLen(1))
-			Expect(ss.Spec.Template.Spec.Containers[0].LivenessProbe.Exec.Command).To(
-				Equal([]string{"/bin/true"}))
-			Expect(ss.Spec.Template.Spec.Containers[0].Args[4]).Should(ContainSubstring("sleep infinity"))
-			Expect(ss.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(
-				Equal([]string{"/bin/true"}))
-			Expect(ss.Spec.Template.Spec.Containers[0].Lifecycle.PostStart.Exec.Command).To(
-				Equal([]string{"/bin/true"}))
-		})
-	})
-
 	When("OVNDBCluster is created with networkAttachments", func() {
 		var OVNDBClusterName types.NamespacedName
 		BeforeEach(func() {
