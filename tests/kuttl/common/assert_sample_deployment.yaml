@@ -37,7 +37,6 @@ spec:
   dbType: NB
   logLevel: info
   replicas: 1
-  storageClass: local-storage
   storageRequest: 10G
 status:
   readyCount: 1
@@ -52,7 +51,6 @@ spec:
   dbType: SB
   logLevel: info
   replicas: 1
-  storageClass: local-storage
   storageRequest: 10G
 status:
   readyCount: 1
@@ -215,6 +213,10 @@ metadata:
   name: ovsdbserver-nb
 spec:
   ports:
+    - name: north
+      port: 6641
+      protocol: TCP
+      targetPort: 6641
     - name: north-raft
       port: 6643
       protocol: TCP
@@ -252,6 +254,10 @@ metadata:
   name: ovsdbserver-sb
 spec:
   ports:
+    - name: south
+      port: 6642
+      protocol: TCP
+      targetPort: 6642
     - name: south-raft
       port: 6644
       protocol: TCP

@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,9 +28,11 @@ import (
 
 const (
 	// NBDBType - Northbound database type
-	NBDBType = "NB"
+	NBDBType      = "NB"
+	ServiceNameNB = "ovsdbserver-nb"
 	// SBDBType - Southbound database type
-	SBDBType = "SB"
+	SBDBType      = "SB"
+	ServiceNameSB = "ovsdbserver-sb"
 
 	// ServiceHeadlessType - Constant to identify Headless services
 	ServiceHeadlessType = "headless"
@@ -114,6 +117,11 @@ type OVNDBClusterSpecCore struct {
 	// NetworkAttachment is a NetworkAttachment resource name to expose the service to the given network.
 	// If specified the IP address of this network is used as the dbAddress connection.
 	NetworkAttachment string `json:"networkAttachment"`
+
+	// +kubebuilder:validation:Optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// TLS - Parameters related to TLS
+	TLS tls.SimpleService `json:"tls,omitempty"`
 }
 
 // OVNDBClusterStatus defines the observed state of OVNDBCluster
