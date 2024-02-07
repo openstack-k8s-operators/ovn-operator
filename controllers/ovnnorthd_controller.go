@@ -28,7 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/go-logr/logr"
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
@@ -182,7 +181,7 @@ func (r *OVNNorthdReconciler) SetupWithManager(mgr ctrl.Manager, ctx context.Con
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
-		Watches(&source.Kind{Type: &ovnv1.OVNDBCluster{}}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), Log))).
+		Watches(&ovnv1.OVNDBCluster{}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), Log))).
 		Complete(r)
 }
 

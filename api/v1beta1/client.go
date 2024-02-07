@@ -89,7 +89,7 @@ func getItems(list client.ObjectList) []client.Object {
 
 // OVNDBClusterNamespaceMapFunc - DBCluster Watch Function
 func OVNDBClusterNamespaceMapFunc(crs client.ObjectList, reader client.Reader, log logr.Logger) handler.MapFunc {
-	return func(obj client.Object) []reconcile.Request {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
 		result := []reconcile.Request{}
 
 		// get all CRs from the same namespace, right now there should only be one
