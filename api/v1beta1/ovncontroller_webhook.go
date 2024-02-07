@@ -21,11 +21,12 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // OvnControllerDefaults -
 type OvnControllerDefaults struct {
-	OvsContainerImageURL string
+	OvsContainerImageURL           string
 	OvnControllerContainerImageURL string
 }
 
@@ -72,22 +73,22 @@ func (spec *OVNControllerSpec) Default() {
 var _ webhook.Validator = &OVNController{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *OVNController) ValidateCreate() error {
+func (r *OVNController) ValidateCreate() (admission.Warnings, error) {
 	ovncontrollerlog.Info("validate create", "name", r.Name)
 
-	return nil
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *OVNController) ValidateUpdate(old runtime.Object) error {
+func (r *OVNController) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	ovncontrollerlog.Info("validate update", "name", r.Name)
 
-	return nil
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *OVNController) ValidateDelete() error {
+func (r *OVNController) ValidateDelete() (admission.Warnings, error) {
 	ovncontrollerlog.Info("validate delete", "name", r.Name)
 
-	return nil
+	return nil, nil
 }

@@ -27,6 +27,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // OVNDBClusterDefaults -
@@ -81,25 +82,25 @@ func (spec *OVNDBClusterSpec) Default() {
 var _ webhook.Validator = &OVNDBCluster{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *OVNDBCluster) ValidateCreate() error {
+func (r *OVNDBCluster) ValidateCreate() (admission.Warnings, error) {
 	ovndbclusterlog.Info("validate create", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object creation.
-	return nil
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *OVNDBCluster) ValidateUpdate(old runtime.Object) error {
+func (r *OVNDBCluster) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	ovndbclusterlog.Info("validate update", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object update.
-	return nil
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *OVNDBCluster) ValidateDelete() error {
+func (r *OVNDBCluster) ValidateDelete() (admission.Warnings, error) {
 	ovndbclusterlog.Info("validate delete", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object deletion.
-	return nil
+	return nil, nil
 }
