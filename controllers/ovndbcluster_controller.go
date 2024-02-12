@@ -196,19 +196,6 @@ func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return r.reconcileNormal(ctx, instance, helper)
 }
 
-// fields to index to reconcile when changed
-const (
-	tlsField                = ".spec.tls.secretName"
-	caBundleSecretNameField = ".spec.tls.caBundleSecretName"
-)
-
-var (
-	allWatchFields = []string{
-		caBundleSecretNameField,
-		tlsField,
-	}
-)
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *OVNDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// index caBundleSecretNameField

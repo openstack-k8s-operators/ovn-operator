@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +29,8 @@ const (
 
 	// OvnNorthdContainerImage is the fall-back container image for OVNNorthd
 	OvnNorthdContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-northd:current-podified"
+	// ServiceNameOvnNorthd -
+	ServiceNameOvnNorthd = "ovn-northd"
 )
 
 // OVNNorthdSpec defines the desired state of OVNNorthd
@@ -67,6 +70,11 @@ type OVNNorthdSpecCore struct {
 	// NetworkAttachment is a NetworkAttachment resource name to expose the service to the given network.
 	// If specified the IP address of this network is used as the dbAddress connection.
 	NetworkAttachment string `json:"networkAttachment"`
+
+	// +kubebuilder:validation:Optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// TLS - Parameters related to TLS
+	TLS tls.SimpleService `json:"tls,omitempty"`
 }
 
 // OVNNorthdStatus defines the observed state of OVNNorthd
