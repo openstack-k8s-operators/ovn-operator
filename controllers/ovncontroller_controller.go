@@ -33,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
@@ -107,7 +106,6 @@ func (r *OVNControllerReconciler) GetClient() client.Client {
 // +kubebuilder:rbac:groups="",resources=pods,verbs=create;delete;get;list;patch;update;watch
 
 func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, _err error) {
-
 	Log := r.GetLogger(ctx)
 
 	// Fetch OVNController instance
@@ -211,7 +209,7 @@ func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager, ctx context
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
-		Watches(&source.Kind{Type: &v1beta1.OVNDBCluster{}}, handler.EnqueueRequestsFromMapFunc(v1beta1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), r.GetLogger(ctx)))).
+		Watches(&v1beta1.OVNDBCluster{}, handler.EnqueueRequestsFromMapFunc(v1beta1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), r.GetLogger(ctx)))).
 		Complete(r)
 }
 
@@ -236,7 +234,7 @@ func (r *OVNControllerReconciler) reconcileInit(
 
 	Log.Info("Reconciling Service init")
 
-	//TODO(slaweq):
+	// TODO(slaweq):
 	// * read status of the external IDs
 	// * if external IDs are different than required once, change them
 	Log.Info("Reconciled Service init successfully")
