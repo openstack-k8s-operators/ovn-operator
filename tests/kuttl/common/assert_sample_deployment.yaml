@@ -282,12 +282,12 @@ spec:
   type: ClusterIP
 ---
 # check that the number of ovn-controller pods is the same  as the number of
-# nodes in the cluster
+# worker nodes in the cluster
 apiVersion: kuttl.dev/v1beta1
 kind: TestAssert
 commands:
     - script: |
-        num_nodes=$(oc get nodes -o name | wc -l)
+        num_nodes=$(oc get nodes -l node-role.kubernetes.io/worker -o name | wc -l)
         # check the number of ovn-controller pods that are running
         num_pods=$(oc get pods -n $NAMESPACE -l service=ovn-controller -o name --field-selector=status.phase=Running | wc -l)
         if [ "$num_nodes" != "$num_pods" ]; then
