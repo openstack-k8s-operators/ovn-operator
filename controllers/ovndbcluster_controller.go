@@ -582,25 +582,32 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	if instance.Status.ReadyCount > 0 && len(svcList.Items) > 0 {
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
 		instance.Status.Conditions.MarkTrue(condition.ExposeServiceReadyCondition, condition.ExposeServiceReadyMessage)
+		internalDbAddress := []string{}
+		raftAddress := []string{}
+		var svcPort int32
 		scheme := "tcp"
 		if instance.Spec.TLS.Enabled() {
 			scheme = "ssl"
 		}
-		serviceName := ovnv1.ServiceNameNB
-		dbPort := ovndbcluster.DbPortNB
-		raftPort := ovndbcluster.RaftPortNB
-		if instance.Spec.DBType == v1beta1.SBDBType {
-			dbPort = ovndbcluster.DbPortSB
-			raftPort = ovndbcluster.RaftPortSB
-			serviceName = ovnv1.ServiceNameSB
+		for _, svc := range svcList.Items {
+			svcPort = svc.Spec.Ports[0].Port
+
+			// Filter out headless services
+			if svc.Spec.ClusterIP != "None" {
+				internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, v1beta1.DNSSuffix, svcPort))
+				raftAddress = append(raftAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, v1beta1.DNSSuffix, svc.Spec.Ports[1].Port))
+			}
 		}
-		instance.Status.InternalDBAddress = fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, serviceName, instance.Namespace, ovnv1.DNSSuffix, dbPort)
-		instance.Status.RaftAddress = fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, serviceName, instance.Namespace, ovnv1.DNSSuffix, raftPort)
-		if instance.Spec.NetworkAttachment != "" {
-			instance.Status.DBAddress = fmt.Sprintf("%s:%s.%s.svc:%d", scheme, serviceName, instance.Namespace, dbPort)
-		} else {
-			instance.Status.DBAddress = ""
-		}
+
+		// Note setting this to the singular headless service address (e.g ssl:ovsdbserver-sb...) "works" but will not
+		// load-balance on OCP (https://issues.redhat.com/browse/RFE-2838)
+		// Since the clients are connecting to the pod dns names directly the TLS certs will need to include
+		// all (potential) pod names or use a wildcard
+
+		// Set DB Address
+		instance.Status.InternalDBAddress = strings.Join(internalDbAddress, ",")
+		// Set RaftAddress
+		instance.Status.RaftAddress = strings.Join(raftAddress, ",")
 	}
 	Log.Info("Reconciled Service successfully")
 	return ctrl.Result{}, nil
@@ -736,10 +743,23 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 		}
 	}
 
+	var svc *corev1.Service
+
 	// When the cluster is attached to an external network, create DNS record for every
 	// cluster member so it can be resolved from outside cluster (edpm nodes)
 	if instance.Spec.NetworkAttachment != "" {
 		for _, ovnPod := range podList.Items[:*(instance.Spec.Replicas)] {
+			svc, err = service.GetServiceWithName(
+				ctx,
+				helper,
+				ovnPod.Name,
+				ovnPod.Namespace,
+			)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+
+			// Currently only IPv4 is supported
 			dnsIP, err := getPodIPInNetwork(ovnPod, instance.Namespace, instance.Spec.NetworkAttachment)
 			if err != nil {
 				return ctrl.Result{}, err
@@ -760,6 +780,13 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 			}
 		}
 	}
+	// dbAddress will contain ovsdbserver-(nb|sb).openstack.svc or empty
+	// IPv6 is not handled
+	scheme := "tcp"
+	if instance.Spec.TLS.Enabled() {
+		scheme = "ssl"
+	}
+	instance.Status.DBAddress = ovndbcluster.GetDBAddress(svc, serviceName, instance.Namespace, scheme)
 
 	Log.Info("Reconciled OVN DB Cluster Service successfully")
 	return ctrl.Result{}, nil

@@ -56,3 +56,12 @@ func DNSData(
 	}
 	return nil
 }
+
+// GetDBAddress - return string connection for the given service
+func GetDBAddress(svc *corev1.Service, serviceName string, namespace string, scheme string) string {
+	if svc == nil {
+		return ""
+	}
+	headlessDNSHostname := serviceName + "." + namespace + ".svc"
+	return fmt.Sprintf("%s:%s:%d", scheme, headlessDNSHostname, svc.Spec.Ports[0].Port)
+}

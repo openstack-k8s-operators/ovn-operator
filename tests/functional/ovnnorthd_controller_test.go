@@ -78,8 +78,8 @@ var _ = Describe("OVNNorthd controller", func() {
 				depl := th.GetDeployment(deplName)
 				Expect(depl.Spec.Template.Spec.Containers[0].Args).To(Equal([]string{
 					"-vfile:off", "-vconsole:info",
-					"--ovnnb-db=tcp:ovsdbserver-nb." + namespace + ".svc.cluster.local:6641",
-					"--ovnsb-db=tcp:ovsdbserver-sb." + namespace + ".svc.cluster.local:6642",
+					"--ovnnb-db=tcp:ovsdbserver-nb-0." + namespace + ".svc.cluster.local:6641",
+					"--ovnsb-db=tcp:ovsdbserver-sb-0." + namespace + ".svc.cluster.local:6642",
 				}))
 			})
 		})
