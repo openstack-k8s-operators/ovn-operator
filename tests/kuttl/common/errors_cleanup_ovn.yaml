@@ -6,6 +6,7 @@
 # No OVNController CR
 # No Deployment for OVNNorthd CR
 # No DaemonSet for OVNController CR
+# No DaemonSet for OVNController-OVS CR
 # No Pods in ovn Deployment
 # No OVN Services
 #
@@ -47,6 +48,11 @@ kind: DaemonSet
 metadata:
   name: ovncontroller
 ---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ovncontroller-ovs
+---
 # the openshift annotations can't be checked through the deployment above
 apiVersion: v1
 kind: Pod
@@ -74,6 +80,15 @@ metadata:
   annotations:
     openshift.io/scc: privileged
   generateName: ovn-controller-
+  labels:
+    service: ovn-controller
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    openshift.io/scc: privileged
+  generateName: ovn-controller-ovs-
   labels:
     service: ovn-controller
 ---

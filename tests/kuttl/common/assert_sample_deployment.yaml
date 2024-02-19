@@ -6,14 +6,17 @@
 # - 1 OVNController CR
 # - Deployment with 1 Pod for OVNNorthd CR
 # - Daemonset for OVNController CR
+# - Daemonset for OVNControllerOVS CR
 # - ovsdbserver-nb-0 Pod
 # - ovsdbserver-sb-0 Pod
 # - ovn-controller- Pod
+# - ovn-controller-ovs- Pod
 # - ovsdbserver-nb Service
 # - ovsdbserver-nb-0 Service
 # - ovsdbserver-sb Service
 # - ovsdbserver-sb-0 Service
-# - OVNController Daemonset created as many pods as nodes
+# - OVNController Daemonset created as many pods as nodes*2
+# - OVNControllerOVS Daemonset created as many pods as nodes*2
 
 apiVersion: ovn.openstack.org/v1beta1
 kind: OVNNorthd
@@ -171,6 +174,13 @@ metadata:
 status:
   numberMisscheduled: 0
 ---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ovn-controller-ovs
+status:
+  numberMisscheduled: 0
+---
 # the openshift annotations can't be checked through the deployment above
 apiVersion: v1
 kind: Pod
@@ -206,6 +216,17 @@ metadata:
   labels:
     service: ovn-controller
   generateName: ovn-controller-
+status:
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    openshift.io/scc: privileged
+  labels:
+    service: ovn-controller
+  generateName: ovn-controller-ovs-
 status:
   phase: Running
 ---
@@ -292,8 +313,8 @@ commands:
         num_nodes=$(oc get nodes -l node-role.kubernetes.io/worker -o name | wc -l)
         # check the number of ovn-controller pods that are running
         num_pods=$(oc get pods -n $NAMESPACE -l service=ovn-controller -o name --field-selector=status.phase=Running | wc -l)
-        if [ "$num_nodes" != "$num_pods" ]; then
-          echo "Cluster has $num_nodes nodes but OVNController spawned $num_pods pods"
+        if [ "$num_nodes" -ne "$((num_pods/2))" ]; then
+          echo "Cluster has $num_nodes nodes but OVNController spawned $num_pods pods, it should have $num_nodes * 2"
           exit 1
         fi
 

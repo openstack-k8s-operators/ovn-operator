@@ -68,44 +68,47 @@ func ConfigJob(
 	envVars["OvnHostName"] = EnvDownwardAPI("spec.nodeName")
 
 	for _, ovnPod := range ovnPods.Items {
-		jobs = append(
-			jobs,
-			&batchv1.Job{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      ovnPod.Name + "-config",
-					Namespace: instance.Namespace,
-					Labels:    labels,
-				},
-				Spec: batchv1.JobSpec{
-					TTLSecondsAfterFinished: &jobTTLAfterFinished,
-					Template: corev1.PodTemplateSpec{
-						Spec: corev1.PodSpec{
-							RestartPolicy:      corev1.RestartPolicyOnFailure,
-							ServiceAccountName: instance.RbacResourceName(),
-							Containers: []corev1.Container{
-								{
-									Name:  "ovn-config",
-									Image: instance.Spec.OvnContainerImage,
-									Command: []string{
-										"/usr/local/bin/container-scripts/init.sh",
+		// NOTE(froyo): just for the ovn-controller pod
+		if !strings.Contains(ovnPod.Name, "ovs") {
+			jobs = append(
+				jobs,
+				&batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      ovnPod.Name + "-config",
+						Namespace: instance.Namespace,
+						Labels:    labels,
+					},
+					Spec: batchv1.JobSpec{
+						TTLSecondsAfterFinished: &jobTTLAfterFinished,
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								RestartPolicy:      corev1.RestartPolicyOnFailure,
+								ServiceAccountName: instance.RbacResourceName(),
+								Containers: []corev1.Container{
+									{
+										Name:  "ovn-config",
+										Image: instance.Spec.OvnContainerImage,
+										Command: []string{
+											"/usr/local/bin/container-scripts/init.sh",
+										},
+										Args: []string{},
+										SecurityContext: &corev1.SecurityContext{
+											RunAsUser:  &runAsUser,
+											Privileged: &privileged,
+										},
+										Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
+										VolumeMounts: GetOvnControllerVolumeMounts(),
+										Resources:    instance.Spec.Resources,
 									},
-									Args: []string{},
-									SecurityContext: &corev1.SecurityContext{
-										RunAsUser:  &runAsUser,
-										Privileged: &privileged,
-									},
-									Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-									VolumeMounts: GetOvnControllerVolumeMounts(),
-									Resources:    instance.Spec.Resources,
 								},
+								Volumes:  GetVolumes(instance.Name, instance.Namespace),
+								NodeName: ovnPod.Spec.NodeName,
 							},
-							Volumes:  GetVolumes(instance.Name, instance.Namespace),
-							NodeName: ovnPod.Spec.NodeName,
 						},
 					},
 				},
-			},
-		)
+			)
+		}
 	}
 
 	return jobs, nil

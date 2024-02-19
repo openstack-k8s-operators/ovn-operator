@@ -2,6 +2,7 @@ package ovncontroller
 
 import (
 	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -166,6 +167,11 @@ func GetVswitchdVolumeMounts() []corev1.VolumeMount {
 			Name:      "var-lib",
 			MountPath: "/var/lib/openvswitch",
 			ReadOnly:  false,
+		},
+		{
+			Name:      "scripts",
+			MountPath: "/usr/local/bin/container-scripts",
+			ReadOnly:  true,
 		},
 	}
 }
