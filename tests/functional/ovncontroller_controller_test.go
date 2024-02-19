@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	//	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 )
 
@@ -101,6 +102,16 @@ var _ = Describe("OVNController controller", func() {
 				Name:      daemonSetName.Name + "-config",
 			}
 			th.AssertJobDoesNotExist(configJob)
+
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+			configJobOVS := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      daemonSetNameOVS.Name + "-config",
+			}
+			th.AssertJobDoesNotExist(configJobOVS)
 		})
 
 		// TODO(ihar) introduce a new condition for the external config?
@@ -124,13 +135,18 @@ var _ = Describe("OVNController controller", func() {
 					Name:      "ovn-controller",
 				}
 				SimulateDaemonsetNumberReady(daemonSetName)
+				daemonSetNameOVS := types.NamespacedName{
+					Namespace: namespace,
+					Name:      "ovn-controller-ovs",
+				}
+				SimulateDaemonsetNumberReady(daemonSetNameOVS)
 				scriptsCM = types.NamespacedName{
 					Namespace: OVNControllerName.Namespace,
 					Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "scripts"),
 				}
 			})
 
-			It("should create a config job", func() {
+			It("should create a config job for ovn-controller and not for ovn-controller-ovs", func() {
 				daemonSetName := types.NamespacedName{
 					Namespace: namespace,
 					Name:      "ovn-controller",
@@ -146,6 +162,20 @@ var _ = Describe("OVNController controller", func() {
 				Eventually(func() batchv1.Job {
 					return *th.GetJob(configJob)
 				}, timeout, interval).ShouldNot(BeNil())
+
+				daemonSetNameOVS := types.NamespacedName{
+					Namespace: namespace,
+					Name:      "ovn-controller-ovs",
+				}
+				SimulateDaemonsetNumberReadyWithPods(
+					daemonSetNameOVS,
+					map[string][]string{},
+				)
+				configJobOVS := types.NamespacedName{
+					Namespace: OVNControllerName.Namespace,
+					Name:      daemonSetNameOVS.Name + "-config",
+				}
+				th.AssertJobDoesNotExist(configJobOVS)
 			})
 
 			It("should create a ConfigMap for net_setup.sh with eth0 as Interface Name", func() {
@@ -176,6 +206,7 @@ var _ = Describe("OVNController controller", func() {
 		When("OVNDBCluster instances with networkAttachments are available", func() {
 			var configCM types.NamespacedName
 			var daemonSetName types.NamespacedName
+			var daemonSetNameOVS types.NamespacedName
 			var dbs []types.NamespacedName
 			BeforeEach(func() {
 				internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
@@ -189,6 +220,14 @@ var _ = Describe("OVNController controller", func() {
 				}
 				SimulateDaemonsetNumberReadyWithPods(
 					daemonSetName,
+					map[string][]string{},
+				)
+				daemonSetNameOVS = types.NamespacedName{
+					Namespace: namespace,
+					Name:      "ovn-controller-ovs",
+				}
+				SimulateDaemonsetNumberReadyWithPods(
+					daemonSetNameOVS,
 					map[string][]string{},
 				)
 				configCM = types.NamespacedName{
@@ -207,6 +246,13 @@ var _ = Describe("OVNController controller", func() {
 				}, timeout, interval).ShouldNot(BeNil())
 			})
 
+			It("should not create a config job", func() {
+				configJob := types.NamespacedName{
+					Namespace: OVNControllerName.Namespace,
+					Name:      daemonSetNameOVS.Name + "-config",
+				}
+				th.AssertJobDoesNotExist(configJob)
+			})
 			It("should create an external config map", func() {
 				Eventually(func() corev1.ConfigMap {
 					return *th.GetConfigMap(configCM)
@@ -246,7 +292,7 @@ var _ = Describe("OVNController controller", func() {
 			DeferCleanup(th.DeleteInstance, instance)
 		})
 
-		It("should create a config job", func() {
+		It("should create a config job for ovn-controller and not for ovn-controller-ovs", func() {
 			daemonSetName := types.NamespacedName{
 				Namespace: namespace,
 				Name:      "ovn-controller",
@@ -254,17 +300,29 @@ var _ = Describe("OVNController controller", func() {
 
 			SimulateDaemonsetNumberReadyWithPods(
 				daemonSetName,
+				make(map[string][]string),
+			)
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetNameOVS,
 				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
 			)
 			configJob := types.NamespacedName{
 				Namespace: OVNControllerName.Namespace,
 				Name:      daemonSetName.Name + "-config",
 			}
+			configJobOVS := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      daemonSetNameOVS.Name + "-config",
+			}
 			Eventually(func() batchv1.Job {
 				return *th.GetJob(configJob)
 			}, timeout, interval).ShouldNot(BeNil())
+			th.AssertJobDoesNotExist(configJobOVS)
 		})
-
 		It("reports that network attachment is missing", func() {
 
 			daemonSetName := types.NamespacedName{
@@ -272,6 +330,13 @@ var _ = Describe("OVNController controller", func() {
 				Name:      "ovn-controller",
 			}
 			ds := GetDaemonSet(daemonSetName)
+			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(BeNil())
+
+			daemonSetName = types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+			ds = GetDaemonSet(daemonSetName)
 
 			expectedAnnotation, err := json.Marshal(
 				[]networkv1.NetworkSelectionElement{
@@ -307,6 +372,14 @@ var _ = Describe("OVNController controller", func() {
 				Name:      "ovn-controller",
 			}
 			ds := GetDaemonSet(daemonSetName)
+
+			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(BeNil())
+
+			daemonSetName = types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+			ds = GetDaemonSet(daemonSetName)
 
 			expectedAnnotation, err := json.Marshal(
 				[]networkv1.NetworkSelectionElement{
@@ -346,6 +419,14 @@ var _ = Describe("OVNController controller", func() {
 			}
 			SimulateDaemonsetNumberReadyWithPods(
 				daemonSetName,
+				make(map[string][]string),
+			)
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetNameOVS,
 				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
 			)
 
@@ -395,6 +476,14 @@ var _ = Describe("OVNController controller", func() {
 			}
 			SimulateDaemonsetNumberReadyWithPods(
 				daemonSetName,
+				make(map[string][]string),
+			)
+			daemonSetName = types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetName,
 				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
 			)
 			ExpectedExternalSBEndpoint := "tcp:ovsdbserver-sb." + namespace + ".svc:6642"
@@ -430,6 +519,15 @@ var _ = Describe("OVNController controller", func() {
 			}
 			SimulateDaemonsetNumberReadyWithPods(
 				daemonSetName,
+				make(map[string][]string),
+			)
+
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetNameOVS,
 				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
 			)
 
@@ -454,6 +552,14 @@ var _ = Describe("OVNController controller", func() {
 			}
 			SimulateDaemonsetNumberReadyWithPods(
 				daemonSetName,
+				make(map[string][]string),
+			)
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetNameOVS,
 				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
 			)
 
@@ -470,6 +576,7 @@ var _ = Describe("OVNController controller", func() {
 			th.AssertConfigMapDoesNotExist(externalCM)
 		})
 	})
+
 	When("OVNController is created with missing networkAttachment", func() {
 		var OVNControllerName types.NamespacedName
 		var dbs []types.NamespacedName
@@ -517,8 +624,15 @@ var _ = Describe("OVNController controller", func() {
 				Namespace: namespace,
 				Name:      "ovn-controller",
 			}
-			ds := GetDaemonSet(daemonSetName)
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
 
+			ds := GetDaemonSet(daemonSetName)
+			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(BeNil())
+
+			ds = GetDaemonSet(daemonSetNameOVS)
 			expectedAnnotation, err := json.Marshal(
 				[]networkv1.NetworkSelectionElement{
 					{
@@ -541,12 +655,12 @@ var _ = Describe("OVNController controller", func() {
 		})
 
 		It("reports IP to not exist in Status for nic-configs", func() {
-			daemonSetName := types.NamespacedName{
+			daemonSetNameOVS := types.NamespacedName{
 				Namespace: namespace,
-				Name:      "ovn-controller",
+				Name:      "ovn-controller-ovs",
 			}
 			SimulateDaemonsetNumberReadyWithPods(
-				daemonSetName,
+				daemonSetNameOVS,
 				map[string][]string{namespace + "/physnet1": {"10.0.0.1"}},
 			)
 
@@ -588,8 +702,15 @@ var _ = Describe("OVNController controller", func() {
 				Namespace: namespace,
 				Name:      "ovn-controller",
 			}
-			ds := GetDaemonSet(daemonSetName)
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
 
+			ds := GetDaemonSet(daemonSetName)
+			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(BeNil())
+
+			ds = GetDaemonSet(daemonSetNameOVS)
 			expectedAnnotation, err := json.Marshal(
 				[]networkv1.NetworkSelectionElement{
 					{
@@ -632,8 +753,15 @@ var _ = Describe("OVNController controller", func() {
 				Namespace: namespace,
 				Name:      "ovn-controller",
 			}
-			ds := GetDaemonSet(daemonSetName)
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
 
+			ds := GetDaemonSet(daemonSetName)
+			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(BeNil())
+
+			ds = GetDaemonSet(daemonSetNameOVS)
 			expectedAnnotation, err := json.Marshal(
 				[]networkv1.NetworkSelectionElement{
 					{
@@ -680,8 +808,14 @@ var _ = Describe("OVNController controller", func() {
 				Namespace: namespace,
 				Name:      "ovn-controller",
 			}
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
 			ds := GetDaemonSet(daemonSetName)
 
+			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(BeNil())
+			ds = GetDaemonSet(daemonSetNameOVS)
 			expectedAnnotation, err := json.Marshal(
 				[]networkv1.NetworkSelectionElement{
 					{
@@ -732,6 +866,10 @@ var _ = Describe("OVNController controller", func() {
 				Namespace: namespace,
 				Name:      "ovn-controller",
 			}
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
 			ds := GetDaemonSet(daemonSetName)
 
 			expectedAnnotation, err := json.Marshal(
@@ -753,6 +891,9 @@ var _ = Describe("OVNController controller", func() {
 					},
 				})
 			Expect(err).ShouldNot(HaveOccurred())
+			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(BeNil())
+
+			ds = GetDaemonSet(daemonSetNameOVS)
 			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(
 				HaveKeyWithValue("k8s.v1.cni.cncf.io/networks", string(expectedAnnotation)),
 			)
@@ -785,8 +926,13 @@ var _ = Describe("OVNController controller", func() {
 				Namespace: namespace,
 				Name:      "ovn-controller",
 			}
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
 			ds := GetDaemonSet(daemonSetName)
 
+			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(BeNil())
 			expectedAnnotation, err := json.Marshal(
 				[]networkv1.NetworkSelectionElement{
 					{
@@ -806,9 +952,11 @@ var _ = Describe("OVNController controller", func() {
 					},
 				})
 			Expect(err).ShouldNot(HaveOccurred())
+			ds = GetDaemonSet(daemonSetNameOVS)
 			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(
 				HaveKeyWithValue("k8s.v1.cni.cncf.io/networks", string(expectedAnnotation)),
 			)
+
 		})
 	})
 
@@ -906,13 +1054,20 @@ var _ = Describe("OVNController controller", func() {
 
 			SimulateDaemonsetNumberReady(daemonSetName)
 
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+
+			SimulateDaemonsetNumberReady(daemonSetNameOVS)
+
 			ds := GetDaemonSet(daemonSetName)
 
 			//  check TLS volumes
 			th.AssertVolumeExists(CABundleSecretName, ds.Spec.Template.Spec.Volumes)
 			th.AssertVolumeExists("ovn-controller-tls-certs", ds.Spec.Template.Spec.Volumes)
 
-			svcC := ds.Spec.Template.Spec.Containers[2]
+			svcC := ds.Spec.Template.Spec.Containers[0]
 
 			// check TLS volume mounts
 			th.AssertVolumeMountExists(CABundleSecretName, "tls-ca-bundle.pem", svcC.VolumeMounts)
@@ -952,8 +1107,15 @@ var _ = Describe("OVNController controller", func() {
 
 			SimulateDaemonsetNumberReady(daemonSetName)
 
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+
+			SimulateDaemonsetNumberReady(daemonSetNameOVS)
+
 			originalHash := GetEnvVarValue(
-				GetDaemonSet(daemonSetName).Spec.Template.Spec.Containers[2].Env,
+				GetDaemonSet(daemonSetName).Spec.Template.Spec.Containers[0].Env,
 				"CONFIG_HASH",
 				"",
 			)
@@ -971,7 +1133,7 @@ var _ = Describe("OVNController controller", func() {
 			// Assert that the pod is updated
 			Eventually(func(g Gomega) {
 				newHash := GetEnvVarValue(
-					GetDaemonSet(daemonSetName).Spec.Template.Spec.Containers[2].Env,
+					GetDaemonSet(daemonSetName).Spec.Template.Spec.Containers[0].Env,
 					"CONFIG_HASH",
 					"",
 				)
@@ -997,8 +1159,15 @@ var _ = Describe("OVNController controller", func() {
 
 			SimulateDaemonsetNumberReady(daemonSetName)
 
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+
+			SimulateDaemonsetNumberReady(daemonSetNameOVS)
+
 			originalHash := GetEnvVarValue(
-				GetDaemonSet(daemonSetName).Spec.Template.Spec.Containers[2].Env,
+				GetDaemonSet(daemonSetName).Spec.Template.Spec.Containers[0].Env,
 				"CONFIG_HASH",
 				"",
 			)
@@ -1016,7 +1185,7 @@ var _ = Describe("OVNController controller", func() {
 			// Assert that the pod is updated
 			Eventually(func(g Gomega) {
 				newHash := GetEnvVarValue(
-					GetDaemonSet(daemonSetName).Spec.Template.Spec.Containers[2].Env,
+					GetDaemonSet(daemonSetName).Spec.Template.Spec.Containers[0].Env,
 					"CONFIG_HASH",
 					"",
 				)

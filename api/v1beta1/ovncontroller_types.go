@@ -94,6 +94,9 @@ type OVNControllerStatus struct {
 	// NumberReady of the OVNController instances
 	NumberReady int32 `json:"numberReady,omitempty"`
 
+	// OVS-NumberReady of the ovs-vswitchd + ovsdb-server instances
+	OVSNumberReady int32 `json:"ovsNumberReady,omitempty"`
+
 	// DesiredNumberScheduled - total number of the nodes which should be running Daemon
 	DesiredNumberScheduled int32 `json:"desiredNumberScheduled,omitempty"`
 
