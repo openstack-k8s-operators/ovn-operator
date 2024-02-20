@@ -86,6 +86,45 @@ var _ = Describe("OVNNorthd controller", func() {
 
 	})
 
+	When("A OVNNorthd instance is created with 0 replicas", func() {
+		var ovnNorthdName types.NamespacedName
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			spec := GetDefaultOVNNorthdSpec()
+			replicas := int32(0)
+			spec.Replicas = &replicas
+			ovnNorthdName = ovn.CreateOVNNorthd(namespace, spec)
+			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
+		})
+
+		It("should create a Deployment with 0 replicas", func() {
+			deplName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-northd",
+			}
+
+			depl := th.GetDeployment(deplName)
+			Expect(*(depl.Spec.Replicas)).Should(Equal(int32(0)))
+		})
+
+		It("should not have deploy ready condition", func() {
+			Eventually(func(g Gomega) {
+				ovnNorthd := GetOVNNorthd(ovnNorthdName)
+				g.Expect(ovnNorthd.Status.Conditions.Has(condition.DeploymentReadyCondition)).To(BeFalse())
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("should be in ready condition", func() {
+			th.ExpectCondition(
+				ovnNorthdName,
+				ConditionGetterFunc(OVNNorthdConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionTrue,
+			)
+		})
+	})
+
 	When("OVNNorthd is created with networkAttachments", func() {
 		var ovnNorthdName types.NamespacedName
 
