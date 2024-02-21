@@ -370,6 +370,8 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 
 	if instance.Status.ReadyCount > 0 {
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
+	} else if *instance.Spec.Replicas == 0 {
+		instance.Status.Conditions.Remove(condition.DeploymentReadyCondition)
 	}
 	// create Deployment - end
 
