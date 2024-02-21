@@ -239,10 +239,10 @@ func (r *OVNDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *OVNDBClusterReconciler) findObjectsForSrc(src client.Object) []reconcile.Request {
+func (r *OVNDBClusterReconciler) findObjectsForSrc(ctx context.Context, src client.Object) []reconcile.Request {
 	requests := []reconcile.Request{}
 
-	l := log.FromContext(context.Background()).WithName("Controllers").WithName("OVNDBCluster")
+	l := log.FromContext(ctx).WithName("Controllers").WithName("OVNDBCluster")
 
 	for _, field := range allWatchFields {
 		crList := &ovnv1.OVNDBClusterList{}
@@ -250,7 +250,7 @@ func (r *OVNDBClusterReconciler) findObjectsForSrc(src client.Object) []reconcil
 			FieldSelector: fields.OneTermEqualSelector(field, src.GetName()),
 			Namespace:     src.GetNamespace(),
 		}
-		err := r.Client.List(context.TODO(), crList, listOps)
+		err := r.Client.List(ctx, crList, listOps)
 		if err != nil {
 			return []reconcile.Request{}
 		}

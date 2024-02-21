@@ -250,10 +250,10 @@ func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager, ctx context
 		Complete(r)
 }
 
-func (r *OVNControllerReconciler) findObjectsForSrc(src client.Object) []reconcile.Request {
+func (r *OVNControllerReconciler) findObjectsForSrc(ctx context.Context, src client.Object) []reconcile.Request {
 	requests := []reconcile.Request{}
 
-	l := log.FromContext(context.Background()).WithName("Controllers").WithName("OVNController")
+	l := log.FromContext(ctx).WithName("Controllers").WithName("OVNController")
 
 	for _, field := range allWatchFields {
 		crList := &ovnv1.OVNControllerList{}
@@ -261,7 +261,7 @@ func (r *OVNControllerReconciler) findObjectsForSrc(src client.Object) []reconci
 			FieldSelector: fields.OneTermEqualSelector(field, src.GetName()),
 			Namespace:     src.GetNamespace(),
 		}
-		err := r.Client.List(context.TODO(), crList, listOps)
+		err := r.Client.List(ctx, crList, listOps)
 		if err != nil {
 			return []reconcile.Request{}
 		}
