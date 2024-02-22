@@ -1,0 +1,68 @@
+#
+# Internal CA created with:
+#
+# apiVersion: cert-manager.io/v1
+# kind: Issuer
+# metadata:
+#   name: rootca-kuttl-internal
+#   namespace: openstack
+# spec:
+#   ca:
+#     secretName: rootca-kuttl-internal
+# ---
+# apiVersion: cert-manager.io/v1
+# kind: Certificate
+# metadata:
+#   name: rootca-kuttl-internal
+#   namespace: openstack
+# spec:
+#   commonName: rootca-kuttl-internal
+#   duration: 87600h0m0s
+#   isCA: true
+#   issuerRef:
+#     name: selfsigned-issuer
+#   privateKey:
+#     algorithm: ECDSA
+#     size: 256
+#   secretName: rootca-kuttl-internal
+#
+# External CA created with:
+#
+# apiVersion: cert-manager.io/v1
+# kind: Issuer
+# metadata:
+#   name: rootca-kuttl-public
+#   namespace: openstack
+# spec:
+#   ca:
+#     secretName: rootca-kuttl-public
+# ---
+# apiVersion: cert-manager.io/v1
+# kind: Certificate
+# metadata:
+#   name: rootca-kuttl-public
+#   namespace: openstack
+# spec:
+#   commonName: rootca-kuttl-public
+#   duration: 87600h0m0s
+#   isCA: true
+#   issuerRef:
+#     name: selfsigned-issuer
+#   privateKey:
+#     algorithm: ECDSA
+#     size: 256
+#   secretName: rootca-kuttl-public
+#
+# Then extracted both CAs and created added them as the bundle:
+# oc get secret rootca-kuttl-internal -o jsonpath='{.data.ca\.crt}' | base64 -d >> tls_ca_bundle.pem
+# oc get secret rootca-kuttl-public -o jsonpath='{.data.ca\.crt}' | base64 -d >> tls_ca_bundle.pem
+# cat tls_ca_bundle.pem | base64 -w0
+apiVersion: v1
+data:
+  tls-ca-bundle.pem: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJnVENDQVNlZ0F3SUJBZ0lSQU5TYWxJeHdEclZ5TVBLS3RHK0lLbzB3Q2dZSUtvWkl6ajBFQXdJd0lERWUKTUJ3R0ExVUVBeE1WY205dmRHTmhMV3QxZEhSc0xXbHVkR1Z5Ym1Gc01CNFhEVEkwTURJeU1qRTBNRGcwTTFvWApEVE0wTURJeE9URTBNRGcwTTFvd0lERWVNQndHQTFVRUF4TVZjbTl2ZEdOaExXdDFkSFJzTFdsdWRHVnlibUZzCk1Ga3dFd1lIS29aSXpqMENBUVlJS29aSXpqMERBUWNEUWdBRTQzd2xOK05BQzhYZnkzSk43S1VaSVMvMjE2OTIKNXpWdHVyYnlpNllmZ3hXbFFONGV4ZU5IcVpGT3ZRcUVoZUVVSFR5K2lpWEVpWDVGcytCeit1eUZWYU5DTUVBdwpEZ1lEVlIwUEFRSC9CQVFEQWdLa01BOEdBMVVkRXdFQi93UUZNQU1CQWY4d0hRWURWUjBPQkJZRUZDRHJnYkhICjh4WmlKbnBKY2gzaEZyZEJLL3lKTUFvR0NDcUdTTTQ5QkFNQ0EwZ0FNRVVDSUNTY3A2QlE3eldQdnlobW9uK00KcTlvbk1PNlRYSVArczdtZjJGaXkvWkVsQWlFQXRxbkF3VE40UXRKQzIrMUZGVUNNd3dpSTZJTmM5blBDVHc1dgo5M1ZWR2ZNPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCi0tLS0tQkVHSU4gQ0VSVElGSUNBVEUtLS0tLQpNSUlCZlRDQ0FTT2dBd0lCQWdJUkFLUHZDdEJJblVocmhkQVVId25tb1BVd0NnWUlLb1pJemowRUF3SXdIakVjCk1Cb0dBMVVFQXhNVGNtOXZkR05oTFd0MWRIUnNMWEIxWW14cFl6QWVGdzB5TkRBeU1qSXhOREE0TkRsYUZ3MHoKTkRBeU1Ua3hOREE0TkRsYU1CNHhIREFhQmdOVkJBTVRFM0p2YjNSallTMXJkWFIwYkMxd2RXSnNhV013V1RBVApCZ2NxaGtqT1BRSUJCZ2dxaGtqT1BRTUJCd05DQUFUZEVDQVQ5dlMyOUtCVmxTWUpEQldOQWowcmhOOTBPL3czCkw4blZXUmxMWDQ1V0hQSjkwcm5heXkwdUFGSXV2SElJS2R6VUIvMEttak4rd3RhUml2SnlvMEl3UURBT0JnTlYKSFE4QkFmOEVCQU1DQXFRd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBZEJnTlZIUTRFRmdRVWxVVGFnYWRuV00xawo2UjcwbjU0dlExV3ZMNjR3Q2dZSUtvWkl6ajBFQXdJRFNBQXdSUUloQU56K2JvUExHMmJ6U09xa2M4UmI1ak9qCjZhZGUzZGJQL3RvVlY2MzBaZDh6QWlBcit3SkQyajVzY0E2cEJlOS8rbzhocTRpYVN0Ymx3NEU1U3B3TDUvYzQKWkE9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+kind: Secret
+metadata:
+  labels:
+    combined-ca-bundle: ""
+  name: combined-ca-bundle
+type: Opaque

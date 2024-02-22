@@ -1,0 +1,29 @@
+#
+# Check for:
+#
+# - 2 tls cert secrets
+# - 1 tls ca bundle secrets
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cert-ovsdbserver-nb-svc
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cert-ovsdbserver-sb-svc
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cert-ovnnorthd-svc
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cert-ovncontroller-svc
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: combined-ca-bundle
