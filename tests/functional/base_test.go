@@ -25,11 +25,13 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	infranetworkv1 "github.com/openstack-k8s-operators/infra-operator/apis/network/v1beta1"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 )
@@ -47,6 +49,19 @@ func GetDefaultOVNNorthdSpec() ovnv1.OVNNorthdSpec {
 			LogLevel: "info",
 		},
 	}
+}
+
+func GetTLSOVNNorthdSpec() ovnv1.OVNNorthdSpec {
+	spec := GetDefaultOVNNorthdSpec()
+	spec.TLS = tls.SimpleService{
+		Ca: tls.Ca{
+			CaBundleSecretName: CABundleSecretName,
+		},
+		GenericService: tls.GenericService{
+			SecretName: ptr.To(OvnDbCertSecretName),
+		},
+	}
+	return spec
 }
 
 func CreateOVNNorthd(namespace string, OVNNorthdName string, spec ovnv1.OVNNorthdSpec) client.Object {
@@ -74,6 +89,19 @@ func GetDefaultOVNDBClusterSpec() ovnv1.OVNDBClusterSpec {
 			StorageClass:   "local-storage",
 		},
 	}
+}
+
+func GetTLSOVNDBClusterSpec() ovnv1.OVNDBClusterSpec {
+	spec := GetDefaultOVNDBClusterSpec()
+	spec.TLS = tls.SimpleService{
+		Ca: tls.Ca{
+			CaBundleSecretName: CABundleSecretName,
+		},
+		GenericService: tls.GenericService{
+			SecretName: ptr.To(OvnDbCertSecretName),
+		},
+	}
+	return spec
 }
 
 func CreateOVNDBCluster(namespace string, spec ovnv1.OVNDBClusterSpec) client.Object {
@@ -201,6 +229,19 @@ func SimulateDaemonsetNumberReady(name types.NamespacedName) {
 
 func GetDefaultOVNControllerSpec() v1beta1.OVNControllerSpec {
 	return v1beta1.OVNControllerSpec{}
+}
+
+func GetTLSOVNControllerSpec() v1beta1.OVNControllerSpec {
+	spec := GetDefaultOVNControllerSpec()
+	spec.TLS = tls.SimpleService{
+		Ca: tls.Ca{
+			CaBundleSecretName: CABundleSecretName,
+		},
+		GenericService: tls.GenericService{
+			SecretName: ptr.To(OvnDbCertSecretName),
+		},
+	}
+	return spec
 }
 
 func CreateOVNController(namespace string, spec v1beta1.OVNControllerSpec) client.Object {

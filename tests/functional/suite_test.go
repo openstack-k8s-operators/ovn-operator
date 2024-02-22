@@ -71,6 +71,11 @@ var (
 	namespace string
 )
 
+const (
+	CABundleSecretName  = "combined-ca-bundle"
+	OvnDbCertSecretName = "ovndb-tls-cert"
+)
+
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 

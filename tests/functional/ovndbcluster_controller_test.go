@@ -383,4 +383,222 @@ var _ = Describe("OVNDBCluster controller", func() {
 			)
 		})
 	})
+
+	When("OVNDBCluster is created with TLS", func() {
+		var OVNDBClusterName types.NamespacedName
+		BeforeEach(func() {
+			spec := GetTLSOVNDBClusterSpec()
+			spec.NetworkAttachment = "internalapi"
+			spec.DBType = v1beta1.SBDBType
+			instance := CreateOVNDBCluster(namespace, spec)
+			OVNDBClusterName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+			DeferCleanup(th.DeleteInstance, instance)
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+		})
+
+		It("reports that the CA secret is missing", func() {
+			th.ExpectConditionWithDetails(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				condition.TLSInputReadyCondition,
+				corev1.ConditionFalse,
+				condition.ErrorReason,
+				fmt.Sprintf(
+					"TLSInput error occured in TLS sources Secret %s/combined-ca-bundle not found",
+					namespace,
+				),
+			)
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionFalse,
+			)
+		})
+
+		It("reports that the cert secret is missing", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			th.ExpectConditionWithDetails(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				condition.TLSInputReadyCondition,
+				corev1.ConditionFalse,
+				condition.ErrorReason,
+				fmt.Sprintf(
+					"TLSInput error occured in TLS sources Secret %s/%s not found",
+					namespace, OvnDbCertSecretName,
+				),
+			)
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionFalse,
+			)
+		})
+
+		It("creates a Statefulset with TLS certs attached", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(statefulSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			ss := th.GetStatefulSet(statefulSetName)
+
+			//  check TLS volumes
+			th.AssertVolumeExists(CABundleSecretName, ss.Spec.Template.Spec.Volumes)
+			th.AssertVolumeExists("ovsdbserver-sb-tls-certs", ss.Spec.Template.Spec.Volumes)
+
+			svcC := ss.Spec.Template.Spec.Containers[0]
+
+			// check TLS volume mounts
+			th.AssertVolumeMountExists(CABundleSecretName, "tls-ca-bundle.pem", svcC.VolumeMounts)
+			th.AssertVolumeMountExists("ovsdbserver-sb-tls-certs", "tls.key", svcC.VolumeMounts)
+			th.AssertVolumeMountExists("ovsdbserver-sb-tls-certs", "tls.crt", svcC.VolumeMounts)
+			th.AssertVolumeMountExists("ovsdbserver-sb-tls-certs", "ca.crt", svcC.VolumeMounts)
+
+			// check DB url schema
+			Eventually(func(g Gomega) {
+				OVNDBCluster := GetOVNDBCluster(OVNDBClusterName)
+				g.Expect(OVNDBCluster.Status.DBAddress).To(HavePrefix("ssl:"))
+				g.Expect(OVNDBCluster.Status.InternalDBAddress).To(HavePrefix("ssl:"))
+				g.Expect(OVNDBCluster.Status.RaftAddress).To(HavePrefix("ssl:"))
+			}, timeout, interval).Should(Succeed())
+
+			// check scripts configure TLS
+			scriptsCM := types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      fmt.Sprintf("%s-%s", OVNDBClusterName.Name, "scripts"),
+			}
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(scriptsCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			Expect(th.GetConfigMap(scriptsCM).Data["settings.sh"]).Should(
+				ContainSubstring("DB_SCHEME=\"pssl\""))
+			Expect(th.GetConfigMap(scriptsCM).Data["setup.sh"]).Should(And(
+				ContainSubstring("-db-ssl-key="),
+				ContainSubstring("-db-ssl-cert="),
+				ContainSubstring("-db-ssl-ca-cert="),
+				ContainSubstring("-cluster-remote-proto=ssl"),
+			))
+
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionTrue,
+			)
+		})
+
+		It("reconfigures the pods when CA bundle changes", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(statefulSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			originalHash := GetEnvVarValue(
+				th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Containers[0].Env,
+				"CONFIG_HASH",
+				"",
+			)
+			Expect(originalHash).NotTo(BeEmpty())
+
+			// Change the content of the CA secret
+			th.UpdateSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			},
+				"tls-ca-bundle.pem",
+				[]byte("DifferentCAData"),
+			)
+
+			// Assert that the pod is updated
+			Eventually(func(g Gomega) {
+				newHash := GetEnvVarValue(
+					th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Containers[0].Env,
+					"CONFIG_HASH",
+					"",
+				)
+				g.Expect(newHash).NotTo(BeEmpty())
+				g.Expect(newHash).NotTo(Equal(originalHash))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("reconfigures the pods when cert changes", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(statefulSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			originalHash := GetEnvVarValue(
+				th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Containers[0].Env,
+				"CONFIG_HASH",
+				"",
+			)
+			Expect(originalHash).NotTo(BeEmpty())
+
+			// Change the content of the cert secret
+			th.UpdateSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			},
+				"tls.crt",
+				[]byte("DifferentCrtData"),
+			)
+
+			// Assert that the pod is updated
+			Eventually(func(g Gomega) {
+				newHash := GetEnvVarValue(
+					th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Containers[0].Env,
+					"CONFIG_HASH",
+					"",
+				)
+				g.Expect(newHash).NotTo(BeEmpty())
+				g.Expect(newHash).NotTo(Equal(originalHash))
+			}, timeout, interval).Should(Succeed())
+		})
+
+	})
 })
