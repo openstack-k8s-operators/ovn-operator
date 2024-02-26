@@ -43,7 +43,6 @@ import (
 	nad "github.com/openstack-k8s-operators/lib-common/modules/common/networkattachment"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
-	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovnnorthd"
 	appsv1 "k8s.io/api/apps/v1"
@@ -382,11 +381,11 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 		return ctrlResult, nil
 	}
 
-	nbEndpoint, err := getInternalEndpoint(ctx, helper, instance, v1beta1.NBDBType)
+	nbEndpoint, err := getInternalEndpoint(ctx, helper, instance, ovnv1.NBDBType)
 	if err != nil {
 		return ctrlResult, err
 	}
-	sbEndpoint, err := getInternalEndpoint(ctx, helper, instance, v1beta1.SBDBType)
+	sbEndpoint, err := getInternalEndpoint(ctx, helper, instance, ovnv1.SBDBType)
 	if err != nil {
 		return ctrlResult, err
 	}

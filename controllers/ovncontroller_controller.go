@@ -51,7 +51,6 @@ import (
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
-	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovncontroller"
 	appsv1 "k8s.io/api/apps/v1"
@@ -241,7 +240,7 @@ func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager, ctx context
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
-		Watches(&v1beta1.OVNDBCluster{}, handler.EnqueueRequestsFromMapFunc(v1beta1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), r.GetLogger(ctx)))).
+		Watches(&ovnv1.OVNDBCluster{}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), r.GetLogger(ctx)))).
 		Watches(
 			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSrc),

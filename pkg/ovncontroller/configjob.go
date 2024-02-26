@@ -19,7 +19,7 @@ import (
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
-	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -32,8 +32,8 @@ func ConfigJob(
 	ctx context.Context,
 	h *helper.Helper,
 	k8sClient client.Client,
-	instance *v1beta1.OVNController,
-	sbCluster *v1beta1.OVNDBCluster,
+	instance *ovnv1.OVNController,
+	sbCluster *ovnv1.OVNDBCluster,
 	labels map[string]string,
 ) ([]*batchv1.Job, error) {
 

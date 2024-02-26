@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/gomega"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
-	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -157,7 +156,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 			OVNDBCluster := GetOVNDBCluster(OVNDBClusterName)
 			Expect(*(OVNDBCluster.Spec.Replicas)).Should(Equal(int32(1)))
 			Expect(OVNDBCluster.Spec.LogLevel).Should(Equal("info"))
-			Expect(OVNDBCluster.Spec.DBType).Should(Equal(v1beta1.NBDBType))
+			Expect(OVNDBCluster.Spec.DBType).Should(Equal(ovnv1.NBDBType))
 		})
 
 		It("should have the Status fields initialized", func() {
@@ -220,7 +219,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 		BeforeEach(func() {
 			spec := GetDefaultOVNDBClusterSpec()
 			spec.NetworkAttachment = "internalapi"
-			spec.DBType = v1beta1.SBDBType
+			spec.DBType = ovnv1.SBDBType
 			instance := CreateOVNDBCluster(namespace, spec)
 			OVNDBClusterName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
@@ -389,7 +388,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 		BeforeEach(func() {
 			spec := GetTLSOVNDBClusterSpec()
 			spec.NetworkAttachment = "internalapi"
-			spec.DBType = v1beta1.SBDBType
+			spec.DBType = ovnv1.SBDBType
 			instance := CreateOVNDBCluster(namespace, spec)
 			OVNDBClusterName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)

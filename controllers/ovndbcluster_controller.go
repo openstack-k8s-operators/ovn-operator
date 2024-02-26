@@ -49,7 +49,6 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/statefulset"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
-	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovndbcluster"
 	appsv1 "k8s.io/api/apps/v1"
@@ -347,7 +346,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	}
 
 	serviceName := ovnv1.ServiceNameNB
-	if instance.Spec.DBType == v1beta1.SBDBType {
+	if instance.Spec.DBType == ovnv1.SBDBType {
 		serviceName = ovnv1.ServiceNameSB
 	}
 	serviceLabels := map[string]string{
@@ -594,8 +593,8 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 
 			// Filter out headless services
 			if svc.Spec.ClusterIP != "None" {
-				internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, v1beta1.DNSSuffix, svcPort))
-				raftAddress = append(raftAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, v1beta1.DNSSuffix, svc.Spec.Ports[1].Port))
+				internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, ovnv1.DNSSuffix, svcPort))
+				raftAddress = append(raftAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, ovnv1.DNSSuffix, svc.Spec.Ports[1].Port))
 			}
 		}
 
@@ -811,7 +810,7 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 	templateParameters["DB_TYPE"] = strings.ToLower(instance.Spec.DBType)
 	templateParameters["DB_PORT"] = ovndbcluster.DbPortNB
 	templateParameters["RAFT_PORT"] = ovndbcluster.RaftPortNB
-	if instance.Spec.DBType == v1beta1.SBDBType {
+	if instance.Spec.DBType == ovnv1.SBDBType {
 		templateParameters["DB_PORT"] = ovndbcluster.DbPortSB
 		templateParameters["RAFT_PORT"] = ovndbcluster.RaftPortSB
 	}
