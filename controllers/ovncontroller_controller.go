@@ -252,7 +252,7 @@ func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager, ctx context
 func (r *OVNControllerReconciler) findObjectsForSrc(ctx context.Context, src client.Object) []reconcile.Request {
 	requests := []reconcile.Request{}
 
-	l := log.FromContext(ctx).WithName("Controllers").WithName("OVNController")
+	Log := r.GetLogger(ctx)
 
 	for _, field := range allWatchFields {
 		crList := &ovnv1.OVNControllerList{}
@@ -266,7 +266,7 @@ func (r *OVNControllerReconciler) findObjectsForSrc(ctx context.Context, src cli
 		}
 
 		for _, item := range crList.Items {
-			l.Info(fmt.Sprintf("input source %s changed, reconcile: %s - %s", src.GetName(), item.GetName(), item.GetNamespace()))
+			Log.Info(fmt.Sprintf("input source %s changed, reconcile: %s - %s", src.GetName(), item.GetName(), item.GetNamespace()))
 
 			requests = append(requests,
 				reconcile.Request{
