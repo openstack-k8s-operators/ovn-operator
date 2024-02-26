@@ -50,6 +50,7 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovndbcluster"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -818,6 +819,10 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 	templateParameters["OVN_INACTIVITY_PROBE"] = instance.Spec.InactivityProbe
 	templateParameters["OVN_PROBE_INTERVAL_TO_ACTIVE"] = instance.Spec.ProbeIntervalToActive
 	templateParameters["TLS"] = instance.Spec.TLS.Enabled()
+	templateParameters["OVNDB_CERT_PATH"] = ovn_common.OVNDbCertPath
+	templateParameters["OVNDB_KEY_PATH"] = ovn_common.OVNDbKeyPath
+	templateParameters["OVNDB_CACERT_PATH"] = ovn_common.OVNDbCaCertPath
+
 	cms := []util.Template{
 		// ScriptsConfigMap
 		{

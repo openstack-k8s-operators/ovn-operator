@@ -18,6 +18,7 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -115,9 +116,9 @@ func StatefulSet(
 	if instance.Spec.TLS.Enabled() {
 		svc := tls.Service{
 			SecretName: *instance.Spec.TLS.GenericService.SecretName,
-			CertMount:  ptr.To("/etc/pki/tls/certs/ovndb.crt"),
-			KeyMount:   ptr.To("/etc/pki/tls/private/ovndb.key"),
-			CaMount:    ptr.To("/etc/pki/tls/certs/ovndbca.crt"),
+			CertMount:  ptr.To(ovn_common.OVNDbCertPath),
+			KeyMount:   ptr.To(ovn_common.OVNDbKeyPath),
+			CaMount:    ptr.To(ovn_common.OVNDbCaCertPath),
 		}
 		volumes = append(volumes, svc.CreateVolume(serviceName))
 		volumeMounts = append(volumeMounts, svc.CreateVolumeMounts(serviceName)...)

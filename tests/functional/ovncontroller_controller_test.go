@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -921,9 +922,9 @@ var _ = Describe("OVNController controller", func() {
 
 			// check cli args
 			Expect(svcC.Args).To(And(
-				ContainElement(ContainSubstring("--private-key=")),
-				ContainElement(ContainSubstring("--certificate=")),
-				ContainElement(ContainSubstring("--ca-cert=")),
+				ContainElement(ContainSubstring(fmt.Sprintf("--private-key=%s", ovn_common.OVNDbKeyPath))),
+				ContainElement(ContainSubstring(fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath))),
+				ContainElement(ContainSubstring(fmt.Sprintf("--ca-cert=%s", ovn_common.OVNDbCaCertPath))),
 			))
 
 			th.ExpectCondition(

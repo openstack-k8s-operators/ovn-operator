@@ -51,9 +51,9 @@ set "$@" --db-${DB_TYPE}-probe-interval-to-active={{ .OVN_PROBE_INTERVAL_TO_ACTI
 set "$@" --db-${DB_TYPE}-addr=${DB_ADDR}
 set "$@" --db-${DB_TYPE}-port=${DB_PORT}
 {{- if .TLS }}
-set "$@" --ovn-${DB_TYPE}-db-ssl-key=/etc/pki/tls/private/ovndb.key
-set "$@" --ovn-${DB_TYPE}-db-ssl-cert=/etc/pki/tls/certs/ovndb.crt
-set "$@" --ovn-${DB_TYPE}-db-ssl-ca-cert=/etc/pki/tls/certs/ovndbca.crt
+set "$@" --ovn-${DB_TYPE}-db-ssl-key={{.OVNDB_KEY_PATH}}
+set "$@" --ovn-${DB_TYPE}-db-ssl-cert={{.OVNDB_CERT_PATH}}
+set "$@" --ovn-${DB_TYPE}-db-ssl-ca-cert={{.OVNDB_CACERT_PATH}}
 set "$@" --db-${DB_TYPE}-cluster-local-proto=ssl
 set "$@" --db-${DB_TYPE}-cluster-remote-proto=ssl
 set "$@" --db-${DB_TYPE}-create-insecure-remote=no

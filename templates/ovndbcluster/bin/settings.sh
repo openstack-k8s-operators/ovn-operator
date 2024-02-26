@@ -40,7 +40,7 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
     fi
 
 {{- if .TLS }}
-    ovn-${DB_TYPE}ctl --no-leader-only set-ssl /etc/pki/tls/private/ovndb.key /etc/pki/tls/certs/ovndb.crt /etc/pki/tls/certs/ovndbca.crt
+    ovn-${DB_TYPE}ctl --no-leader-only set-ssl {{.OVNDB_KEY_PATH}} {{.OVNDB_CERT_PATH}} {{.OVNDB_CACERT_PATH}}
     ovn-${DB_TYPE}ctl --no-leader-only set-connection ${DB_SCHEME}:${DB_PORT}:0.0.0.0
 {{- end }}
 
