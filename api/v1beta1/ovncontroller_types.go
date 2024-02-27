@@ -144,6 +144,10 @@ type OVSExternalIDs struct {
 	OvnEncapType string `json:"ovn-encap-type,omitempty"`
 
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:default={}
+	OvnAvailabilityZones []string `json:"availability-zones,omitempty"`
+
+	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=true
 	EnableChassisAsGateway *bool `json:"enable-chassis-as-gateway"`
 }

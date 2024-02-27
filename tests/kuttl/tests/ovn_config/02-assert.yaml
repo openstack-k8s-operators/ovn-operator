@@ -1,0 +1,13 @@
+#
+# Check for:
+#
+# - external_ids:availability-zones configured correctly
+
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 30
+commands:
+    - script: |
+        controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller -o name|head -1)
+        oc rsh -n $NAMESPACE ${controller_pod} ovs-vsctl --if-exists get open . external_ids:ovn-cms-options | grep -q availability-zones=az0:az2 || exit 1
+        exit 0

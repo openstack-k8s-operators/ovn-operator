@@ -52,6 +52,10 @@ spec:
                 description: OVSExternalIDs is a set of configuration options for
                   OVS external-ids table
                 properties:
+                  availability-zones:
+                    items:
+                      type: string
+                    type: array
                   enable-chassis-as-gateway:
                     default: true
                     type: boolean

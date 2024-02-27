@@ -18,6 +18,7 @@
 OvnBridge=${OvnBridge:-"br-int"}
 OvnRemote=${OvnRemote:-"tcp:127.0.0.1:6642"}
 OvnEncapType=${OvnEncapType:-"geneve"}
+OvnAvailabilityZones=${OvnAvailabilityZones:-""}
 EnableChassisAsGateway=${EnableChassisAsGateway:-true}
 PhysicalNetworks=${PhysicalNetworks:-""}
 OvnHostName=${OvnHostName:-""}
@@ -42,8 +43,15 @@ function configure_external_ids {
     if [ -n "$OvnHostName" ]; then
         ovs-vsctl set open . external-ids:hostname=${OvnHostName}
     fi
+    local cms_options=""
     if [ "$EnableChassisAsGateway" == "true" ]; then
-        ovs-vsctl set open . external-ids:ovn-cms-options=enable-chassis-as-gw
+        cms_options="enable-chassis-as-gw"
+    fi
+    if [ -n "$OvnAvailabilityZones" ]; then
+        cms_options+=",availability-zones="$OvnAvailabilityZones
+    fi
+    if [ -n "${cms_options}" ]; then
+        ovs-vsctl set open . external-ids:ovn-cms-options=${cms_options#,}
     else
         ovs-vsctl --if-exists remove open . external_ids ovn-cms-options
     fi
