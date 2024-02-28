@@ -59,6 +59,13 @@ function configure_external_ids {
 
 # Configure bridge mappings and physical bridges
 function configure_physical_networks {
+
+    set +ex
+
+    # Add br-octavia if octavia is being deployed.
+    (ip -br link show octavia > /dev/null 2>&1) && PhysicalNetworks="octavia $PhysicalNetworks"
+
+    set -ex
     local OvnBridgeMappings=""
     for physicalNetwork in ${PhysicalNetworks}; do
         br_name="br-${physicalNetwork}"
