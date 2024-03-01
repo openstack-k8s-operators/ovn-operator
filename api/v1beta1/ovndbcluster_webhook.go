@@ -74,6 +74,12 @@ func (spec *OVNDBClusterSpec) Default() {
 			spec.ContainerImage = ovnDbClusterDefaults.SBContainerImageURL
 		}
 	}
+	spec.OVNDBClusterSpecCore.Default()
+}
+
+// Default - set defaults for this OVNDBCluster core spec (this version is called by OpenStackControlplane webhooks)
+func (spec *OVNDBClusterSpecCore) Default() {
+	// nothing here yet
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.

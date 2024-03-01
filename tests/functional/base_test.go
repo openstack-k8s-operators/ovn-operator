@@ -41,9 +41,11 @@ const (
 
 func GetDefaultOVNNorthdSpec() ovnv1.OVNNorthdSpec {
 	return ovnv1.OVNNorthdSpec{
-		// TODO: Create() doesn't apply kubebuilder defaults, in contrast to
-		// CreateUnstructured for some reason; need to understand why
-		LogLevel: "info",
+		OVNNorthdSpecCore: ovnv1.OVNNorthdSpecCore{
+			// TODO: Create() doesn't apply kubebuilder defaults, in contrast to
+			// CreateUnstructured for some reason; need to understand why
+			LogLevel: "info",
+		},
 	}
 }
 
@@ -63,12 +65,14 @@ func OVNNorthdConditionGetter(name types.NamespacedName) condition.Conditions {
 
 func GetDefaultOVNDBClusterSpec() ovnv1.OVNDBClusterSpec {
 	return ovnv1.OVNDBClusterSpec{
-		DBType: v1beta1.NBDBType,
-		// TODO: Create() doesn't apply kubebuilder defaults, in contrast to
-		// CreateUnstructured for some reason; need to understand why
-		LogLevel:       "info",
-		StorageRequest: "1G",
-		StorageClass:   "local-storage",
+		OVNDBClusterSpecCore: ovnv1.OVNDBClusterSpecCore{
+			DBType: v1beta1.NBDBType,
+			// TODO: Create() doesn't apply kubebuilder defaults, in contrast to
+			// CreateUnstructured for some reason; need to understand why
+			LogLevel:       "info",
+			StorageRequest: "1G",
+			StorageClass:   "local-storage",
+		},
 	}
 }
 

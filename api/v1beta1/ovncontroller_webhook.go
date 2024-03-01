@@ -66,6 +66,12 @@ func (spec *OVNControllerSpec) Default() {
 	if spec.OvnContainerImage == "" {
 		spec.OvnContainerImage = ovnDefaults.OvnControllerContainerImageURL
 	}
+	spec.OVNControllerSpecCore.Default()
+}
+
+// Default - set defaults for this OVNController core spec (this version is called by OpenStackControlplane webhooks)
+func (spec *OVNControllerSpecCore) Default() {
+	// nothing here yet
 }
 
 //+kubebuilder:webhook:path=/validate-ovn-openstack-org-v1beta1-ovncontroller,mutating=false,failurePolicy=fail,sideEffects=None,groups=ovn.openstack.org,resources=ovncontrollers,verbs=create;update,versions=v1beta1,name=vovncontroller.kb.io,admissionReviewVersions=v1

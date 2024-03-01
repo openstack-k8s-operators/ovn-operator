@@ -37,10 +37,6 @@ const (
 
 // OVNControllerSpec defines the desired state of OVNController
 type OVNControllerSpec struct {
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default={}
-	ExternalIDS OVSExternalIDs `json:"external-ids"`
-
 	// +kubebuilder:validation:Required
 	// Image used for the ovsdb-server and ovs-vswitchd containers (will be set to environmental default if empty)
 	OvsContainerImage string `json:"ovsContainerImage"`
@@ -48,6 +44,15 @@ type OVNControllerSpec struct {
 	// +kubebuilder:validation:Required
 	// Image used for the ovn-controller container (will be set to environmental default if empty)
 	OvnContainerImage string `json:"ovnContainerImage"`
+
+	OVNControllerSpecCore `json:",inline"`
+}
+
+// OVNControllerSpecCore -
+type OVNControllerSpecCore struct {
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default={}
+	ExternalIDS OVSExternalIDs `json:"external-ids"`
 
 	// +kubebuilder:validation:Optional
 	// +optional

@@ -69,6 +69,12 @@ func (spec *OVNNorthdSpec) Default() {
 	if spec.ContainerImage == "" {
 		spec.ContainerImage = ovnNorthdDefaults.ContainerImageURL
 	}
+	spec.OVNNorthdSpecCore.Default()
+}
+
+// Default - set defaults for this OVNNorthd core spec (this version is called by OpenStackControlplane webhooks)
+func (spec *OVNNorthdSpecCore) Default() {
+	// nothing here yet
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.

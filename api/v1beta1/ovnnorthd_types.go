@@ -36,6 +36,12 @@ type OVNNorthdSpec struct {
 	// ContainerImage - Container Image URL (will be set to environmental default if empty)
 	ContainerImage string `json:"containerImage"`
 
+	OVNNorthdSpecCore `json:",inline"`
+}
+
+// OVNNorthdSpecCore -
+type OVNNorthdSpecCore struct {
+
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=1
 	// +kubebuilder:validation:Maximum=32
