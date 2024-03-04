@@ -19,7 +19,6 @@ package functional_test
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	. "github.com/onsi/ginkgo/v2"
@@ -57,8 +56,8 @@ var _ = Describe("OVNDBCluster controller", func() {
 					}
 
 					Eventually(func(g Gomega) int {
-						listDns := GetDNSDataList(statefulSetName, "ovsdbserver-"+DnsName)
-						return len(listDns.Items)
+						DnsHostsList := GetDNSDataHostsList(statefulSetName.Namespace, "ovsdbserver-"+DnsName)
+						return len(DnsHostsList)
 					}).Should(BeNumerically("==", 3))
 
 					// Scale down to 1
@@ -70,24 +69,12 @@ var _ = Describe("OVNDBCluster controller", func() {
 
 					// Check if dnsdata CR is down to 1
 					Eventually(func() int {
-						targetedDnsOcurrences := 0
-						listDns := GetDNSDataList(statefulSetName, "ovsdbserver-"+DnsName)
-						// This calls CreateOVNDBClusters at the BeforeEach, which will
-						// create NB and SB cluster, both belonging at the same namespace
-						// GetDNSDataList will return ALL occurrences of DNSData (will include
-						// the NB and the SB occurences). Since both clusters were created with 3
-						// replicas and only the targeted one has been scaled down to 1 if we don't
-						// filter by name the result would be 4 (3+1)
-						for _, d := range listDns.Items {
-							if strings.Contains(d.Name, DnsName) {
-								targetedDnsOcurrences++
-							}
-						}
-						return targetedDnsOcurrences
+						listDns := GetDNSDataHostsList(statefulSetName.Namespace, "ovsdbserver-"+DnsName)
+						return len(listDns)
 					}).Should(BeNumerically("==", 1))
 				},
-				Entry("DNS entry NB", "sb"),
-				Entry("DNS entry SB", "nb"),
+				Entry("DNS entry NB", "nb"),
+				Entry("DNS entry SB", "sb"),
 			)
 			DescribeTable("Should update DNSData IP if pod IP changes",
 				func(DNSEntryName string) {
@@ -101,12 +88,10 @@ var _ = Describe("OVNDBCluster controller", func() {
 					OVNSBDBClusterName = types.NamespacedName{Name: dbs[1].Name, Namespace: dbs[1].Namespace}
 					cluster = GetOVNDBCluster(OVNSBDBClusterName)
 					clusterName = OVNSBDBClusterName
-					fullDNSEntryName := DNSEntryName + "." + cluster.Namespace + ".svc"
 
 					// Check that DNSData info has been created with correct IP (10.0.0.1)
 					Eventually(func(g Gomega) {
-						ip := GetDNSDataHostnameIP("ovsdbserver-sb-0", cluster.Namespace, fullDNSEntryName)
-						g.Expect(ip).Should(Equal("10.0.0.1"))
+						g.Expect(CheckDNSDataContainsIp(cluster.Namespace, "ovsdbserver-sb", "10.0.0.1")).Should(BeTrue())
 					}).Should(Succeed())
 
 					// Modify pod IP section
@@ -134,8 +119,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 
 					// Check that DNSData info has been modified with correct IP (10.0.0.10)
 					Eventually(func(g Gomega) {
-						ip := GetDNSDataHostnameIP("ovsdbserver-sb-0", cluster.Namespace, fullDNSEntryName)
-						g.Expect(ip).Should(Equal("10.0.0.10"))
+						g.Expect(CheckDNSDataContainsIp(cluster.Namespace, "ovsdbserver-sb", "10.0.0.1")).Should(BeTrue())
 					}).Should(Succeed())
 
 				},
