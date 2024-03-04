@@ -23,11 +23,22 @@ DB_NAME="OVN_Northbound"
 if [[ "${DB_TYPE}" == "sb" ]]; then
     DB_NAME="OVN_Southbound"
 fi
+
+PODNAME=$(hostname -f | cut -d. -f1,2)
+PODIPV6=$(grep "${PODNAME}" /etc/hosts | grep ':' | cut -d$'\t' -f1)
+
+if [[ "" = "${PODIPV6}" ]]; then
+    DB_ADDR="0.0.0.0"
+else
+    DB_ADDR="[::]"
+fi
+
 if [[ "$(hostname)" != "{{ .SERVICE_NAME }}-0" ]]; then
     rm -f /etc/ovn/ovn${DB_TYPE}_db.db
     #ovsdb-tool join-cluster /etc/ovn/ovn${DB_TYPE}_db.db ${DB_NAME} tcp:$(hostname).{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local:${RAFT_PORT} tcp:{{ .SERVICE_NAME }}-0.{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local:${RAFT_PORT}
-    OPTS="--db-${DB_TYPE}-cluster-remote-proto=tcp --db-${DB_TYPE}-cluster-remote-addr={{ .SERVICE_NAME }}-0.{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local --db-${DB_TYPE}-cluster-remote-port=${RAFT_PORT}"
+    OPTS="--db-${DB_TYPE}-cluster-remote-proto=tcp --db-${DB_TYPE}-cluster-remote-addr={{ .SERVICE_NAME }}-0.{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local --db-${DB_TYPE}-cluster-remote-port=${RAFT_PORT} --db-${DB_TYPE}-addr=${DB_ADDR}"
 fi
+
 
 # call to ovn-ctl directly instead of start-${DB_TYPE}-db-server to pass
 # extra_args after --
@@ -38,7 +49,7 @@ set "$@" --db-${DB_TYPE}-cluster-local-proto=tcp
 set "$@" --db-${DB_TYPE}-cluster-local-addr=$(hostname).{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local
 set "$@" --db-${DB_TYPE}-cluster-local-port=${RAFT_PORT}
 set "$@" --db-${DB_TYPE}-probe-interval-to-active={{ .OVN_PROBE_INTERVAL_TO_ACTIVE }}
-set "$@" --db-${DB_TYPE}-addr=0.0.0.0
+set "$@" --db-${DB_TYPE}-addr=${DB_ADDR}
 set "$@" --db-${DB_TYPE}-port=${DB_PORT}
 
 # log to console

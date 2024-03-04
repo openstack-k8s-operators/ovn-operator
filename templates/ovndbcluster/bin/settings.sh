@@ -25,8 +25,17 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
         sleep 1
     done
 
+    PODNAME=$(hostname -f | cut -d. -f1,2)
+    PODIPV6=$(grep "${PODNAME}" /etc/hosts | grep ':' | cut -d$'\t' -f1)
+
+    if [[ "" = "${PODIPV6}" ]]; then
+        DB_ADDR="0.0.0.0"
+    else
+        DB_ADDR="[::]"
+    fi
+
     while [ "$(ovn-${DB_TYPE}ctl --no-leader-only get connection . inactivity_probe)" != "{{ .OVN_INACTIVITY_PROBE }}" ]; do
-        ovn-${DB_TYPE}ctl --no-leader-only --inactivity-probe={{ .OVN_INACTIVITY_PROBE }} set-connection ptcp:${DB_PORT}:0.0.0.0
+        ovn-${DB_TYPE}ctl --no-leader-only --inactivity-probe={{ .OVN_INACTIVITY_PROBE }} set-connection ptcp:${DB_PORT}:${DB_ADDR}
     done
     ovn-${DB_TYPE}ctl --no-leader-only list connection
 fi

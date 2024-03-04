@@ -16,7 +16,7 @@
 
 # Configs are obtained from ENV variables.
 OvnBridge=${OvnBridge:-"br-int"}
-OvnRemote=${OvnRemote:-"tcp:127.0.0.1:6642"}
+OvnRemote=${OvnRemote:-"tcp:localhost:6642"}
 OvnEncapType=${OvnEncapType:-"geneve"}
 OvnAvailabilityZones=${OvnAvailabilityZones:-""}
 EnableChassisAsGateway=${EnableChassisAsGateway:-true}
