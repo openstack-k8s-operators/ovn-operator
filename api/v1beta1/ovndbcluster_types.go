@@ -50,10 +50,15 @@ const (
 
 // OVNDBClusterSpec defines the desired state of OVNDBCluster
 type OVNDBClusterSpec struct {
-
 	// +kubebuilder:validation:Required
 	// ContainerImage - Container Image URL (will be set to environmental default if empty)
 	ContainerImage string `json:"containerImage"`
+
+	OVNDBClusterSpecCore `json:",inline"`
+}
+
+// OVNDBClusterSpecCore -
+type OVNDBClusterSpecCore struct {
 
 	// +kubebuilder:validation:Required
 	// +kubebuilder:default="NB"
