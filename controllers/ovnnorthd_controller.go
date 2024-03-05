@@ -392,8 +392,6 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 
 	envVars := make(map[string]env.Setter)
 
-	instance.Status.Conditions.MarkTrue(condition.InputReadyCondition, condition.InputReadyMessage)
-
 	//
 	// TLS input validation
 	//
