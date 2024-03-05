@@ -226,6 +226,40 @@ var _ = Describe("OVNDBCluster controller", func() {
 			DeferCleanup(th.DeleteInstance, instance)
 		})
 
+		It("should create services", func() {
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(
+				statefulSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+			// Cluster is created with 1 replica, serviceListWithoutTypeLabel should be 2:
+			// - ovsdbserver-sb   (headless type)
+			// - ovsdbserver-sb-0 (cluster type)
+			Eventually(func(g Gomega) {
+				serviceListWithoutTypeLabel := GetServicesListWithLabel(namespace)
+				g.Expect(len(serviceListWithoutTypeLabel.Items)).To(Equal(2))
+			}).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				serviceListWithClusterType := GetServicesListWithLabel(namespace, map[string]string{"type": "cluster"})
+				g.Expect(len(serviceListWithClusterType.Items)).To(Equal(1))
+				g.Expect(serviceListWithClusterType.Items[0].Name).To(Equal("ovsdbserver-sb-0"))
+			}).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				serviceListWithHeadlessType := GetServicesListWithLabel(namespace, map[string]string{"type": "headless"})
+				g.Expect(len(serviceListWithHeadlessType.Items)).To(Equal(1))
+				g.Expect(serviceListWithHeadlessType.Items[0].Name).To(Equal("ovsdbserver-sb"))
+			}).Should(Succeed())
+		})
+
 		It("reports that the definition is missing", func() {
 			th.ExpectConditionWithDetails(
 				OVNDBClusterName,
