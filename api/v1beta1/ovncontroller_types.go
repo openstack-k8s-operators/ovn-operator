@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,6 +34,9 @@ const (
 	OvnControllerOvsContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-base:current-podified"
 	// OvnControllerContainerImage is the fall-back container image for OVNController ovn-controller
 	OvnControllerContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-controller:current-podified"
+
+	// ServiceNameOvnController - ovn-controller service name
+	ServiceNameOvnController = "ovn-controller"
 )
 
 // OVNControllerSpec defines the desired state of OVNController
@@ -78,6 +82,11 @@ type OVNControllerSpecCore struct {
 	// If present, the IP of the attachment named "tenant", will be used as the OvnEncapIP.
 
 	NetworkAttachments []string `json:"networkAttachments,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// TLS - Parameters related to TLS
+	TLS tls.SimpleService `json:"tls,omitempty"`
 }
 
 // OVNControllerStatus defines the observed state of OVNController

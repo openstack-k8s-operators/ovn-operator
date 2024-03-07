@@ -36,7 +36,7 @@ fi
 if [[ "$(hostname)" != "{{ .SERVICE_NAME }}-0" ]]; then
     rm -f /etc/ovn/ovn${DB_TYPE}_db.db
     #ovsdb-tool join-cluster /etc/ovn/ovn${DB_TYPE}_db.db ${DB_NAME} tcp:$(hostname).{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local:${RAFT_PORT} tcp:{{ .SERVICE_NAME }}-0.{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local:${RAFT_PORT}
-    OPTS="--db-${DB_TYPE}-cluster-remote-proto=tcp --db-${DB_TYPE}-cluster-remote-addr={{ .SERVICE_NAME }}-0.{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local --db-${DB_TYPE}-cluster-remote-port=${RAFT_PORT} --db-${DB_TYPE}-addr=${DB_ADDR}"
+    OPTS="--db-${DB_TYPE}-cluster-remote-addr={{ .SERVICE_NAME }}-0.{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local --db-${DB_TYPE}-cluster-remote-port=${RAFT_PORT}"
 fi
 
 
@@ -45,12 +45,22 @@ fi
 set /usr/share/ovn/scripts/ovn-ctl --no-monitor
 
 set "$@" --db-${DB_TYPE}-election-timer={{ .OVN_ELECTION_TIMER }}
-set "$@" --db-${DB_TYPE}-cluster-local-proto=tcp
 set "$@" --db-${DB_TYPE}-cluster-local-addr=$(hostname).{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local
 set "$@" --db-${DB_TYPE}-cluster-local-port=${RAFT_PORT}
 set "$@" --db-${DB_TYPE}-probe-interval-to-active={{ .OVN_PROBE_INTERVAL_TO_ACTIVE }}
 set "$@" --db-${DB_TYPE}-addr=${DB_ADDR}
 set "$@" --db-${DB_TYPE}-port=${DB_PORT}
+{{- if .TLS }}
+set "$@" --ovn-${DB_TYPE}-db-ssl-key={{.OVNDB_KEY_PATH}}
+set "$@" --ovn-${DB_TYPE}-db-ssl-cert={{.OVNDB_CERT_PATH}}
+set "$@" --ovn-${DB_TYPE}-db-ssl-ca-cert={{.OVNDB_CACERT_PATH}}
+set "$@" --db-${DB_TYPE}-cluster-local-proto=ssl
+set "$@" --db-${DB_TYPE}-cluster-remote-proto=ssl
+set "$@" --db-${DB_TYPE}-create-insecure-remote=no
+{{- else }}
+set "$@" --db-${DB_TYPE}-cluster-local-proto=tcp
+set "$@" --db-${DB_TYPE}-cluster-remote-proto=tcp
+{{- end }}
 
 # log to console
 set "$@" --ovn-${DB_TYPE}-log=-vconsole:{{ .OVN_LOG_LEVEL }}

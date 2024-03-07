@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -829,6 +830,199 @@ var _ = Describe("OVNController controller", func() {
 			Expect(ovnController.Spec.ExternalIDS.OvnEncapType).To(Equal("geneve"))
 			Expect(ovnController.Spec.ExternalIDS.OvnBridge).To(Equal("br-int"))
 			Expect(ovnController.Spec.ExternalIDS.SystemID).To(Equal("random"))
+		})
+	})
+
+	When("OVNController is created with TLS", func() {
+		var ovnControllerName types.NamespacedName
+
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			instance := CreateOVNController(namespace, GetTLSOVNControllerSpec())
+			DeferCleanup(th.DeleteInstance, instance)
+
+			ovnControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+		})
+
+		It("reports that the CA secret is missing", func() {
+			th.ExpectConditionWithDetails(
+				ovnControllerName,
+				ConditionGetterFunc(OVNControllerConditionGetter),
+				condition.TLSInputReadyCondition,
+				corev1.ConditionFalse,
+				condition.ErrorReason,
+				fmt.Sprintf(
+					"TLSInput error occured in TLS sources Secret %s/combined-ca-bundle not found",
+					namespace,
+				),
+			)
+			th.ExpectCondition(
+				ovnControllerName,
+				ConditionGetterFunc(OVNControllerConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionFalse,
+			)
+		})
+
+		It("reports that the cert secret is missing", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			th.ExpectConditionWithDetails(
+				ovnControllerName,
+				ConditionGetterFunc(OVNControllerConditionGetter),
+				condition.TLSInputReadyCondition,
+				corev1.ConditionFalse,
+				condition.ErrorReason,
+				fmt.Sprintf(
+					"TLSInput error occured in TLS sources Secret %s/%s not found",
+					namespace, OvnDbCertSecretName,
+				),
+			)
+			th.ExpectCondition(
+				ovnControllerName,
+				ConditionGetterFunc(OVNControllerConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionFalse,
+			)
+		})
+
+		It("creates a Daemonset with TLS certs attached", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+
+			SimulateDaemonsetNumberReady(daemonSetName)
+
+			ds := GetDaemonSet(daemonSetName)
+
+			//  check TLS volumes
+			th.AssertVolumeExists(CABundleSecretName, ds.Spec.Template.Spec.Volumes)
+			th.AssertVolumeExists("ovn-controller-tls-certs", ds.Spec.Template.Spec.Volumes)
+
+			svcC := ds.Spec.Template.Spec.Containers[2]
+
+			// check TLS volume mounts
+			th.AssertVolumeMountExists(CABundleSecretName, "tls-ca-bundle.pem", svcC.VolumeMounts)
+			th.AssertVolumeMountExists("ovn-controller-tls-certs", "tls.key", svcC.VolumeMounts)
+			th.AssertVolumeMountExists("ovn-controller-tls-certs", "tls.crt", svcC.VolumeMounts)
+			th.AssertVolumeMountExists("ovn-controller-tls-certs", "ca.crt", svcC.VolumeMounts)
+
+			// check cli args
+			Expect(svcC.Args).To(And(
+				ContainElement(ContainSubstring(fmt.Sprintf("--private-key=%s", ovn_common.OVNDbKeyPath))),
+				ContainElement(ContainSubstring(fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath))),
+				ContainElement(ContainSubstring(fmt.Sprintf("--ca-cert=%s", ovn_common.OVNDbCaCertPath))),
+			))
+
+			th.ExpectCondition(
+				ovnControllerName,
+				ConditionGetterFunc(OVNControllerConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionTrue,
+			)
+		})
+
+		It("reconfigures the pods when CA bundle changes", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+
+			SimulateDaemonsetNumberReady(daemonSetName)
+
+			originalHash := GetEnvVarValue(
+				GetDaemonSet(daemonSetName).Spec.Template.Spec.Containers[2].Env,
+				"CONFIG_HASH",
+				"",
+			)
+			Expect(originalHash).NotTo(BeEmpty())
+
+			// Change the content of the CA secret
+			th.UpdateSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			},
+				"tls-ca-bundle.pem",
+				[]byte("DifferentCAData"),
+			)
+
+			// Assert that the pod is updated
+			Eventually(func(g Gomega) {
+				newHash := GetEnvVarValue(
+					GetDaemonSet(daemonSetName).Spec.Template.Spec.Containers[2].Env,
+					"CONFIG_HASH",
+					"",
+				)
+				g.Expect(newHash).NotTo(BeEmpty())
+				g.Expect(newHash).NotTo(Equal(originalHash))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("reconfigures the pods when cert changes", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+
+			SimulateDaemonsetNumberReady(daemonSetName)
+
+			originalHash := GetEnvVarValue(
+				GetDaemonSet(daemonSetName).Spec.Template.Spec.Containers[2].Env,
+				"CONFIG_HASH",
+				"",
+			)
+			Expect(originalHash).NotTo(BeEmpty())
+
+			// Change the content of the cert secret
+			th.UpdateSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			},
+				"tls.crt",
+				[]byte("DifferentCrtData"),
+			)
+
+			// Assert that the pod is updated
+			Eventually(func(g Gomega) {
+				newHash := GetEnvVarValue(
+					GetDaemonSet(daemonSetName).Spec.Template.Spec.Containers[2].Env,
+					"CONFIG_HASH",
+					"",
+				)
+				g.Expect(newHash).NotTo(BeEmpty())
+				g.Expect(newHash).NotTo(Equal(originalHash))
+			}, timeout, interval).Should(Succeed())
 		})
 	})
 })

@@ -13,17 +13,23 @@ limitations under the License.
 package ovncontroller
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
-	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
+	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 // DaemonSet func
 func DaemonSet(
-	instance *v1beta1.OVNController,
+	instance *ovnv1.OVNController,
 	configHash string,
 	labels map[string]string,
 	annotations map[string]string,
@@ -31,6 +37,35 @@ func DaemonSet(
 
 	runAsUser := int64(0)
 	privileged := true
+
+	volumes := GetVolumes(instance.Name, instance.Namespace)
+	commonVolumeMounts := []corev1.VolumeMount{}
+
+	// add CA bundle if defined
+	if instance.Spec.TLS.CaBundleSecretName != "" {
+		volumes = append(volumes, instance.Spec.TLS.CreateVolume())
+		commonVolumeMounts = append(commonVolumeMounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
+	}
+
+	ovnControllerVolumeMounts := append(GetOvnControllerVolumeMounts(), commonVolumeMounts...)
+
+	// add OVN dbs cert and CA
+	var ovnControllerTLSArgs []string
+	if instance.Spec.TLS.Enabled() {
+		svc := tls.Service{
+			SecretName: *instance.Spec.TLS.GenericService.SecretName,
+			CertMount:  ptr.To(ovn_common.OVNDbCertPath),
+			KeyMount:   ptr.To(ovn_common.OVNDbKeyPath),
+			CaMount:    ptr.To(ovn_common.OVNDbCaCertPath),
+		}
+		volumes = append(volumes, svc.CreateVolume(ovnv1.ServiceNameOvnController))
+		ovnControllerVolumeMounts = append(ovnControllerVolumeMounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOvnController)...)
+		ovnControllerTLSArgs = []string{
+			fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath),
+			fmt.Sprintf("--private-key=%s", ovn_common.OVNDbKeyPath),
+			fmt.Sprintf("--ca-cert=%s", ovn_common.OVNDbCaCertPath),
+		}
+	}
 
 	//
 	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
@@ -99,7 +134,13 @@ func DaemonSet(
 		"/bin/bash", "-c",
 	}
 	ovnControllerArgs = []string{
-		"/usr/local/bin/container-scripts/net_setup.sh && ovn-controller --pidfile unix:/run/openvswitch/db.sock",
+		strings.Join(
+			append(
+				[]string{"/usr/local/bin/container-scripts/net_setup.sh && ovn-controller"},
+				append(ovnControllerTLSArgs, "--pidfile", "unix:/run/openvswitch/db.sock")...,
+			),
+			" ",
+		),
 	}
 	// sleep is required as workaround for https://github.com/kubernetes/kubernetes/issues/39170
 	ovnControllerPreStopCmd = []string{
@@ -111,7 +152,7 @@ func DaemonSet(
 
 	daemonset := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ServiceName,
+			Name:      ovnv1.ServiceNameOvnController,
 			Namespace: instance.Namespace,
 		},
 		Spec: appsv1.DaemonSetSpec{
@@ -148,7 +189,7 @@ func DaemonSet(
 								Privileged: &privileged,
 							},
 							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-							VolumeMounts:             GetOvsDbVolumeMounts(),
+							VolumeMounts:             append(GetOvsDbVolumeMounts(), commonVolumeMounts...),
 							Resources:                instance.Spec.Resources,
 							LivenessProbe:            ovsDbLivenessProbe,
 							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
@@ -174,7 +215,7 @@ func DaemonSet(
 								Privileged: &privileged,
 							},
 							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-							VolumeMounts:             GetVswitchdVolumeMounts(),
+							VolumeMounts:             append(GetVswitchdVolumeMounts(), commonVolumeMounts...),
 							Resources:                instance.Spec.Resources,
 							LivenessProbe:            ovsVswitchdLivenessProbe,
 							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
@@ -203,7 +244,7 @@ func DaemonSet(
 								Privileged: &privileged,
 							},
 							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-							VolumeMounts:             GetOvnControllerVolumeMounts(),
+							VolumeMounts:             ovnControllerVolumeMounts,
 							Resources:                instance.Spec.Resources,
 							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 						},
@@ -212,7 +253,7 @@ func DaemonSet(
 			},
 		},
 	}
-	daemonset.Spec.Template.Spec.Volumes = GetVolumes(instance.Name, instance.Namespace)
+	daemonset.Spec.Template.Spec.Volumes = volumes
 
 	if instance.Spec.NodeSelector != nil && len(instance.Spec.NodeSelector) > 0 {
 		daemonset.Spec.Template.Spec.NodeSelector = instance.Spec.NodeSelector

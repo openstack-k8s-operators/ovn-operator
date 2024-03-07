@@ -18,11 +18,14 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/affinity"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -37,6 +40,7 @@ func Deployment(
 	annotations map[string]string,
 	nbEndpoint string,
 	sbEndpoint string,
+	envVars map[string]env.Setter,
 ) *appsv1.Deployment {
 
 	livenessProbe := &corev1.Probe{
@@ -59,6 +63,34 @@ func Deployment(
 		fmt.Sprintf("--ovnsb-db=%s", sbEndpoint),
 	}
 
+	// create Volume and VolumeMounts
+	volumes := []corev1.Volume{}
+	volumeMounts := []corev1.VolumeMount{}
+
+	// add CA bundle if defined
+	if instance.Spec.TLS.CaBundleSecretName != "" {
+		volumes = append(volumes, instance.Spec.TLS.CreateVolume())
+		volumeMounts = append(volumeMounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
+	}
+
+	// add OVN dbs cert and CA
+	if instance.Spec.TLS.Enabled() {
+		svc := tls.Service{
+			SecretName: *instance.Spec.TLS.GenericService.SecretName,
+			CertMount:  ptr.To(ovn_common.OVNDbCertPath),
+			KeyMount:   ptr.To(ovn_common.OVNDbKeyPath),
+			CaMount:    ptr.To(ovn_common.OVNDbCaCertPath),
+		}
+		volumes = append(volumes, svc.CreateVolume(ovnv1.ServiceNameOvnNorthd))
+		volumeMounts = append(volumeMounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOvnNorthd)...)
+
+		args = append(args,
+			fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath),
+			fmt.Sprintf("--private-key=%s", ovn_common.OVNDbKeyPath),
+			fmt.Sprintf("--ca-cert=%s", ovn_common.OVNDbCaCertPath),
+		)
+	}
+
 	//
 	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 	//
@@ -69,13 +101,12 @@ func Deployment(
 	}
 	readinessProbe.Exec = livenessProbe.Exec
 
-	envVars := map[string]env.Setter{}
 	// TODO: Make confs customizable
 	envVars["OVN_RUNDIR"] = env.SetValue("/tmp")
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ServiceName,
+			Name:      ovnv1.ServiceNameOvnNorthd,
 			Namespace: instance.Namespace,
 		},
 		Spec: appsv1.DeploymentSpec{
@@ -92,7 +123,7 @@ func Deployment(
 					ServiceAccountName: instance.RbacResourceName(),
 					Containers: []corev1.Container{
 						{
-							Name:                     ServiceName,
+							Name:                     ovnv1.ServiceNameOvnNorthd,
 							Command:                  []string{cmd},
 							Args:                     args,
 							Image:                    instance.Spec.ContainerImage,
@@ -102,8 +133,10 @@ func Deployment(
 							ReadinessProbe:           readinessProbe,
 							LivenessProbe:            livenessProbe,
 							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+							VolumeMounts:             volumeMounts,
 						},
 					},
+					Volumes: volumes,
 				},
 			},
 		},
@@ -114,7 +147,7 @@ func Deployment(
 	deployment.Spec.Template.Spec.Affinity = affinity.DistributePods(
 		common.AppSelector,
 		[]string{
-			ServiceName,
+			ovnv1.ServiceNameOvnNorthd,
 		},
 		corev1.LabelHostname,
 	)

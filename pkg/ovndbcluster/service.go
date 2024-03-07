@@ -1,7 +1,6 @@
 package ovndbcluster
 
 import (
-	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,13 +15,13 @@ func Service(
 ) *corev1.Service {
 	dbPortName := "north"
 	raftPortName := "north-raft"
-	var dbPort int32 = 6641
-	var raftPort int32 = 6643
-	if instance.Spec.DBType == v1beta1.SBDBType {
+	dbPort := DbPortNB
+	raftPort := RaftPortNB
+	if instance.Spec.DBType == ovnv1.SBDBType {
 		dbPortName = "south"
 		raftPortName = "south-raft"
-		dbPort = 6642
-		raftPort = 6644
+		dbPort = DbPortSB
+		raftPort = RaftPortSB
 	}
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -56,10 +55,10 @@ func HeadlessService(
 	selectorLabels map[string]string,
 ) *corev1.Service {
 	raftPortName := "north-raft"
-	var raftPort int32 = 6643
-	if instance.Spec.DBType == "SB" {
+	raftPort := RaftPortNB
+	if instance.Spec.DBType == ovnv1.SBDBType {
 		raftPortName = "south-raft"
-		raftPort = 6644
+		raftPort = RaftPortSB
 	}
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{

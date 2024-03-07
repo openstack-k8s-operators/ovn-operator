@@ -1,0 +1,92 @@
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNNorthd
+metadata:
+  name: ovnnorthd-sample
+spec:
+  tls:
+    caBundleSecretName: combined-ca-bundle
+    secretName: cert-ovnnorthd-svc
+status:
+  readyCount: 1
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  name: ovndbcluster-nb-sample
+spec:
+  tls:
+    caBundleSecretName: combined-ca-bundle
+    secretName: cert-ovsdbserver-nb-svc
+status:
+  readyCount: 1
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  name: ovndbcluster-sb-sample
+spec:
+  tls:
+    caBundleSecretName: combined-ca-bundle
+    secretName: cert-ovsdbserver-sb-svc
+status:
+  readyCount: 1
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNController
+metadata:
+  name: ovncontroller-sample
+spec:
+  tls:
+    caBundleSecretName: combined-ca-bundle
+    secretName: cert-ovncontroller-svc
+status:
+  conditions:
+  - message: Setup complete
+    reason: Ready
+    status: "True"
+    type: Ready
+  - message: Deployment completed
+    reason: Ready
+    status: "True"
+    type: DeploymentReady
+  - message: Input data complete
+    reason: Ready
+    status: "True"
+    type: InputReady
+  - message: NetworkAttachments completed
+    reason: Ready
+    status: "True"
+    type: NetworkAttachmentsReady
+  - message: RoleBinding created
+    reason: Ready
+    status: "True"
+    type: RoleBindingReady
+  - message: Role created
+    reason: Ready
+    status: "True"
+    type: RoleReady
+  - message: ServiceAccount created
+    reason: Ready
+    status: "True"
+    type: ServiceAccountReady
+  - message: Service config create completed
+    reason: Ready
+    status: "True"
+    type: ServiceConfigReady
+  - message: Input data complete
+    reason: Ready
+    status: "True"
+    type: TLSInputReady
+---
+# check the DB uri scheme is ssl
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+commands:
+  - script: |
+      template='{{.status.internalDbAddress}}{{"\n"}}'
+      regex="ssl:.*"
+      dbUri=$(oc get -n $NAMESPACE OVNDBCluster ovndbcluster-sb-sample -o go-template="$template")
+      matches=$(echo "$dbUri" | sed -e "s?$regex??")
+      if [[ -n "$matches" ]]; then
+        exit 1
+      fi

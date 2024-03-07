@@ -23,12 +23,18 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	infranetworkv1 "github.com/openstack-k8s-operators/infra-operator/apis/network/v1beta1"
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
@@ -41,9 +47,10 @@ import (
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/service"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/statefulset"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
-	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovndbcluster"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -83,6 +90,7 @@ func (r *OVNDBClusterReconciler) GetLogger(ctx context.Context) logr.Logger {
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovndbclusters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovndbclusters/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete;
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;patch;update;delete;
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;patch;update;delete;
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
@@ -130,6 +138,7 @@ func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			condition.UnknownCondition(condition.ServiceAccountReadyCondition, condition.InitReason, condition.ServiceAccountReadyInitMessage),
 			condition.UnknownCondition(condition.RoleReadyCondition, condition.InitReason, condition.RoleReadyInitMessage),
 			condition.UnknownCondition(condition.RoleBindingReadyCondition, condition.InitReason, condition.RoleBindingReadyInitMessage),
+			condition.UnknownCondition(condition.TLSInputReadyCondition, condition.InitReason, condition.InputReadyInitMessage),
 		)
 
 		instance.Status.Conditions.Init(&cl)
@@ -189,6 +198,30 @@ func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OVNDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// index caBundleSecretNameField
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &ovnv1.OVNDBCluster{}, caBundleSecretNameField, func(rawObj client.Object) []string {
+		// Extract the secret name from the spec, if one is provided
+		cr := rawObj.(*ovnv1.OVNDBCluster)
+		if cr.Spec.TLS.CaBundleSecretName == "" {
+			return nil
+		}
+		return []string{cr.Spec.TLS.CaBundleSecretName}
+	}); err != nil {
+		return err
+	}
+
+	// index tlsField
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &ovnv1.OVNDBCluster{}, tlsField, func(rawObj client.Object) []string {
+		// Extract the secret name from the spec, if one is provided
+		cr := rawObj.(*ovnv1.OVNDBCluster)
+		if cr.Spec.TLS.SecretName == nil {
+			return nil
+		}
+		return []string{*cr.Spec.TLS.SecretName}
+	}); err != nil {
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ovnv1.OVNDBCluster{}).
 		Owns(&corev1.Service{}).
@@ -198,7 +231,45 @@ func (r *OVNDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
 		Owns(&infranetworkv1.DNSData{}).
+		Watches(
+			&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSrc),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}),
+		).
 		Complete(r)
+}
+
+func (r *OVNDBClusterReconciler) findObjectsForSrc(ctx context.Context, src client.Object) []reconcile.Request {
+	requests := []reconcile.Request{}
+
+	Log := r.GetLogger(ctx)
+
+	for _, field := range allWatchFields {
+		crList := &ovnv1.OVNDBClusterList{}
+		listOps := &client.ListOptions{
+			FieldSelector: fields.OneTermEqualSelector(field, src.GetName()),
+			Namespace:     src.GetNamespace(),
+		}
+		err := r.Client.List(ctx, crList, listOps)
+		if err != nil {
+			return []reconcile.Request{}
+		}
+
+		for _, item := range crList.Items {
+			Log.Info(fmt.Sprintf("input source %s changed, reconcile: %s - %s", src.GetName(), item.GetName(), item.GetNamespace()))
+
+			requests = append(requests,
+				reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      item.GetName(),
+						Namespace: item.GetNamespace(),
+					},
+				},
+			)
+		}
+	}
+
+	return requests
 }
 
 func (r *OVNDBClusterReconciler) reconcileDelete(ctx context.Context, instance *ovnv1.OVNDBCluster, helper *helper.Helper) (ctrl.Result, error) {
@@ -275,9 +346,9 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		return rbacResult, nil
 	}
 
-	serviceName := ovndbcluster.ServiceNameNB
-	if instance.Spec.DBType == v1beta1.SBDBType {
-		serviceName = ovndbcluster.ServiceNameSB
+	serviceName := ovnv1.ServiceNameNB
+	if instance.Spec.DBType == ovnv1.SBDBType {
+		serviceName = ovnv1.ServiceNameSB
 	}
 	serviceLabels := map[string]string{
 		common.AppSelector: serviceName,
@@ -319,6 +390,55 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	configMapVars := make(map[string]env.Setter)
 
 	instance.Status.Conditions.MarkTrue(condition.InputReadyCondition, condition.InputReadyMessage)
+
+	//
+	// TLS input validation
+	//
+	// Validate the CA cert secret if provided
+	if instance.Spec.TLS.CaBundleSecretName != "" {
+		hash, ctrlResult, err := tls.ValidateCACertSecret(
+			ctx,
+			helper.GetClient(),
+			types.NamespacedName{
+				Name:      instance.Spec.TLS.CaBundleSecretName,
+				Namespace: instance.Namespace,
+			},
+		)
+		if err != nil {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.TLSInputReadyCondition,
+				condition.ErrorReason,
+				condition.SeverityWarning,
+				condition.TLSInputErrorMessage,
+				err.Error()))
+			return ctrlResult, err
+		} else if (ctrlResult != ctrl.Result{}) {
+			return ctrlResult, nil
+		}
+
+		if hash != "" {
+			configMapVars[tls.CABundleKey] = env.SetValue(hash)
+		}
+	}
+
+	// Validate service cert secret
+	if instance.Spec.TLS.Enabled() {
+		hash, ctrlResult, err := instance.Spec.TLS.ValidateCertSecret(ctx, helper, instance.Namespace)
+		if err != nil {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.TLSInputReadyCondition,
+				condition.ErrorReason,
+				condition.SeverityWarning,
+				condition.TLSInputErrorMessage,
+				err.Error()))
+			return ctrl.Result{}, err
+		} else if (ctrlResult != ctrl.Result{}) {
+			return ctrlResult, nil
+		}
+		configMapVars[tls.TLSHashName] = env.SetValue(hash)
+	}
+	// all cert input checks out so report InputReady
+	instance.Status.Conditions.MarkTrue(condition.TLSInputReadyCondition, condition.InputReadyMessage)
 
 	//
 	// Create ConfigMaps and Secrets required as input for the Service and calculate an overall hash of hashes
@@ -465,15 +585,24 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		internalDbAddress := []string{}
 		raftAddress := []string{}
 		var svcPort int32
+		scheme := "tcp"
+		if instance.Spec.TLS.Enabled() {
+			scheme = "ssl"
+		}
 		for _, svc := range svcList.Items {
 			svcPort = svc.Spec.Ports[0].Port
 
 			// Filter out headless services
 			if svc.Spec.ClusterIP != "None" {
-				internalDbAddress = append(internalDbAddress, fmt.Sprintf("tcp:%s.%s.svc.%s:%d", svc.Name, svc.Namespace, v1beta1.DNSSuffix, svcPort))
-				raftAddress = append(raftAddress, fmt.Sprintf("tcp:%s.%s.svc.%s:%d", svc.Name, svc.Namespace, v1beta1.DNSSuffix, svc.Spec.Ports[1].Port))
+				internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, ovnv1.DNSSuffix, svcPort))
+				raftAddress = append(raftAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, ovnv1.DNSSuffix, svc.Spec.Ports[1].Port))
 			}
 		}
+
+		// Note setting this to the singular headless service address (e.g ssl:ovsdbserver-sb...) "works" but will not
+		// load-balance on OCP (https://issues.redhat.com/browse/RFE-2838)
+		// Since the clients are connecting to the pod dns names directly the TLS certs will need to include
+		// all (potential) pod names or use a wildcard
 
 		// Set DB Address
 		instance.Status.InternalDBAddress = strings.Join(internalDbAddress, ",")
@@ -531,7 +660,7 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 	//
 	// Ensure the ovndbcluster headless service Exists
 	//
-	headlessServiceLabels := util.MergeMaps(serviceLabels, map[string]string{"type": v1beta1.ServiceHeadlessType})
+	headlessServiceLabels := util.MergeMaps(serviceLabels, map[string]string{"type": ovnv1.ServiceHeadlessType})
 
 	headlesssvc, err := service.NewService(
 		ovndbcluster.HeadlessService(serviceName, instance, headlessServiceLabels, serviceLabels),
@@ -562,7 +691,7 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 			common.AppSelector:                   serviceName,
 			"statefulset.kubernetes.io/pod-name": ovnPod.Name,
 		}
-		ovndbServiceLabels := util.MergeMaps(ovndbSelectorLabels, map[string]string{"type": v1beta1.ServiceClusterType})
+		ovndbServiceLabels := util.MergeMaps(ovndbSelectorLabels, map[string]string{"type": ovnv1.ServiceClusterType})
 		svc, err := service.NewService(
 			ovndbcluster.Service(ovnPod.Name, instance, ovndbServiceLabels, ovndbSelectorLabels),
 			time.Duration(5)*time.Second,
@@ -581,7 +710,7 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 	}
 
 	// Delete any extra services left after scale down
-	clusterServiceLabels := util.MergeMaps(serviceLabels, map[string]string{"type": v1beta1.ServiceClusterType})
+	clusterServiceLabels := util.MergeMaps(serviceLabels, map[string]string{"type": ovnv1.ServiceClusterType})
 	svcList, err := service.GetServicesListWithLabel(
 		ctx,
 		helper,
@@ -651,7 +780,11 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 		}
 	}
 	// dbAddress will contain ovsdbserver-(nb|sb).openstack.svc or empty
-	instance.Status.DBAddress = ovndbcluster.GetDBAddress(svc, serviceName, instance.Namespace)
+	scheme := "tcp"
+	if instance.Spec.TLS.Enabled() {
+		scheme = "ssl"
+	}
+	instance.Status.DBAddress = ovndbcluster.GetDBAddress(svc, serviceName, instance.Namespace, scheme)
 
 	Log.Info("Reconciled OVN DB Cluster Service successfully")
 	return ctrl.Result{}, nil
@@ -674,15 +807,20 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 	templateParameters["SERVICE_NAME"] = serviceName
 	templateParameters["NAMESPACE"] = instance.GetNamespace()
 	templateParameters["DB_TYPE"] = strings.ToLower(instance.Spec.DBType)
-	templateParameters["DB_PORT"] = 6641
-	templateParameters["RAFT_PORT"] = 6643
-	if instance.Spec.DBType == v1beta1.SBDBType {
-		templateParameters["DB_PORT"] = 6642
-		templateParameters["RAFT_PORT"] = 6644
+	templateParameters["DB_PORT"] = ovndbcluster.DbPortNB
+	templateParameters["RAFT_PORT"] = ovndbcluster.RaftPortNB
+	if instance.Spec.DBType == ovnv1.SBDBType {
+		templateParameters["DB_PORT"] = ovndbcluster.DbPortSB
+		templateParameters["RAFT_PORT"] = ovndbcluster.RaftPortSB
 	}
 	templateParameters["OVN_ELECTION_TIMER"] = instance.Spec.ElectionTimer
 	templateParameters["OVN_INACTIVITY_PROBE"] = instance.Spec.InactivityProbe
 	templateParameters["OVN_PROBE_INTERVAL_TO_ACTIVE"] = instance.Spec.ProbeIntervalToActive
+	templateParameters["TLS"] = instance.Spec.TLS.Enabled()
+	templateParameters["OVNDB_CERT_PATH"] = ovn_common.OVNDbCertPath
+	templateParameters["OVNDB_KEY_PATH"] = ovn_common.OVNDbKeyPath
+	templateParameters["OVNDB_CACERT_PATH"] = ovn_common.OVNDbCaCertPath
+
 	cms := []util.Template{
 		// ScriptsConfigMap
 		{

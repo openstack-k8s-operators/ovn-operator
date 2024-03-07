@@ -2,8 +2,10 @@ package ovndbcluster
 
 const (
 	// ServiceNameNB -
-	ServiceNameNB = "ovsdbserver-nb"
+	DbPortNB   int32 = 6641
+	RaftPortNB int32 = 6643
 
 	// ServiceNameSB -
-	ServiceNameSB = "ovsdbserver-sb"
+	DbPortSB   int32 = 6642
+	RaftPortSB int32 = 6644
 )

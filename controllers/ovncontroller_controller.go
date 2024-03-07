@@ -26,13 +26,18 @@ import (
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
@@ -44,8 +49,9 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
 	nad "github.com/openstack-k8s-operators/lib-common/modules/common/networkattachment"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
-	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovncontroller"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -91,6 +97,7 @@ func (r *OVNControllerReconciler) GetClient() client.Client {
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovncontrollers/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovncontrollers/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete;
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
 //+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;get;list;patch;update;watch
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;patch;update;delete;
@@ -109,7 +116,7 @@ func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	Log := r.GetLogger(ctx)
 
 	// Fetch OVNController instance
-	instance := &v1beta1.OVNController{}
+	instance := &ovnv1.OVNController{}
 	err := r.Client.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if k8s_errors.IsNotFound(err) {
@@ -173,6 +180,7 @@ func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			condition.UnknownCondition(condition.ServiceAccountReadyCondition, condition.InitReason, condition.ServiceAccountReadyInitMessage),
 			condition.UnknownCondition(condition.RoleReadyCondition, condition.InitReason, condition.RoleReadyInitMessage),
 			condition.UnknownCondition(condition.RoleBindingReadyCondition, condition.InitReason, condition.RoleBindingReadyInitMessage),
+			condition.UnknownCondition(condition.TLSInputReadyCondition, condition.InitReason, condition.InputReadyInitMessage),
 		)
 
 		instance.Status.Conditions.Init(&cl)
@@ -199,9 +207,32 @@ func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager, ctx context.Context) error {
-	crs := &v1beta1.OVNControllerList{}
+	crs := &ovnv1.OVNControllerList{}
+	// index caBundleSecretNameField
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &ovnv1.OVNController{}, caBundleSecretNameField, func(rawObj client.Object) []string {
+		// Extract the secret name from the spec, if one is provided
+		cr := rawObj.(*ovnv1.OVNController)
+		if cr.Spec.TLS.CaBundleSecretName == "" {
+			return nil
+		}
+		return []string{cr.Spec.TLS.CaBundleSecretName}
+	}); err != nil {
+		return err
+	}
+
+	// index tlsField
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &ovnv1.OVNController{}, tlsField, func(rawObj client.Object) []string {
+		// Extract the secret name from the spec, if one is provided
+		cr := rawObj.(*ovnv1.OVNController)
+		if cr.Spec.TLS.SecretName == nil {
+			return nil
+		}
+		return []string{*cr.Spec.TLS.SecretName}
+	}); err != nil {
+		return err
+	}
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1beta1.OVNController{}).
+		For(&ovnv1.OVNController{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&batchv1.Job{}).
 		Owns(&netattdefv1.NetworkAttachmentDefinition{}).
@@ -209,11 +240,49 @@ func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager, ctx context
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
-		Watches(&v1beta1.OVNDBCluster{}, handler.EnqueueRequestsFromMapFunc(v1beta1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), r.GetLogger(ctx)))).
+		Watches(&ovnv1.OVNDBCluster{}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), r.GetLogger(ctx)))).
+		Watches(
+			&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSrc),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}),
+		).
 		Complete(r)
 }
 
-func (r *OVNControllerReconciler) reconcileDelete(ctx context.Context, instance *v1beta1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
+func (r *OVNControllerReconciler) findObjectsForSrc(ctx context.Context, src client.Object) []reconcile.Request {
+	requests := []reconcile.Request{}
+
+	Log := r.GetLogger(ctx)
+
+	for _, field := range allWatchFields {
+		crList := &ovnv1.OVNControllerList{}
+		listOps := &client.ListOptions{
+			FieldSelector: fields.OneTermEqualSelector(field, src.GetName()),
+			Namespace:     src.GetNamespace(),
+		}
+		err := r.Client.List(ctx, crList, listOps)
+		if err != nil {
+			return []reconcile.Request{}
+		}
+
+		for _, item := range crList.Items {
+			Log.Info(fmt.Sprintf("input source %s changed, reconcile: %s - %s", src.GetName(), item.GetName(), item.GetNamespace()))
+
+			requests = append(requests,
+				reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      item.GetName(),
+						Namespace: item.GetNamespace(),
+					},
+				},
+			)
+		}
+	}
+
+	return requests
+}
+
+func (r *OVNControllerReconciler) reconcileDelete(ctx context.Context, instance *ovnv1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 
 	Log.Info("Reconciling Service delete")
@@ -227,7 +296,7 @@ func (r *OVNControllerReconciler) reconcileDelete(ctx context.Context, instance 
 
 func (r *OVNControllerReconciler) reconcileInit(
 	ctx context.Context,
-	instance *v1beta1.OVNController,
+	instance *ovnv1.OVNController,
 	helper *helper.Helper,
 ) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
@@ -241,7 +310,7 @@ func (r *OVNControllerReconciler) reconcileInit(
 	return ctrl.Result{}, nil
 }
 
-func (r *OVNControllerReconciler) reconcileUpdate(ctx context.Context, instance *v1beta1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
+func (r *OVNControllerReconciler) reconcileUpdate(ctx context.Context, instance *ovnv1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 
 	Log.Info("Reconciling Service update")
@@ -250,7 +319,7 @@ func (r *OVNControllerReconciler) reconcileUpdate(ctx context.Context, instance 
 	return ctrl.Result{}, nil
 }
 
-func (r *OVNControllerReconciler) reconcileUpgrade(ctx context.Context, instance *v1beta1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
+func (r *OVNControllerReconciler) reconcileUpgrade(ctx context.Context, instance *ovnv1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 
 	Log.Info("Reconciling Service upgrade")
@@ -259,7 +328,7 @@ func (r *OVNControllerReconciler) reconcileUpgrade(ctx context.Context, instance
 	return ctrl.Result{}, nil
 }
 
-func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance *v1beta1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
+func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance *ovnv1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 
 	Log.Info("Reconciling Service")
@@ -289,6 +358,55 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	configMapVars := make(map[string]env.Setter)
 
 	instance.Status.Conditions.MarkTrue(condition.InputReadyCondition, condition.InputReadyMessage)
+
+	//
+	// TLS input validation
+	//
+	// Validate the CA cert secret if provided
+	if instance.Spec.TLS.CaBundleSecretName != "" {
+		hash, ctrlResult, err := tls.ValidateCACertSecret(
+			ctx,
+			helper.GetClient(),
+			types.NamespacedName{
+				Name:      instance.Spec.TLS.CaBundleSecretName,
+				Namespace: instance.Namespace,
+			},
+		)
+		if err != nil {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.TLSInputReadyCondition,
+				condition.ErrorReason,
+				condition.SeverityWarning,
+				condition.TLSInputErrorMessage,
+				err.Error()))
+			return ctrlResult, err
+		} else if (ctrlResult != ctrl.Result{}) {
+			return ctrlResult, nil
+		}
+
+		if hash != "" {
+			configMapVars[tls.CABundleKey] = env.SetValue(hash)
+		}
+	}
+
+	// Validate service cert secret
+	if instance.Spec.TLS.Enabled() {
+		hash, ctrlResult, err := instance.Spec.TLS.ValidateCertSecret(ctx, helper, instance.Namespace)
+		if err != nil {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.TLSInputReadyCondition,
+				condition.ErrorReason,
+				condition.SeverityWarning,
+				condition.TLSInputErrorMessage,
+				err.Error()))
+			return ctrl.Result{}, err
+		} else if (ctrlResult != ctrl.Result{}) {
+			return ctrlResult, nil
+		}
+		configMapVars[tls.TLSHashName] = env.SetValue(hash)
+	}
+	// all cert input checks out so report InputReady
+	instance.Status.Conditions.MarkTrue(condition.TLSInputReadyCondition, condition.InputReadyMessage)
 
 	//
 	// create Configmap required for OVNController input
@@ -331,7 +449,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	//
 
 	serviceLabels := map[string]string{
-		common.AppSelector: ovncontroller.ServiceName,
+		common.AppSelector: ovnv1.ServiceNameOvnController,
 	}
 
 	// Create additional Physical Network Attachments
@@ -461,7 +579,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 	// create DaemonSet - end
 
-	sbCluster, err := v1beta1.GetDBClusterByType(ctx, helper, instance.Namespace, map[string]string{}, v1beta1.SBDBType)
+	sbCluster, err := ovnv1.GetDBClusterByType(ctx, helper, instance.Namespace, map[string]string{}, ovnv1.SBDBType)
 	if err != nil {
 		Log.Info("No SB OVNDBCluster defined, deleting external ConfigMap")
 		cleanupConfigMapErr := r.deleteExternalConfigMaps(ctx, helper, instance)
@@ -500,7 +618,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 			return ctrl.Result{}, err
 		}
 		for _, jobDef := range jobsDef {
-			configHashKey := v1beta1.OvnConfigHash + "-" + jobDef.Spec.Template.Spec.NodeName
+			configHashKey := ovnv1.OvnConfigHash + "-" + jobDef.Spec.Template.Spec.NodeName
 			configHash := instance.Status.Hash[configHashKey]
 			configJob := job.NewJob(
 				jobDef,
@@ -555,11 +673,11 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 func (r *OVNControllerReconciler) generateServiceConfigMaps(
 	ctx context.Context,
 	h *helper.Helper,
-	instance *v1beta1.OVNController,
+	instance *ovnv1.OVNController,
 	envVars *map[string]env.Setter,
 ) error {
 	// Create/update configmaps from templates
-	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovncontroller.ServiceName), map[string]string{})
+	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnv1.ServiceNameOvnController), map[string]string{})
 
 	templateParameters := make(map[string]interface{})
 	if contains(instance.Spec.NetworkAttachments, TunnelNetworkAttachmentName) {
@@ -587,12 +705,12 @@ func (r *OVNControllerReconciler) generateServiceConfigMaps(
 func (r *OVNControllerReconciler) generateExternalConfigMaps(
 	ctx context.Context,
 	h *helper.Helper,
-	instance *v1beta1.OVNController,
-	sbCluster *v1beta1.OVNDBCluster,
+	instance *ovnv1.OVNController,
+	sbCluster *ovnv1.OVNDBCluster,
 	envVars *map[string]env.Setter,
 ) error {
 	// Create/update configmaps from templates
-	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovncontroller.ServiceName), map[string]string{})
+	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnv1.ServiceNameOvnController), map[string]string{})
 
 	externalEndpoint, err := sbCluster.GetExternalEndpoint()
 	if err != nil {
@@ -622,7 +740,7 @@ func (r *OVNControllerReconciler) generateExternalConfigMaps(
 func (r *OVNControllerReconciler) deleteExternalConfigMaps(
 	ctx context.Context,
 	h *helper.Helper,
-	instance *v1beta1.OVNController,
+	instance *ovnv1.OVNController,
 ) error {
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -644,7 +762,7 @@ func (r *OVNControllerReconciler) deleteExternalConfigMaps(
 // returns the hash, whether the hash changed (as a bool) and any error
 func (r *OVNControllerReconciler) createHashOfInputHashes(
 	ctx context.Context,
-	instance *v1beta1.OVNController,
+	instance *ovnv1.OVNController,
 	envVars map[string]env.Setter,
 ) (string, bool, error) {
 	Log := r.GetLogger(ctx)

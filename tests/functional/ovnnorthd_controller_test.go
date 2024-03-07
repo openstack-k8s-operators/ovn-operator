@@ -18,6 +18,7 @@ package functional_test
 
 import (
 	"encoding/json"
+	"fmt"
 
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	. "github.com/onsi/ginkgo/v2"
@@ -257,4 +258,202 @@ var _ = Describe("OVNNorthd controller", func() {
 		})
 	})
 
+	When("OVNNorthd is created with TLS", func() {
+		var ovnNorthdName types.NamespacedName
+
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			spec := GetTLSOVNNorthdSpec()
+			spec.NetworkAttachment = "internalapi"
+			ovnNorthdName = ovn.CreateOVNNorthd(namespace, spec)
+			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+		})
+
+		It("reports that the CA secret is missing", func() {
+			th.ExpectConditionWithDetails(
+				ovnNorthdName,
+				ConditionGetterFunc(OVNNorthdConditionGetter),
+				condition.TLSInputReadyCondition,
+				corev1.ConditionFalse,
+				condition.ErrorReason,
+				fmt.Sprintf(
+					"TLSInput error occured in TLS sources Secret %s/combined-ca-bundle not found",
+					namespace,
+				),
+			)
+			th.ExpectCondition(
+				ovnNorthdName,
+				ConditionGetterFunc(OVNNorthdConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionFalse,
+			)
+		})
+
+		It("reports that the cert secret is missing", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			th.ExpectConditionWithDetails(
+				ovnNorthdName,
+				ConditionGetterFunc(OVNNorthdConditionGetter),
+				condition.TLSInputReadyCondition,
+				corev1.ConditionFalse,
+				condition.ErrorReason,
+				fmt.Sprintf(
+					"TLSInput error occured in TLS sources Secret %s/%s not found",
+					namespace, OvnDbCertSecretName,
+				),
+			)
+			th.ExpectCondition(
+				ovnNorthdName,
+				ConditionGetterFunc(OVNNorthdConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionFalse,
+			)
+		})
+
+		It("creates a Deployment with TLS certs attached", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			deploymentName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-northd",
+			}
+			th.SimulateDeploymentReadyWithPods(
+				deploymentName, map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			d := th.GetDeployment(deploymentName)
+
+			//  check TLS volumes
+			th.AssertVolumeExists(CABundleSecretName, d.Spec.Template.Spec.Volumes)
+			th.AssertVolumeExists("ovn-northd-tls-certs", d.Spec.Template.Spec.Volumes)
+
+			svcC := d.Spec.Template.Spec.Containers[0]
+
+			// check TLS volume mounts
+			th.AssertVolumeMountExists(CABundleSecretName, "tls-ca-bundle.pem", svcC.VolumeMounts)
+			th.AssertVolumeMountExists("ovn-northd-tls-certs", "tls.key", svcC.VolumeMounts)
+			th.AssertVolumeMountExists("ovn-northd-tls-certs", "tls.crt", svcC.VolumeMounts)
+			th.AssertVolumeMountExists("ovn-northd-tls-certs", "ca.crt", svcC.VolumeMounts)
+
+			// check cli args
+			Expect(svcC.Args).To(And(
+				ContainElement(ContainSubstring("--private-key=")),
+				ContainElement(ContainSubstring("--certificate=")),
+				ContainElement(ContainSubstring("--ca-cert=")),
+			))
+
+			th.ExpectCondition(
+				ovnNorthdName,
+				ConditionGetterFunc(OVNNorthdConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionTrue,
+			)
+		})
+
+		It("reconfigures the pods when CA bundle changes", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			deploymentName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-northd",
+			}
+			th.SimulateDeploymentReadyWithPods(
+				deploymentName, map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			originalHash := GetEnvVarValue(
+				th.GetDeployment(deploymentName).Spec.Template.Spec.Containers[0].Env,
+				"tls-ca-bundle.pem",
+				"",
+			)
+			Expect(originalHash).NotTo(BeEmpty())
+
+			// Change the content of the CA secret
+			th.UpdateSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			},
+				"tls-ca-bundle.pem",
+				[]byte("DifferentCAData"),
+			)
+
+			// Assert that the pod is updated
+			Eventually(func(g Gomega) {
+				newHash := GetEnvVarValue(
+					th.GetDeployment(deploymentName).Spec.Template.Spec.Containers[0].Env,
+					"tls-ca-bundle.pem",
+					"",
+				)
+				g.Expect(newHash).NotTo(BeEmpty())
+				g.Expect(newHash).NotTo(Equal(originalHash))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("reconfigures the pods when cert changes", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			deploymentName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-northd",
+			}
+			th.SimulateDeploymentReadyWithPods(
+				deploymentName, map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			originalHash := GetEnvVarValue(
+				th.GetDeployment(deploymentName).Spec.Template.Spec.Containers[0].Env,
+				"certs",
+				"",
+			)
+			Expect(originalHash).NotTo(BeEmpty())
+
+			// Change the content of the cert secret
+			th.UpdateSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			},
+				"tls.crt",
+				[]byte("DifferentCrtData"),
+			)
+
+			// Assert that the pod is updated
+			Eventually(func(g Gomega) {
+				newHash := GetEnvVarValue(
+					th.GetDeployment(deploymentName).Spec.Template.Spec.Containers[0].Env,
+					"certs",
+					"",
+				)
+				g.Expect(newHash).NotTo(BeEmpty())
+				g.Expect(newHash).NotTo(Equal(originalHash))
+			}, timeout, interval).Should(Succeed())
+		})
+	})
 })

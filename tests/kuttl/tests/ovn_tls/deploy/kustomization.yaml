@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ovn_v1beta1_ovnnorthd.yaml
+- ovn_v1beta1_ovndbcluster.yaml
+- ovn_v1beta1_ovncontroller.yaml
+patches:
+- patch: |-
+    - op: add
+      path: /spec/tls
+      value:
+        caBundleSecretName: combined-ca-bundle
+        secretName: cert-ovsdbserver-nb-svc
+  target:
+    kind: OVNDBCluster
+    name: ovndbcluster-nb-sample
+- patch: |-
+    - op: add
+      path: /spec/tls
+      value:
+        caBundleSecretName: combined-ca-bundle
+        secretName: cert-ovsdbserver-sb-svc
+  target:
+    kind: OVNDBCluster
+    name: ovndbcluster-sb-sample
+- patch: |-
+    - op: add
+      path: /spec/tls
+      value:
+        caBundleSecretName: combined-ca-bundle
+        secretName: cert-ovnnorthd-svc
+  target:
+    kind: OVNNorthd
+- patch: |-
+    - op: add
+      path: /spec/tls
+      value:
+        caBundleSecretName: combined-ca-bundle
+        secretName: cert-ovncontroller-svc
+  target:
+    kind: OVNController

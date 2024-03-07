@@ -16,13 +16,15 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/affinity"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
-	"github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -86,9 +88,9 @@ func StatefulSet(
 			},
 		},
 	}
-	serviceName := ServiceNameNB
-	if instance.Spec.DBType == v1beta1.SBDBType {
-		serviceName = ServiceNameSB
+	serviceName := ovnv1.ServiceNameNB
+	if instance.Spec.DBType == ovnv1.SBDBType {
+		serviceName = ovnv1.ServiceNameSB
 	}
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
@@ -99,6 +101,28 @@ func StatefulSet(
 	// before seizing file logging, and the default log file location is not
 	// available for write
 	envVars["OVN_LOGDIR"] = env.SetValue("/tmp")
+
+	// create Volume and VolumeMounts
+	volumes := GetDBClusterVolumes(instance.Name)
+	volumeMounts := GetDBClusterVolumeMounts(instance.Name + PvcSuffixEtcOvn)
+
+	// add CA bundle if defined
+	if instance.Spec.TLS.CaBundleSecretName != "" {
+		volumes = append(volumes, instance.Spec.TLS.CreateVolume())
+		volumeMounts = append(volumeMounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
+	}
+
+	// add OVN dbs cert and CA
+	if instance.Spec.TLS.Enabled() {
+		svc := tls.Service{
+			SecretName: *instance.Spec.TLS.GenericService.SecretName,
+			CertMount:  ptr.To(ovn_common.OVNDbCertPath),
+			KeyMount:   ptr.To(ovn_common.OVNDbKeyPath),
+			CaMount:    ptr.To(ovn_common.OVNDbCaCertPath),
+		}
+		volumes = append(volumes, svc.CreateVolume(serviceName))
+		volumeMounts = append(volumeMounts, svc.CreateVolumeMounts(serviceName)...)
+	}
 
 	statefulset := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -125,7 +149,7 @@ func StatefulSet(
 							Args:                     args,
 							Image:                    instance.Spec.ContainerImage,
 							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-							VolumeMounts:             GetDBClusterVolumeMounts(instance.Name + PvcSuffixEtcOvn),
+							VolumeMounts:             volumeMounts,
 							Resources:                instance.Spec.Resources,
 							ReadinessProbe:           readinessProbe,
 							LivenessProbe:            livenessProbe,
@@ -169,7 +193,7 @@ func StatefulSet(
 			},
 		},
 	}
-	statefulset.Spec.Template.Spec.Volumes = GetDBClusterVolumes(instance.Name)
+	statefulset.Spec.Template.Spec.Volumes = volumes
 	// If possible two pods of the same service should not
 	// run on the same worker node. If this is not possible
 	// the get still created on the same worker node.
