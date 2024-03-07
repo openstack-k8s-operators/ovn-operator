@@ -759,7 +759,6 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 				return ctrl.Result{}, err
 			}
 
-			// Currently only IPv4 is supported
 			dnsIP, err := getPodIPInNetwork(ovnPod, instance.Namespace, instance.Spec.NetworkAttachment)
 			if err != nil {
 				return ctrl.Result{}, err
@@ -781,7 +780,6 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 		}
 	}
 	// dbAddress will contain ovsdbserver-(nb|sb).openstack.svc or empty
-	// IPv6 is not handled
 	scheme := "tcp"
 	if instance.Spec.TLS.Enabled() {
 		scheme = "ssl"
