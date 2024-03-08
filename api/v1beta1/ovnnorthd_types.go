@@ -75,6 +75,11 @@ type OVNNorthdSpecCore struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// TLS - Parameters related to TLS
 	TLS tls.SimpleService `json:"tls,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=1
+	// NThreads sets number of threads used for building logical flows
+	NThreads *int32 `json:"nThreads"`
 }
 
 // OVNNorthdStatus defines the observed state of OVNNorthd

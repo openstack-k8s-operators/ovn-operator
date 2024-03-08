@@ -56,6 +56,12 @@ spec:
                 default: info
                 description: LogLevel - Set log level info, dbg, emer etc
                 type: string
+              nThreads:
+                default: 1
+                description: NThreads sets number of threads used for building logical
+                  flows
+                format: int32
+                type: integer
               networkAttachment:
                 description: NetworkAttachment is a NetworkAttachment resource name
                   to expose the service to the given network. If specified the IP
