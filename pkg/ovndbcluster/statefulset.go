@@ -133,8 +133,9 @@ func StatefulSet(
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
-			ServiceName: serviceName,
-			Replicas:    instance.Spec.Replicas,
+			ServiceName:         serviceName,
+			PodManagementPolicy: appsv1.ParallelPodManagement,
+			Replicas:            instance.Spec.Replicas,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: annotations,

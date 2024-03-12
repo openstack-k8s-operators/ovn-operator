@@ -27,6 +27,7 @@ import (
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -157,6 +158,16 @@ var _ = Describe("OVNDBCluster controller", func() {
 			Expect(*(OVNDBCluster.Spec.Replicas)).Should(Equal(int32(1)))
 			Expect(OVNDBCluster.Spec.LogLevel).Should(Equal("info"))
 			Expect(OVNDBCluster.Spec.DBType).Should(Equal(ovnv1.NBDBType))
+		})
+
+		It("should have the StatefulSet with podManagementPolicy set to Parallel", func() {
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-nb",
+			}
+			ss := th.GetStatefulSet(statefulSetName)
+
+			Expect(ss.Spec.PodManagementPolicy).Should(Equal(appsv1.ParallelPodManagement))
 		})
 
 		It("should have the Status fields initialized", func() {
