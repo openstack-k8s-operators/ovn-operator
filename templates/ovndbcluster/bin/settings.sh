@@ -25,10 +25,10 @@ DB_SCHEME="ptcp"
 exec 1>/proc/1/fd/1 2>&1
 
 if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
-    while [ ! -S /tmp/ovn${DB_TYPE}_db.ctl ]; do
-        echo DB Server Not ready, waiting
-        sleep 1
-    done
+    # The command will wait until the daemon is connected and the DB is available
+    # All following ctl invocation will use the local DB replica in the daemon
+    export OVN_${DB_TYPE^^}_DAEMON=$(ovn-${DB_TYPE}ctl --detach)
+    daemon_var=OVN_${DB_TYPE^^}_DAEMON
 
     PODNAME=$(hostname -f | cut -d. -f1,2)
     PODIPV6=$(grep "${PODNAME}" /etc/hosts | grep ':' | cut -d$'\t' -f1)
@@ -48,4 +48,7 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
         ovn-${DB_TYPE}ctl --no-leader-only --inactivity-probe={{ .OVN_INACTIVITY_PROBE }} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
     done
     ovn-${DB_TYPE}ctl --no-leader-only list connection
+
+    # The daemon is no longer needed, kill it
+    kill $(echo ${!daemon_var} | sed "s/.*ovn-${DB_TYPE}ctl\.\([0-9]*\).*/\1/")
 fi
