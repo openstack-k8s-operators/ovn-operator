@@ -131,14 +131,11 @@ func DaemonSet(
 	}
 
 	ovnControllerCmd = []string{
-		"/bin/bash", "-c",
+		"/usr/local/bin/container-scripts/net_setup.sh && ovn-controller",
 	}
 	ovnControllerArgs = []string{
 		strings.Join(
-			append(
-				[]string{"/usr/local/bin/container-scripts/net_setup.sh && ovn-controller"},
-				append(ovnControllerTLSArgs, "--pidfile", "unix:/run/openvswitch/db.sock")...,
-			),
+			append(ovnControllerTLSArgs, "--pidfile", "unix:/run/openvswitch/db.sock")...,
 			" ",
 		),
 	}
