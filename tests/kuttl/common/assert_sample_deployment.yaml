@@ -330,3 +330,15 @@ commands:
         done
 
         exit 0
+---
+# check that the chassis is registered in sb db
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+commands:
+    - script: |
+        controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller -o name|head -1)
+        host=$(oc rsh -n $NAMESPACE ${controller_pod} ovs-vsctl get open . external_ids:hostname)
+
+        sb_pod=$(oc get pod -n $NAMESPACE -l service=ovsdbserver-sb -o name|head -1)
+        oc rsh -n $NAMESPACE ${sb_pod} ovn-sbctl list chassis | grep -q ${host} || exit 1
+        exit 0

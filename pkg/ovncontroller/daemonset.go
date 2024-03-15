@@ -108,9 +108,8 @@ func DaemonSet(
 	ovsDbArgs = []string{
 		"--single-child", "--", "/usr/local/bin/container-scripts/start-ovsdb-server.sh",
 	}
-	// sleep is required as workaround for https://github.com/kubernetes/kubernetes/issues/39170
 	ovsDbPreStopCmd = []string{
-		"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovs-vswitchd", ";", "sleep", "2",
+		"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovs-vswitchd",
 	}
 
 	ovsVswitchdLivenessProbe.Exec = &corev1.ExecAction{
@@ -125,9 +124,8 @@ func DaemonSet(
 	ovsVswitchdArgs = []string{
 		"--pidfile", "--mlockall",
 	}
-	// sleep is required as workaround for https://github.com/kubernetes/kubernetes/issues/39170
 	ovsVswitchdPreStopCmd = []string{
-		"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovsdb-server", ";", "sleep", "2",
+		"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovsdb-server",
 	}
 
 	ovnControllerCmd = []string{
@@ -142,9 +140,8 @@ func DaemonSet(
 			" ",
 		),
 	}
-	// sleep is required as workaround for https://github.com/kubernetes/kubernetes/issues/39170
 	ovnControllerPreStopCmd = []string{
-		"/usr/share/ovn/scripts/ovn-ctl", "stop_controller", ";", "sleep", "2",
+		"/usr/share/ovn/scripts/ovn-ctl", "stop_controller",
 	}
 
 	envVars := map[string]env.Setter{}
