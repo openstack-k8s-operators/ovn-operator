@@ -68,6 +68,7 @@ var _ = Describe("OVNNorthd controller", func() {
 
 		When("OVNDBCluster instances are available", func() {
 			It("should create a Deployment with the ovn connection CLI args set based on the OVNDBCluster", func() {
+				OVNNorthd := ovn.GetOVNNorthd(ovnNorthdName)
 				dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 				DeferCleanup(DeleteOVNDBClusters, dbs)
 
@@ -78,7 +79,9 @@ var _ = Describe("OVNNorthd controller", func() {
 
 				depl := th.GetDeployment(deplName)
 				Expect(depl.Spec.Template.Spec.Containers[0].Args).To(Equal([]string{
-					"-vfile:off", "-vconsole:info",
+					"-vfile:off",
+					"-vconsole:info",
+					fmt.Sprintf("--n-threads=%d", *OVNNorthd.Spec.NThreads),
 					"--ovnnb-db=tcp:ovsdbserver-nb-0." + namespace + ".svc.cluster.local:6641",
 					"--ovnsb-db=tcp:ovsdbserver-sb-0." + namespace + ".svc.cluster.local:6642",
 				}))

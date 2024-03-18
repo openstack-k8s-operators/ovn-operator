@@ -59,6 +59,7 @@ func Deployment(
 	args := []string{
 		"-vfile:off",
 		fmt.Sprintf("-vconsole:%s", instance.Spec.LogLevel),
+		fmt.Sprintf("--n-threads=%d", *instance.Spec.NThreads),
 		fmt.Sprintf("--ovnnb-db=%s", nbEndpoint),
 		fmt.Sprintf("--ovnsb-db=%s", sbEndpoint),
 	}
