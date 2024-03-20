@@ -115,6 +115,19 @@ func StatefulSet(
 		volumeMounts = append(volumeMounts, svc.CreateVolumeMounts(serviceName)...)
 	}
 
+	// NOTE(ihar) ovndb pods leave the raft cluster on delete; it's important
+	// that they are not interrupted and have a good chance to propagate the
+	// leave message to the leader. In general case, this should happen near
+	// instantly. But if the leader pod is itself down / restarting, it may take
+	// it some time to recover and start processing messages from other members.
+	// The default value of 30 seconds is sometimes not enough. In local testing,
+	// 60 seconds seems enough, but we'll take a significantly more conservative
+	// approach here and set it to 5 minutes.
+	//
+	// If the leader is not back even after 5 minutes, we'll give up
+	// nevertheless, and manual cluster recovery will be needed.
+	terminationGracePeriodSeconds := int64(300)
+
 	statefulset := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
@@ -133,7 +146,8 @@ func StatefulSet(
 					Labels:      labels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: instance.RbacResourceName(),
+					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
+					ServiceAccountName:            instance.RbacResourceName(),
 					Containers: []corev1.Container{
 						{
 							Name:                     serviceName,
