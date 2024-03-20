@@ -501,7 +501,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 				return *th.GetConfigMap(scriptsCM)
 			}, timeout, interval).ShouldNot(BeNil())
 
-			Expect(th.GetConfigMap(scriptsCM).Data["settings.sh"]).Should(
+			Expect(th.GetConfigMap(scriptsCM).Data["setup.sh"]).Should(
 				ContainSubstring("DB_SCHEME=\"pssl\""))
 			Expect(th.GetConfigMap(scriptsCM).Data["setup.sh"]).Should(And(
 				ContainSubstring("-db-ssl-key="),

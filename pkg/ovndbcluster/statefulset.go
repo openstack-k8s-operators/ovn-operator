@@ -56,7 +56,6 @@ func StatefulSet(
 	}
 
 	var preStopCmd []string
-	var postStartCmd []string
 	cmd := []string{"/usr/bin/dumb-init"}
 	args := []string{"--single-child", "--", "/bin/bash", "-c", ServiceCommand}
 	//
@@ -69,19 +68,11 @@ func StatefulSet(
 	}
 	readinessProbe.Exec = livenessProbe.Exec
 
-	postStartCmd = []string{
-		"/usr/local/bin/container-scripts/settings.sh",
-	}
 	preStopCmd = []string{
 		"/usr/local/bin/container-scripts/cleanup.sh",
 	}
 
 	lifecycle := &corev1.Lifecycle{
-		PostStart: &corev1.LifecycleHandler{
-			Exec: &corev1.ExecAction{
-				Command: postStartCmd,
-			},
-		},
 		PreStop: &corev1.LifecycleHandler{
 			Exec: &corev1.ExecAction{
 				Command: preStopCmd,
