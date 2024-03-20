@@ -82,8 +82,7 @@ $@ ${OPTS} run_${DB_TYPE}_ovsdb -- -vfile:off &
 if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
     # The command will wait until the daemon is connected and the DB is available
     # All following ctl invocation will use the local DB replica in the daemon
-    export OVN_${DB_TYPE^^}_DAEMON=$(ovn-${DB_TYPE}ctl --detach)
-    daemon_var=OVN_${DB_TYPE^^}_DAEMON
+    export OVN_${DB_TYPE^^}_DAEMON=$(ovn-${DB_TYPE}ctl --pidfile --detach)
 
 {{- if .TLS }}
     ovn-${DB_TYPE}ctl --no-leader-only set-ssl {{.OVNDB_KEY_PATH}} {{.OVNDB_CERT_PATH}} {{.OVNDB_CACERT_PATH}}
@@ -96,7 +95,8 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
     ovn-${DB_TYPE}ctl --no-leader-only list connection
 
     # The daemon is no longer needed, kill it
-    kill $(echo ${!daemon_var} | sed "s/.*ovn-${DB_TYPE}ctl\.\([0-9]*\).*/\1/")
+    kill $(cat $OVN_RUNDIR/ovn-${DB_TYPE}ctl.pid)
+    unset OVN_${DB_TYPE^^}_DAEMON
 fi
 
 wait
