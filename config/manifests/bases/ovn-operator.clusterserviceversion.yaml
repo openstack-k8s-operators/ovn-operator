@@ -17,16 +17,28 @@ spec:
       displayName: OVNController
       kind: OVNController
       name: ovncontrollers.ovn.openstack.org
+      specDescriptors:
+      - description: TLS - Parameters related to TLS
+        displayName: TLS
+        path: tls
       version: v1beta1
     - description: OVNDBCluster is the Schema for the ovndbclusters API
       displayName: OVNDBCluster
       kind: OVNDBCluster
       name: ovndbclusters.ovn.openstack.org
+      specDescriptors:
+      - description: TLS - Parameters related to TLS
+        displayName: TLS
+        path: tls
       version: v1beta1
     - description: OVNNorthd is the Schema for the ovnnorthds API
       displayName: OVNNorthd
       kind: OVNNorthd
       name: ovnnorthds.ovn.openstack.org
+      specDescriptors:
+      - description: TLS - Parameters related to TLS
+        displayName: TLS
+        path: tls
       version: v1beta1
   description: OVN Operator
   displayName: OVN Operator
