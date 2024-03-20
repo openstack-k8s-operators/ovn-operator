@@ -79,7 +79,9 @@ set "$@" --ovn-${DB_TYPE}-logfile=/dev/null
 # don't log to file (we already log to console)
 $@ ${OPTS} run_${DB_TYPE}_ovsdb -- -vfile:off &
 
+# Once the database is running, we will attempt to configure db options
 CTLCMD="ovn-${DB_TYPE}ctl --no-leader-only"
+
 if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
     # The command will wait until the daemon is connected and the DB is available
     # All following ctl invocation will use the local DB replica in the daemon
@@ -90,6 +92,19 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
     ${CTLCMD} set-connection ${DB_SCHEME}:${DB_PORT}:0.0.0.0
 {{- end }}
 
+    # OVN does not support setting inactivity-probe through --remote cli arg so
+    # we have to set it after database is up.
+    #
+    # In theory, ovsdb.local-config(5) could be used to configure inactivity
+    # probe using a local ovsdb-server. But the future of this database is
+    # unclear, and it was largely abandoned by the community in mid-flight, so
+    # no tools exist to configure connections using this database. It may even
+    # be that this scheme will be abandoned in the future, because its features
+    # are covered by ovs text config file support added in latest ovs releases.
+    #
+    # TODO: Consider migrating inactivity probe setting  to config files when
+    # we update to ovs 3.3. See --config-file in ovsdb-server(1) for more
+    # details.
     while [ "$(${CTLCMD} get connection . inactivity_probe)" != "{{ .OVN_INACTIVITY_PROBE }}" ]; do
         ${CTLCMD} --inactivity-probe={{ .OVN_INACTIVITY_PROBE }} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
     done
