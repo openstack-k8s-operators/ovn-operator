@@ -34,7 +34,6 @@ else
 fi
 
 if [[ "$(hostname)" != "{{ .SERVICE_NAME }}-0" ]]; then
-    rm -f /etc/ovn/ovn${DB_TYPE}_db.db
     #ovsdb-tool join-cluster /etc/ovn/ovn${DB_TYPE}_db.db ${DB_NAME} tcp:$(hostname).{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local:${RAFT_PORT} tcp:{{ .SERVICE_NAME }}-0.{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local:${RAFT_PORT}
     OPTS="--db-${DB_TYPE}-cluster-remote-addr={{ .SERVICE_NAME }}-0.{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local --db-${DB_TYPE}-cluster-remote-port=${RAFT_PORT}"
 fi

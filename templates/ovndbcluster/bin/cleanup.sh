@@ -22,4 +22,17 @@ if [[ "${DB_TYPE}" == "sb" ]]; then
 fi
 if [[ "$(hostname)" != "{{ .SERVICE_NAME }}-0" ]]; then
     ovs-appctl -t /tmp/ovn${DB_TYPE}_db.ctl cluster/leave ${DB_NAME}
+
+    # wait for when the leader confirms we left the cluster
+    while true; do
+        # TODO: is there a better way to detect the cluster left state?..
+        STATUS=$(ovs-appctl -t /tmp/ovn${DB_TYPE}_db.ctl cluster/status ${DB_NAME} | grep Status: | awk -e '{print $2}')
+        if [ -z "$STATUS" -o "x$STATUS" = "xleft cluster" ]; then
+            break
+        fi
+        sleep 1
+    done
+
+    # now that we left, the database file is no longer valid
+    rm -f /etc/ovn/ovn${DB_TYPE}_db.db
 fi
