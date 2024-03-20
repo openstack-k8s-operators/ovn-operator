@@ -38,6 +38,10 @@ else
     DB_ADDR="[::]"
 fi
 
+# The --cluster-remote-addr / --cluster-local-addr options will have effect
+# only on bootstrap, when we assume the leadership role for the first pod.
+# Later, cli arguments are still passed, but raft membership hints are already
+# stored in the databases, and hence the arguments are of no effect.
 if [[ "$(hostname)" != "{{ .SERVICE_NAME }}-0" ]]; then
     #ovsdb-tool join-cluster /etc/ovn/ovn${DB_TYPE}_db.db ${DB_NAME} tcp:$(hostname).{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local:${RAFT_PORT} tcp:{{ .SERVICE_NAME }}-0.{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local:${RAFT_PORT}
     OPTS="--db-${DB_TYPE}-cluster-remote-addr={{ .SERVICE_NAME }}-0.{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local --db-${DB_TYPE}-cluster-remote-port=${RAFT_PORT}"
@@ -82,6 +86,9 @@ $@ ${OPTS} run_${DB_TYPE}_ovsdb -- -vfile:off &
 # Once the database is running, we will attempt to configure db options
 CTLCMD="ovn-${DB_TYPE}ctl --no-leader-only"
 
+# Nothing special about the first pod, we just know that it always exists with
+# replicas > 0 and use it for configuration. In theory, this could be executed
+# in any other pod.
 if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
     # The command will wait until the daemon is connected and the DB is available
     # All following ctl invocation will use the local DB replica in the daemon

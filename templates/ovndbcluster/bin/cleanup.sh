@@ -20,6 +20,9 @@ DB_TYPE="{{ .DB_TYPE }}"
 if [[ "${DB_TYPE}" == "sb" ]]; then
     DB_NAME="OVN_Southbound"
 fi
+
+# There is nothing special about -0 pod, except that it's always guaranteed to
+# exist, assuming any replicas are ordered.
 if [[ "$(hostname)" != "{{ .SERVICE_NAME }}-0" ]]; then
     ovs-appctl -t /tmp/ovn${DB_TYPE}_db.ctl cluster/leave ${DB_NAME}
 
@@ -32,7 +35,12 @@ if [[ "$(hostname)" != "{{ .SERVICE_NAME }}-0" ]]; then
         fi
         sleep 1
     done
+fi
 
+# If replicas are 0 and *all* pods are removed, we still want to retain the
+# database with its cid/sid for when the cluster is scaled back to > 0, so
+# leaving the database file intact for -0 pod.
+if [[ "$(hostname)" != "{{ .SERVICE_NAME }}-0" ]]; then
     # now that we left, the database file is no longer valid
     rm -f /etc/ovn/ovn${DB_TYPE}_db.db
 fi
