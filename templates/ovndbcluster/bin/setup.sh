@@ -79,20 +79,21 @@ set "$@" --ovn-${DB_TYPE}-logfile=/dev/null
 # don't log to file (we already log to console)
 $@ ${OPTS} run_${DB_TYPE}_ovsdb -- -vfile:off &
 
+CTLCMD="ovn-${DB_TYPE}ctl --no-leader-only"
 if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
     # The command will wait until the daemon is connected and the DB is available
     # All following ctl invocation will use the local DB replica in the daemon
-    export OVN_${DB_TYPE^^}_DAEMON=$(ovn-${DB_TYPE}ctl --pidfile --detach)
+    export OVN_${DB_TYPE^^}_DAEMON=$(${CTLCMD} --pidfile --detach)
 
 {{- if .TLS }}
-    ovn-${DB_TYPE}ctl --no-leader-only set-ssl {{.OVNDB_KEY_PATH}} {{.OVNDB_CERT_PATH}} {{.OVNDB_CACERT_PATH}}
-    ovn-${DB_TYPE}ctl --no-leader-only set-connection ${DB_SCHEME}:${DB_PORT}:0.0.0.0
+    ${CTLCMD} set-ssl {{.OVNDB_KEY_PATH}} {{.OVNDB_CERT_PATH}} {{.OVNDB_CACERT_PATH}}
+    ${CTLCMD} set-connection ${DB_SCHEME}:${DB_PORT}:0.0.0.0
 {{- end }}
 
-    while [ "$(ovn-${DB_TYPE}ctl --no-leader-only get connection . inactivity_probe)" != "{{ .OVN_INACTIVITY_PROBE }}" ]; do
-        ovn-${DB_TYPE}ctl --no-leader-only --inactivity-probe={{ .OVN_INACTIVITY_PROBE }} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
+    while [ "$(${CTLCMD} get connection . inactivity_probe)" != "{{ .OVN_INACTIVITY_PROBE }}" ]; do
+        ${CTLCMD} --inactivity-probe={{ .OVN_INACTIVITY_PROBE }} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
     done
-    ovn-${DB_TYPE}ctl --no-leader-only list connection
+    ${CTLCMD} list connection
 
     # The daemon is no longer needed, kill it
     kill $(cat $OVN_RUNDIR/ovn-${DB_TYPE}ctl.pid)
