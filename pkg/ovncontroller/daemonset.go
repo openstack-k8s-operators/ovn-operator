@@ -164,13 +164,6 @@ func CreateOVSDaemonSet(
 			"bond/show",
 		},
 	}
-	containerImages := []string{instance.Spec.OvsContainerImage, instance.Spec.OvsContainerImage}
-	containerNames := []string{"ovsdb-server", "ovs-vswitchd"}
-	containerCmds := [][]string{{"/usr/bin/dumb-init"}, {"/bin/bash", "-c"}}
-	containerArgs := [][]string{{"--single-child", "--", "/usr/local/bin/container-scripts/start-ovsdb-server.sh"}, {"/usr/local/bin/container-scripts/net_setup.sh && /usr/sbin/ovs-vswitchd --pidfile", "--mlockall"}}
-	preStopCmds := [][]string{{"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovs-vswitchd"}, {"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovsdb-server"}}
-	livenessProbes := []*corev1.Probe{ovsDbLivenessProbe, ovsVswitchdLivenessProbe}
-	volumeMounts := [][]corev1.VolumeMount{append(GetOvsDbVolumeMounts(), commonVolumeMounts...), append(GetVswitchdVolumeMounts(), commonVolumeMounts...)}
 
 	runAsUser := int64(0)
 	privileged := true
@@ -178,20 +171,19 @@ func CreateOVSDaemonSet(
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 
-	containers := []corev1.Container{}
-	for i, containername := range containerNames {
-		container := corev1.Container{
-			Name:    containername,
-			Command: containerCmds[i],
-			Args:    containerArgs[i],
+	containers := []corev1.Container{
+		{
+			Name:    "ovsdb-server",
+			Command: []string{"/usr/bin/dumb-init"},
+			Args:    []string{"--single-child", "--", "/usr/local/bin/container-scripts/start-ovsdb-server.sh"},
 			Lifecycle: &corev1.Lifecycle{
 				PreStop: &corev1.LifecycleHandler{
 					Exec: &corev1.ExecAction{
-						Command: preStopCmds[i],
+						Command: []string{"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovs-vswitchd"},
 					},
 				},
 			},
-			Image: containerImages[i],
+			Image: instance.Spec.OvsContainerImage,
 			SecurityContext: &corev1.SecurityContext{
 				Capabilities: &corev1.Capabilities{
 					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
@@ -201,14 +193,35 @@ func CreateOVSDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts:             volumeMounts[i],
+			VolumeMounts:             append(GetOvsDbVolumeMounts(), commonVolumeMounts...),
 			Resources:                instance.Spec.Resources,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-		}
-		if len(livenessProbes) > i {
-			container.LivenessProbe = livenessProbes[i]
-		}
-		containers = append(containers, container)
+		},
+		{
+			Name:    "ovs-vswitchd",
+			Command: []string{"/bin/bash", "-c"},
+			Args:    []string{"/usr/local/bin/container-scripts/net_setup.sh && /usr/sbin/ovs-vswitchd --pidfile", "--mlockall"},
+			Lifecycle: &corev1.Lifecycle{
+				PreStop: &corev1.LifecycleHandler{
+					Exec: &corev1.ExecAction{
+						Command: []string{"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovsdb-server"},
+					},
+				},
+			},
+			Image: instance.Spec.OvsContainerImage,
+			SecurityContext: &corev1.SecurityContext{
+				Capabilities: &corev1.Capabilities{
+					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
+					Drop: []corev1.Capability{},
+				},
+				RunAsUser:  &runAsUser,
+				Privileged: &privileged,
+			},
+			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			VolumeMounts:             append(GetVswitchdVolumeMounts(), commonVolumeMounts...),
+			Resources:                instance.Spec.Resources,
+			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+		},
 	}
 
 	daemonset := &appsv1.DaemonSet{
