@@ -499,6 +499,7 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	// create Deployment - end
 
 	Log.Info("Reconciled Service successfully")
+	instance.Status.ObservedGeneration = instance.Generation
 	return ctrl.Result{}, nil
 }
 

@@ -125,6 +125,7 @@ func (th *TestHelper) GetOVNNorthd(name types.NamespacedName) *ovnv1.OVNNorthd {
 func (th *TestHelper) SimulateOVNNorthdReady(name types.NamespacedName) {
 	gomega.Eventually(func(g gomega.Gomega) {
 		service := th.GetOVNNorthd(name)
+		service.Status.ObservedGeneration = service.Generation
 		service.Status.Conditions.MarkTrue(condition.ReadyCondition, "Ready")
 		g.Expect(th.K8sClient.Status().Update(th.Ctx, service)).To(gomega.Succeed())
 	}, th.Timeout, th.Interval).Should(gomega.Succeed())
@@ -207,6 +208,7 @@ func (th *TestHelper) GetOVNDBCluster(name types.NamespacedName) *ovnv1.OVNDBClu
 func (th *TestHelper) SimulateOVNDBClusterReady(name types.NamespacedName) {
 	gomega.Eventually(func(g gomega.Gomega) {
 		service := th.GetOVNDBCluster(name)
+		service.Status.ObservedGeneration = service.Generation
 		service.Status.Conditions.MarkTrue(condition.ReadyCondition, "Ready")
 		g.Expect(th.K8sClient.Status().Update(th.Ctx, service)).To(gomega.Succeed())
 	}, th.Timeout, th.Interval).Should(gomega.Succeed())
@@ -289,6 +291,7 @@ func (th *TestHelper) GetOVNController(name types.NamespacedName) *ovnv1.OVNCont
 func (th *TestHelper) SimulateOVNControllerReady(name types.NamespacedName) {
 	gomega.Eventually(func(g gomega.Gomega) {
 		service := th.GetOVNController(name)
+		service.Status.ObservedGeneration = service.Generation
 		service.Status.Conditions.MarkTrue(condition.ReadyCondition, "Ready")
 		g.Expect(th.K8sClient.Status().Update(th.Ctx, service)).To(gomega.Succeed())
 	}, th.Timeout, th.Interval).Should(gomega.Succeed())

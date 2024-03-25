@@ -613,6 +613,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		instance.Status.RaftAddress = strings.Join(raftAddress, ",")
 	}
 	Log.Info("Reconciled Service successfully")
+	instance.Status.ObservedGeneration = instance.Generation
 	return ctrl.Result{}, nil
 }
 
