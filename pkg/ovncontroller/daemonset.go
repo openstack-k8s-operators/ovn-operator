@@ -198,7 +198,7 @@ func CreateOVSDaemonSet(
 		{
 			Name:    "ovs-vswitchd",
 			Command: []string{"/bin/bash", "-c"},
-			Args:    []string{"/usr/local/bin/container-scripts/net_setup.sh && /usr/sbin/ovs-vswitchd --pidfile", "--mlockall"},
+			Args:    []string{"/usr/local/bin/container-scripts/net_setup.sh && /usr/sbin/ovs-vswitchd --pidfile --mlockall"},
 			Lifecycle: &corev1.Lifecycle{
 				PreStop: &corev1.LifecycleHandler{
 					Exec: &corev1.ExecAction{
