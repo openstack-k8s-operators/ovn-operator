@@ -37,6 +37,9 @@ const (
 
 	// ServiceNameOvnController - ovn-controller service name
 	ServiceNameOvnController = "ovn-controller"
+
+	// ServiceNameOvs - ovn-controller-ovs service name
+	ServiceNameOvs = "ovn-controller-ovs"
 )
 
 // OVNControllerSpec defines the desired state of OVNController

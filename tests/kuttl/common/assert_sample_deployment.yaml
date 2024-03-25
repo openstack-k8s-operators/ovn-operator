@@ -225,7 +225,7 @@ metadata:
   annotations:
     openshift.io/scc: privileged
   labels:
-    service: ovn-controller
+    service: ovn-controller-ovs
   generateName: ovn-controller-ovs-
 status:
   phase: Running
