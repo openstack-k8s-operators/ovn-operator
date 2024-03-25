@@ -14,7 +14,6 @@ package ovncontroller
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
@@ -43,8 +42,11 @@ func CreateOVNDaemonSet(
 
 	ovnControllerVolumeMounts := append(GetOvnControllerVolumeMounts(), commonVolumeMounts...)
 
+	args := []string{
+		"ovn-controller --pidfile unix:/run/openvswitch/db.sock",
+	}
+
 	// add OVN dbs cert and CA
-	var ovnControllerTLSArgs []string
 	if instance.Spec.TLS.Enabled() {
 		svc := tls.Service{
 			SecretName: *instance.Spec.TLS.GenericService.SecretName,
@@ -54,29 +56,13 @@ func CreateOVNDaemonSet(
 		}
 		volumes = append(volumes, svc.CreateVolume(ovnv1.ServiceNameOvnController))
 		ovnControllerVolumeMounts = append(ovnControllerVolumeMounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOvnController)...)
-		ovnControllerTLSArgs = []string{
+
+		args = append(args, []string{
 			fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath),
 			fmt.Sprintf("--private-key=%s", ovn_common.OVNDbKeyPath),
 			fmt.Sprintf("--ca-cert=%s", ovn_common.OVNDbCaCertPath),
-		}
+		}...)
 	}
-
-	containerImages := []string{instance.Spec.OvnContainerImage}
-	containerNames := []string{"ovn-controller"}
-	containerCmds := [][]string{{"/bin/bash", "-c"}}
-	containerArgs := [][]string{{}}
-	containerArgs[0] = []string{
-		strings.Join(
-			append(
-				[]string{"ovn-controller"},
-				append(ovnControllerTLSArgs, "--pidfile", "unix:/run/openvswitch/db.sock")...,
-			),
-			" ",
-		),
-	}
-
-	preStopCmds := [][]string{{"/usr/share/ovn/scripts/ovn-ctl", "stop_controller"}}
-	volumeMounts := [][]corev1.VolumeMount{ovnControllerVolumeMounts}
 
 	runAsUser := int64(0)
 	privileged := true
@@ -84,20 +70,19 @@ func CreateOVNDaemonSet(
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 
-	containers := []corev1.Container{}
-	for i, containername := range containerNames {
-		container := corev1.Container{
-			Name:    containername,
-			Command: containerCmds[i],
-			Args:    containerArgs[i],
+	containers := []corev1.Container{
+		{
+			Name:    "ovn-controller",
+			Command: []string{"/bin/bash", "-c"},
+			Args:    args,
 			Lifecycle: &corev1.Lifecycle{
 				PreStop: &corev1.LifecycleHandler{
 					Exec: &corev1.ExecAction{
-						Command: preStopCmds[i],
+						Command: []string{"/usr/share/ovn/scripts/ovn-ctl", "stop_controller"},
 					},
 				},
 			},
-			Image: containerImages[i],
+			Image: instance.Spec.OvnContainerImage,
 			SecurityContext: &corev1.SecurityContext{
 				Capabilities: &corev1.Capabilities{
 					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
@@ -107,11 +92,10 @@ func CreateOVNDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts:             volumeMounts[i],
+			VolumeMounts:             ovnControllerVolumeMounts,
 			Resources:                instance.Spec.Resources,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-		}
-		containers = append(containers, container)
+		},
 	}
 
 	daemonset := &appsv1.DaemonSet{
