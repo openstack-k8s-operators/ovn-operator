@@ -32,15 +32,13 @@ func CreateOVNDaemonSet(
 	labels map[string]string,
 ) *appsv1.DaemonSet {
 	volumes := GetVolumes(instance.Name, instance.Namespace)
-	commonMounts := []corev1.VolumeMount{}
+	mounts := GetOvnControllerVolumeMounts()
 
 	// add CA bundle if defined
 	if instance.Spec.TLS.CaBundleSecretName != "" {
 		volumes = append(volumes, instance.Spec.TLS.CreateVolume())
-		commonMounts = append(commonMounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
+		mounts = append(mounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
 	}
-
-	mounts := append(GetOvnControllerVolumeMounts(), commonMounts...)
 
 	args := []string{
 		"ovn-controller --pidfile unix:/run/openvswitch/db.sock",
@@ -133,8 +131,6 @@ func CreateOVSDaemonSet(
 	labels map[string]string,
 	annotations map[string]string,
 ) *appsv1.DaemonSet {
-	volumes := GetVolumes(instance.Name, instance.Namespace)
-	commonMounts := []corev1.VolumeMount{}
 	//
 	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 	//
@@ -193,7 +189,7 @@ func CreateOVSDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts:             append(GetOvsDbVolumeMounts(), commonMounts...),
+			VolumeMounts:             GetOvsDbVolumeMounts(),
 			Resources:                instance.Spec.Resources,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		},
@@ -218,7 +214,7 @@ func CreateOVSDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts:             append(GetVswitchdVolumeMounts(), commonMounts...),
+			VolumeMounts:             GetVswitchdVolumeMounts(),
 			Resources:                instance.Spec.Resources,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		},
@@ -244,7 +240,7 @@ func CreateOVSDaemonSet(
 			},
 		},
 	}
-	daemonset.Spec.Template.Spec.Volumes = volumes
+	daemonset.Spec.Template.Spec.Volumes = GetVolumes(instance.Name, instance.Namespace)
 
 	if instance.Spec.NodeSelector != nil && len(instance.Spec.NodeSelector) > 0 {
 		daemonset.Spec.Template.Spec.NodeSelector = instance.Spec.NodeSelector
