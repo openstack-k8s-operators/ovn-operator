@@ -530,7 +530,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 
 	// Define a new DaemonSet object for OVNController
 	dset := daemonset.NewDaemonSet(
-		ovncontroller.CreateOVNDaemonSet(instance, inputHash, ovnServiceLabels, make(map[string]string)),
+		ovncontroller.CreateOVNDaemonSet(instance, inputHash, ovnServiceLabels),
 		time.Duration(5)*time.Second,
 	)
 
