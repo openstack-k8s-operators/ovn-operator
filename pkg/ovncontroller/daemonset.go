@@ -32,15 +32,15 @@ func CreateOVNDaemonSet(
 	labels map[string]string,
 ) *appsv1.DaemonSet {
 	volumes := GetVolumes(instance.Name, instance.Namespace)
-	commonVolumeMounts := []corev1.VolumeMount{}
+	commonMounts := []corev1.VolumeMount{}
 
 	// add CA bundle if defined
 	if instance.Spec.TLS.CaBundleSecretName != "" {
 		volumes = append(volumes, instance.Spec.TLS.CreateVolume())
-		commonVolumeMounts = append(commonVolumeMounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
+		commonMounts = append(commonMounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
 	}
 
-	ovnControllerVolumeMounts := append(GetOvnControllerVolumeMounts(), commonVolumeMounts...)
+	mounts := append(GetOvnControllerVolumeMounts(), commonMounts...)
 
 	args := []string{
 		"ovn-controller --pidfile unix:/run/openvswitch/db.sock",
@@ -55,7 +55,7 @@ func CreateOVNDaemonSet(
 			CaMount:    ptr.To(ovn_common.OVNDbCaCertPath),
 		}
 		volumes = append(volumes, svc.CreateVolume(ovnv1.ServiceNameOvnController))
-		ovnControllerVolumeMounts = append(ovnControllerVolumeMounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOvnController)...)
+		mounts = append(mounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOvnController)...)
 
 		args = append(args, []string{
 			fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath),
@@ -92,7 +92,7 @@ func CreateOVNDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts:             ovnControllerVolumeMounts,
+			VolumeMounts:             mounts,
 			Resources:                instance.Spec.Resources,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		},
@@ -134,7 +134,7 @@ func CreateOVSDaemonSet(
 	annotations map[string]string,
 ) *appsv1.DaemonSet {
 	volumes := GetVolumes(instance.Name, instance.Namespace)
-	commonVolumeMounts := []corev1.VolumeMount{}
+	commonMounts := []corev1.VolumeMount{}
 	//
 	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 	//
@@ -193,7 +193,7 @@ func CreateOVSDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts:             append(GetOvsDbVolumeMounts(), commonVolumeMounts...),
+			VolumeMounts:             append(GetOvsDbVolumeMounts(), commonMounts...),
 			Resources:                instance.Spec.Resources,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		},
@@ -218,7 +218,7 @@ func CreateOVSDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts:             append(GetVswitchdVolumeMounts(), commonVolumeMounts...),
+			VolumeMounts:             append(GetVswitchdVolumeMounts(), commonMounts...),
 			Resources:                instance.Spec.Resources,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		},
