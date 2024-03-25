@@ -113,11 +113,11 @@ func CreateOVNDaemonSet(
 				Spec: corev1.PodSpec{
 					ServiceAccountName: instance.RbacResourceName(),
 					Containers:         containers,
+					Volumes:            volumes,
 				},
 			},
 		},
 	}
-	daemonset.Spec.Template.Spec.Volumes = volumes
 
 	if instance.Spec.NodeSelector != nil && len(instance.Spec.NodeSelector) > 0 {
 		daemonset.Spec.Template.Spec.NodeSelector = instance.Spec.NodeSelector
@@ -239,11 +239,11 @@ func CreateOVSDaemonSet(
 				Spec: corev1.PodSpec{
 					ServiceAccountName: instance.RbacResourceName(),
 					Containers:         containers,
+					Volumes:            GetVolumes(instance.Name, instance.Namespace),
 				},
 			},
 		},
 	}
-	daemonset.Spec.Template.Spec.Volumes = GetVolumes(instance.Name, instance.Namespace)
 
 	if instance.Spec.NodeSelector != nil && len(instance.Spec.NodeSelector) > 0 {
 		daemonset.Spec.Template.Spec.NodeSelector = instance.Spec.NodeSelector
