@@ -528,14 +528,9 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		return ctrlResult, nil
 	}
 
-	// Define a new DaemonSet object for the OVN-Controller
-	ovnDaemonSet, err := ovncontroller.CreateOVNDaemonSet(instance, inputHash, ovnServiceLabels, make(map[string]string))
-	if err != nil {
-		Log.Error(err, "Failed to create OVNController DaemonSet")
-		return ctrl.Result{}, err
-	}
+	// Define a new DaemonSet object for OVNController
 	dset := daemonset.NewDaemonSet(
-		ovnDaemonSet,
+		ovncontroller.CreateOVNDaemonSet(instance, inputHash, ovnServiceLabels, make(map[string]string)),
 		time.Duration(5)*time.Second,
 	)
 
@@ -560,14 +555,9 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	instance.Status.DesiredNumberScheduled = dset.GetDaemonSet().Status.DesiredNumberScheduled
 	instance.Status.NumberReady = dset.GetDaemonSet().Status.NumberReady
 
-	// Define a new DaemonSet object for the OVS (ovsdbserver+ovsvswitchd)
-	ovsDaemonSet, err := ovncontroller.CreateOVSDaemonSet(instance, inputHash, ovsServiceLabels, serviceAnnotations)
-	if err != nil {
-		Log.Error(err, "Failed to create OVS DaemonSet")
-		return ctrl.Result{}, err
-	}
+	// Define a new DaemonSet object for OVS (ovsdb-server + ovs-vswitchd)
 	ovsdset := daemonset.NewDaemonSet(
-		ovsDaemonSet,
+		ovncontroller.CreateOVSDaemonSet(instance, inputHash, ovsServiceLabels, serviceAnnotations),
 		time.Duration(5)*time.Second,
 	)
 
