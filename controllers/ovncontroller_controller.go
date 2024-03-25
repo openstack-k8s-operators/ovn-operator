@@ -688,7 +688,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		}
 		instance.Status.Conditions.MarkTrue(condition.ServiceConfigReadyCondition, condition.ServiceConfigReadyMessage)
 	} else {
-		Log.Info("OVS DaemonSets not ready yet. Configuration job cannot be started.")
+		Log.Info("OVS DaemonSet not ready yet. Configuration job cannot be started.")
 		return ctrl.Result{Requeue: true}, nil
 	}
 	// create OVN Config Job - end
