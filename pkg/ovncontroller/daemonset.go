@@ -149,7 +149,6 @@ func CreateOVNDaemonSet(
 		}
 	}
 
-	var name string
 	var containerNames []string
 	var containerImages []string
 	var containerCmds [][]string
@@ -158,7 +157,6 @@ func CreateOVNDaemonSet(
 	var livenessProbes []*corev1.Probe
 	var volumeMounts [][]corev1.VolumeMount
 
-	name = "ovn-controller"
 	containerImages = []string{instance.Spec.OvnContainerImage}
 	containerNames = []string{"ovn-controller"}
 	containerCmds = [][]string{{"/bin/bash", "-c"}}
@@ -177,7 +175,7 @@ func CreateOVNDaemonSet(
 	livenessProbes = nil
 	volumeMounts = [][]corev1.VolumeMount{ovnControllerVolumeMounts}
 
-	return GetDaemonSetSpec(instance, name, containerImages, volumeMounts, volumes, configHash, labels, nil, containerNames, containerCmds, containerArgs, preStopCmds, livenessProbes)
+	return GetDaemonSetSpec(instance, ovnv1.ServiceNameOvnController, containerImages, volumeMounts, volumes, configHash, labels, nil, containerNames, containerCmds, containerArgs, preStopCmds, livenessProbes)
 }
 
 func CreateOVSDaemonSet(
@@ -205,7 +203,6 @@ func CreateOVSDaemonSet(
 		InitialDelaySeconds: 3,
 	}
 
-	var name string
 	var containerNames []string
 	var containerImages []string
 	var containerCmds [][]string
@@ -226,7 +223,6 @@ func CreateOVSDaemonSet(
 			"bond/show",
 		},
 	}
-	name = "ovn-controller-ovs"
 	containerImages = []string{instance.Spec.OvsContainerImage, instance.Spec.OvsContainerImage}
 	containerNames = []string{"ovsdb-server", "ovs-vswitchd"}
 	containerCmds = [][]string{{"/usr/bin/dumb-init"}, {"/bin/bash", "-c"}}
@@ -235,5 +231,5 @@ func CreateOVSDaemonSet(
 	livenessProbes = []*corev1.Probe{ovsDbLivenessProbe, ovsVswitchdLivenessProbe}
 	volumeMounts = [][]corev1.VolumeMount{append(GetOvsDbVolumeMounts(), commonVolumeMounts...), append(GetVswitchdVolumeMounts(), commonVolumeMounts...)}
 
-	return GetDaemonSetSpec(instance, name, containerImages, volumeMounts, volumes, configHash, labels, annotations, containerNames, containerCmds, containerArgs, preStopCmds, livenessProbes)
+	return GetDaemonSetSpec(instance, ovnv1.ServiceNameOvs, containerImages, volumeMounts, volumes, configHash, labels, annotations, containerNames, containerCmds, containerArgs, preStopCmds, livenessProbes)
 }
