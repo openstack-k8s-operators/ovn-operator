@@ -119,7 +119,6 @@ func CreateOVNDaemonSet(
 	instance *ovnv1.OVNController,
 	configHash string,
 	labels map[string]string,
-	annotations map[string]string,
 ) *appsv1.DaemonSet {
 	volumes := GetVolumes(instance.Name, instance.Namespace)
 	commonVolumeMounts := []corev1.VolumeMount{}
@@ -178,7 +177,7 @@ func CreateOVNDaemonSet(
 	livenessProbes = nil
 	volumeMounts = [][]corev1.VolumeMount{ovnControllerVolumeMounts}
 
-	return GetDaemonSetSpec(instance, name, containerImages, volumeMounts, volumes, configHash, labels, annotations, containerNames, containerCmds, containerArgs, preStopCmds, livenessProbes)
+	return GetDaemonSetSpec(instance, name, containerImages, volumeMounts, volumes, configHash, labels, nil, containerNames, containerCmds, containerArgs, preStopCmds, livenessProbes)
 }
 
 func CreateOVSDaemonSet(
