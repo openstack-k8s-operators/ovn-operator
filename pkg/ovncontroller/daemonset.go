@@ -34,12 +34,6 @@ func CreateOVNDaemonSet(
 	volumes := GetVolumes(instance.Name, instance.Namespace)
 	mounts := GetOvnControllerVolumeMounts()
 
-	// add CA bundle if defined
-	if instance.Spec.TLS.CaBundleSecretName != "" {
-		volumes = append(volumes, instance.Spec.TLS.CreateVolume())
-		mounts = append(mounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
-	}
-
 	args := []string{
 		"ovn-controller --pidfile unix:/run/openvswitch/db.sock",
 	}
@@ -54,6 +48,12 @@ func CreateOVNDaemonSet(
 		}
 		volumes = append(volumes, svc.CreateVolume(ovnv1.ServiceNameOvnController))
 		mounts = append(mounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOvnController)...)
+
+		// add CA bundle if defined
+		if instance.Spec.TLS.CaBundleSecretName != "" {
+			volumes = append(volumes, instance.Spec.TLS.CreateVolume())
+			mounts = append(mounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
+		}
 
 		args = append(args, []string{
 			fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath),
