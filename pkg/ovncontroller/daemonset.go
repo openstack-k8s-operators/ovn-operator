@@ -27,94 +27,6 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-func GetDaemonSetSpec(
-	instance *ovnv1.OVNController,
-	name string,
-	images []string,
-	volumeMounts [][]corev1.VolumeMount,
-	volumes []corev1.Volume,
-	configHash string,
-	labels map[string]string,
-	annotations map[string]string,
-	containerNames []string,
-	containerCmds [][]string,
-	containerArgs [][]string,
-	preStopCmds [][]string,
-	livenessProbes []*corev1.Probe,
-) *appsv1.DaemonSet {
-
-	runAsUser := int64(0)
-	privileged := true
-
-	envVars := map[string]env.Setter{}
-	envVars["CONFIG_HASH"] = env.SetValue(configHash)
-
-	containers := []corev1.Container{}
-	for i, containername := range containerNames {
-		container := corev1.Container{
-			Name:    containername,
-			Command: containerCmds[i],
-			Args:    containerArgs[i],
-			Lifecycle: &corev1.Lifecycle{
-				PreStop: &corev1.LifecycleHandler{
-					Exec: &corev1.ExecAction{
-						Command: preStopCmds[i],
-					},
-				},
-			},
-			Image: images[i],
-			SecurityContext: &corev1.SecurityContext{
-				Capabilities: &corev1.Capabilities{
-					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
-					Drop: []corev1.Capability{},
-				},
-				RunAsUser:  &runAsUser,
-				Privileged: &privileged,
-			},
-			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts:             volumeMounts[i],
-			Resources:                instance.Spec.Resources,
-			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-		}
-		if livenessProbes != nil && len(livenessProbes) > i {
-			container.LivenessProbe = livenessProbes[i]
-		}
-		containers = append(containers, container)
-	}
-
-	daemonset := &appsv1.DaemonSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: instance.Namespace,
-		},
-		Spec: appsv1.DaemonSetSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: corev1.PodSpec{
-					ServiceAccountName: instance.RbacResourceName(),
-					Containers:         containers,
-				},
-			},
-		},
-	}
-	daemonset.Spec.Template.Spec.Volumes = volumes
-
-	if instance.Spec.NodeSelector != nil && len(instance.Spec.NodeSelector) > 0 {
-		daemonset.Spec.Template.Spec.NodeSelector = instance.Spec.NodeSelector
-	}
-
-	if annotations != nil && len(annotations) > 0 {
-		daemonset.Spec.Template.ObjectMeta.Annotations = annotations
-	}
-
-	return daemonset
-}
-
 func CreateOVNDaemonSet(
 	instance *ovnv1.OVNController,
 	configHash string,
@@ -154,7 +66,6 @@ func CreateOVNDaemonSet(
 	var containerCmds [][]string
 	var containerArgs [][]string
 	var preStopCmds [][]string
-	var livenessProbes []*corev1.Probe
 	var volumeMounts [][]corev1.VolumeMount
 
 	containerImages = []string{instance.Spec.OvnContainerImage}
@@ -172,10 +83,71 @@ func CreateOVNDaemonSet(
 	}
 
 	preStopCmds = [][]string{{"/usr/share/ovn/scripts/ovn-ctl", "stop_controller"}}
-	livenessProbes = nil
 	volumeMounts = [][]corev1.VolumeMount{ovnControllerVolumeMounts}
 
-	return GetDaemonSetSpec(instance, ovnv1.ServiceNameOvnController, containerImages, volumeMounts, volumes, configHash, labels, nil, containerNames, containerCmds, containerArgs, preStopCmds, livenessProbes)
+	runAsUser := int64(0)
+	privileged := true
+
+	envVars := map[string]env.Setter{}
+	envVars["CONFIG_HASH"] = env.SetValue(configHash)
+
+	containers := []corev1.Container{}
+	for i, containername := range containerNames {
+		container := corev1.Container{
+			Name:    containername,
+			Command: containerCmds[i],
+			Args:    containerArgs[i],
+			Lifecycle: &corev1.Lifecycle{
+				PreStop: &corev1.LifecycleHandler{
+					Exec: &corev1.ExecAction{
+						Command: preStopCmds[i],
+					},
+				},
+			},
+			Image: containerImages[i],
+			SecurityContext: &corev1.SecurityContext{
+				Capabilities: &corev1.Capabilities{
+					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
+					Drop: []corev1.Capability{},
+				},
+				RunAsUser:  &runAsUser,
+				Privileged: &privileged,
+			},
+			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			VolumeMounts:             volumeMounts[i],
+			Resources:                instance.Spec.Resources,
+			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+		}
+		containers = append(containers, container)
+	}
+
+	daemonset := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ovnv1.ServiceNameOvnController,
+			Namespace: instance.Namespace,
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					ServiceAccountName: instance.RbacResourceName(),
+					Containers:         containers,
+				},
+			},
+		},
+	}
+	daemonset.Spec.Template.Spec.Volumes = volumes
+
+	if instance.Spec.NodeSelector != nil && len(instance.Spec.NodeSelector) > 0 {
+		daemonset.Spec.Template.Spec.NodeSelector = instance.Spec.NodeSelector
+	}
+
+	return daemonset
 }
 
 func CreateOVSDaemonSet(
@@ -231,5 +203,74 @@ func CreateOVSDaemonSet(
 	livenessProbes = []*corev1.Probe{ovsDbLivenessProbe, ovsVswitchdLivenessProbe}
 	volumeMounts = [][]corev1.VolumeMount{append(GetOvsDbVolumeMounts(), commonVolumeMounts...), append(GetVswitchdVolumeMounts(), commonVolumeMounts...)}
 
-	return GetDaemonSetSpec(instance, ovnv1.ServiceNameOvs, containerImages, volumeMounts, volumes, configHash, labels, annotations, containerNames, containerCmds, containerArgs, preStopCmds, livenessProbes)
+	runAsUser := int64(0)
+	privileged := true
+
+	envVars := map[string]env.Setter{}
+	envVars["CONFIG_HASH"] = env.SetValue(configHash)
+
+	containers := []corev1.Container{}
+	for i, containername := range containerNames {
+		container := corev1.Container{
+			Name:    containername,
+			Command: containerCmds[i],
+			Args:    containerArgs[i],
+			Lifecycle: &corev1.Lifecycle{
+				PreStop: &corev1.LifecycleHandler{
+					Exec: &corev1.ExecAction{
+						Command: preStopCmds[i],
+					},
+				},
+			},
+			Image: containerImages[i],
+			SecurityContext: &corev1.SecurityContext{
+				Capabilities: &corev1.Capabilities{
+					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
+					Drop: []corev1.Capability{},
+				},
+				RunAsUser:  &runAsUser,
+				Privileged: &privileged,
+			},
+			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			VolumeMounts:             volumeMounts[i],
+			Resources:                instance.Spec.Resources,
+			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+		}
+		if len(livenessProbes) > i {
+			container.LivenessProbe = livenessProbes[i]
+		}
+		containers = append(containers, container)
+	}
+
+	daemonset := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ovnv1.ServiceNameOvs,
+			Namespace: instance.Namespace,
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					ServiceAccountName: instance.RbacResourceName(),
+					Containers:         containers,
+				},
+			},
+		},
+	}
+	daemonset.Spec.Template.Spec.Volumes = volumes
+
+	if instance.Spec.NodeSelector != nil && len(instance.Spec.NodeSelector) > 0 {
+		daemonset.Spec.Template.Spec.NodeSelector = instance.Spec.NodeSelector
+	}
+
+	if len(annotations) > 0 {
+		daemonset.Spec.Template.ObjectMeta.Annotations = annotations
+	}
+
+	return daemonset
 }
