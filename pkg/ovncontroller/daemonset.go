@@ -115,14 +115,12 @@ func GetDaemonSetSpec(
 	return daemonset
 }
 
-func DaemonSet(
+func CreateOVNDaemonSet(
 	instance *ovnv1.OVNController,
-	kindDaemonSet string,
 	configHash string,
 	labels map[string]string,
 	annotations map[string]string,
 ) (*appsv1.DaemonSet, error) {
-
 	volumes := GetVolumes(instance.Name, instance.Namespace)
 	commonVolumeMounts := []corev1.VolumeMount{}
 
@@ -152,6 +150,45 @@ func DaemonSet(
 		}
 	}
 
+	var name string
+	var containerNames []string
+	var containerImages []string
+	var containerCmds [][]string
+	var containerArgs [][]string
+	var preStopCmds [][]string
+	var livenessProbes []*corev1.Probe
+	var volumeMounts [][]corev1.VolumeMount
+
+	name = "ovn-controller"
+	containerImages = []string{instance.Spec.OvnContainerImage}
+	containerNames = []string{"ovn-controller"}
+	containerCmds = [][]string{{"/bin/bash", "-c"}}
+	containerArgs = [][]string{{}}
+	containerArgs[0] = []string{
+		strings.Join(
+			append(
+				[]string{"ovn-controller"},
+				append(ovnControllerTLSArgs, "--pidfile", "unix:/run/openvswitch/db.sock")...,
+			),
+			" ",
+		),
+	}
+
+	preStopCmds = [][]string{{"/usr/share/ovn/scripts/ovn-ctl", "stop_controller"}}
+	livenessProbes = nil
+	volumeMounts = [][]corev1.VolumeMount{ovnControllerVolumeMounts}
+
+	return GetDaemonSetSpec(instance, name, containerImages, volumeMounts, volumes, configHash, labels, annotations, containerNames, containerCmds, containerArgs, preStopCmds, livenessProbes), nil
+}
+
+func CreateOVSDaemonSet(
+	instance *ovnv1.OVNController,
+	configHash string,
+	labels map[string]string,
+	annotations map[string]string,
+) (*appsv1.DaemonSet, error) {
+	volumes := GetVolumes(instance.Name, instance.Namespace)
+	commonVolumeMounts := []corev1.VolumeMount{}
 	//
 	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 	//
@@ -178,68 +215,26 @@ func DaemonSet(
 	var livenessProbes []*corev1.Probe
 	var volumeMounts [][]corev1.VolumeMount
 
-	if kindDaemonSet == "ovn" {
-
-		name = "ovn-controller"
-		containerImages = []string{instance.Spec.OvnContainerImage}
-		containerNames = []string{"ovn-controller"}
-		containerCmds = [][]string{{"/bin/bash", "-c"}}
-		containerArgs = [][]string{{}}
-		containerArgs[0] = []string{
-			strings.Join(
-				append(
-					[]string{"ovn-controller"},
-					append(ovnControllerTLSArgs, "--pidfile", "unix:/run/openvswitch/db.sock")...,
-				),
-				" ",
-			),
-		}
-
-		preStopCmds = [][]string{{"/usr/share/ovn/scripts/ovn-ctl", "stop_controller"}}
-		livenessProbes = nil
-		volumeMounts = [][]corev1.VolumeMount{ovnControllerVolumeMounts}
-
-	} else {
-		ovsDbLivenessProbe.Exec = &corev1.ExecAction{
-			Command: []string{
-				"/usr/bin/ovs-vsctl",
-				"show",
-			},
-		}
-		ovsVswitchdLivenessProbe.Exec = &corev1.ExecAction{
-			Command: []string{
-				"/usr/bin/ovs-appctl",
-				"bond/show",
-			},
-		}
-		name = "ovn-controller-ovs"
-		containerImages = []string{instance.Spec.OvsContainerImage, instance.Spec.OvsContainerImage}
-		containerNames = []string{"ovsdb-server", "ovs-vswitchd"}
-		containerCmds = [][]string{{"/usr/bin/dumb-init"}, {"/bin/bash", "-c"}}
-		containerArgs = [][]string{{"--single-child", "--", "/usr/local/bin/container-scripts/start-ovsdb-server.sh"}, {"/usr/local/bin/container-scripts/net_setup.sh && /usr/sbin/ovs-vswitchd --pidfile", "--mlockall"}}
-		preStopCmds = [][]string{{"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovs-vswitchd"}, {"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovsdb-server"}}
-		livenessProbes = []*corev1.Probe{ovsDbLivenessProbe, ovsVswitchdLivenessProbe}
-		volumeMounts = [][]corev1.VolumeMount{append(GetOvsDbVolumeMounts(), commonVolumeMounts...), append(GetVswitchdVolumeMounts(), commonVolumeMounts...)}
+	ovsDbLivenessProbe.Exec = &corev1.ExecAction{
+		Command: []string{
+			"/usr/bin/ovs-vsctl",
+			"show",
+		},
 	}
+	ovsVswitchdLivenessProbe.Exec = &corev1.ExecAction{
+		Command: []string{
+			"/usr/bin/ovs-appctl",
+			"bond/show",
+		},
+	}
+	name = "ovn-controller-ovs"
+	containerImages = []string{instance.Spec.OvsContainerImage, instance.Spec.OvsContainerImage}
+	containerNames = []string{"ovsdb-server", "ovs-vswitchd"}
+	containerCmds = [][]string{{"/usr/bin/dumb-init"}, {"/bin/bash", "-c"}}
+	containerArgs = [][]string{{"--single-child", "--", "/usr/local/bin/container-scripts/start-ovsdb-server.sh"}, {"/usr/local/bin/container-scripts/net_setup.sh && /usr/sbin/ovs-vswitchd --pidfile", "--mlockall"}}
+	preStopCmds = [][]string{{"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovs-vswitchd"}, {"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovsdb-server"}}
+	livenessProbes = []*corev1.Probe{ovsDbLivenessProbe, ovsVswitchdLivenessProbe}
+	volumeMounts = [][]corev1.VolumeMount{append(GetOvsDbVolumeMounts(), commonVolumeMounts...), append(GetVswitchdVolumeMounts(), commonVolumeMounts...)}
 
 	return GetDaemonSetSpec(instance, name, containerImages, volumeMounts, volumes, configHash, labels, annotations, containerNames, containerCmds, containerArgs, preStopCmds, livenessProbes), nil
-}
-
-func CreateOVNDaemonSet(
-	instance *ovnv1.OVNController,
-	configHash string,
-	labels map[string]string,
-	annotations map[string]string,
-) (*appsv1.DaemonSet, error) {
-
-	return DaemonSet(instance, "ovn", configHash, labels, annotations)
-}
-
-func CreateOVSDaemonSet(
-	instance *ovnv1.OVNController,
-	configHash string,
-	labels map[string]string,
-	annotations map[string]string,
-) (*appsv1.DaemonSet, error) {
-	return DaemonSet(instance, "ovs", configHash, labels, annotations)
 }
