@@ -238,7 +238,7 @@ spec:
                 format: int64
                 type: integer
               ovsNumberReady:
-                description: OVS-NumberReady of the ovs-vswitchd + ovsdb-server instances
+                description: ovsNumberReady of ovs instances
                 format: int32
                 type: integer
             type: object
