@@ -31,7 +31,7 @@ func CreateOVNDaemonSet(
 	configHash string,
 	labels map[string]string,
 ) *appsv1.DaemonSet {
-	volumes := GetVolumes(instance.Name, instance.Namespace)
+	volumes := GetOvnControllerVolumes(instance.Name, instance.Namespace)
 	mounts := GetOvnControllerVolumeMounts()
 
 	args := []string{
@@ -239,7 +239,7 @@ func CreateOVSDaemonSet(
 				Spec: corev1.PodSpec{
 					ServiceAccountName: instance.RbacResourceName(),
 					Containers:         containers,
-					Volumes:            GetVolumes(instance.Name, instance.Namespace),
+					Volumes:            GetOvsVolumes(instance.Name, instance.Namespace),
 				},
 			},
 		},

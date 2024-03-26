@@ -99,7 +99,7 @@ func ConfigJob(
 									Resources:    instance.Spec.Resources,
 								},
 							},
-							Volumes:  GetVolumes(instance.Name, instance.Namespace),
+							Volumes:  GetOvnControllerVolumes(instance.Name, instance.Namespace),
 							NodeName: ovnPod.Spec.NodeName,
 						},
 					},
