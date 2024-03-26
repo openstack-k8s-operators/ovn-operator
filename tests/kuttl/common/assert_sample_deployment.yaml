@@ -311,9 +311,12 @@ kind: TestAssert
 commands:
     - script: |
         num_nodes=$(oc get nodes -l node-role.kubernetes.io/worker -o name | wc -l)
-        # check the number of ovn-controller pods that are running
-        num_pods=$(oc get pods -n $NAMESPACE -l service=ovn-controller -o name --field-selector=status.phase=Running | wc -l)
-        if [ "$num_nodes" -ne "$((num_pods/2))" ]; then
+        # check the number of ovn-controller* pods that are running
+        num_pods_ovn=$(oc get pods -n $NAMESPACE -l service=ovn-controller -o name --field-selector=status.phase=Running | wc -l)
+        num_pods_ovs=$(oc get pods -n $NAMESPACE -l service=ovn-controller-ovs -o name --field-selector=status.phase=Running | wc -l)
+        num_pods=$(( num_pods_ovn + num_pods_ovs))
+        # for each nodes, two pods are spawned - ovn-controller and ovn-controller-ovs
+        if [ "$((num_nodes * 2))" -ne "$num_pods" ]; then
           echo "Cluster has $num_nodes nodes but OVNController spawned $num_pods pods, it should have $num_nodes * 2"
           exit 1
         fi
@@ -351,11 +354,6 @@ commands:
         done
 
         exit 0
----
-# check that the chassis is registered in sb db
-apiVersion: kuttl.dev/v1beta1
-kind: TestAssert
-commands:
     - script: |
         controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller -o name|head -1)
         host=$(oc rsh -n $NAMESPACE ${controller_pod} ovs-vsctl get open . external_ids:hostname)
