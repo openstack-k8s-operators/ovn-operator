@@ -15,22 +15,6 @@ func GetOvnControllerVolumes(name string, namespace string) []corev1.Volume {
 	//source_type := corev1.HostPathDirectoryOrCreate
 	return []corev1.Volume{
 		{
-			Name: "etc-machine-id",
-			VolumeSource: corev1.VolumeSource{
-				HostPath: &corev1.HostPathVolumeSource{
-					Path: "/etc/machine-id",
-				},
-			},
-		},
-		{
-			Name: "etc-localtime",
-			VolumeSource: corev1.VolumeSource{
-				HostPath: &corev1.HostPathVolumeSource{
-					Path: "/etc/localtime",
-				},
-			},
-		},
-		{
 			Name: "etc-ovs",
 			VolumeSource: corev1.VolumeSource{
 				HostPath: &corev1.HostPathVolumeSource{
@@ -107,22 +91,6 @@ func GetOvsVolumes(name string, namespace string) []corev1.Volume {
 
 	//source_type := corev1.HostPathDirectoryOrCreate
 	return []corev1.Volume{
-		{
-			Name: "etc-machine-id",
-			VolumeSource: corev1.VolumeSource{
-				HostPath: &corev1.HostPathVolumeSource{
-					Path: "/etc/machine-id",
-				},
-			},
-		},
-		{
-			Name: "etc-localtime",
-			VolumeSource: corev1.VolumeSource{
-				HostPath: &corev1.HostPathVolumeSource{
-					Path: "/etc/localtime",
-				},
-			},
-		},
 		{
 			Name: "etc-ovs",
 			VolumeSource: corev1.VolumeSource{
