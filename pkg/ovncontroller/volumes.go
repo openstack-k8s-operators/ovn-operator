@@ -146,16 +146,6 @@ func GetOvsVolumes(name string, namespace string) []corev1.Volume {
 func GetOvsDbVolumeMounts() []corev1.VolumeMount {
 	return []corev1.VolumeMount{
 		{
-			Name:      "etc-machine-id",
-			MountPath: "/etc/machine-id",
-			ReadOnly:  true,
-		},
-		{
-			Name:      "etc-localtime",
-			MountPath: "/etc/localtime",
-			ReadOnly:  true,
-		},
-		{
 			Name:      "etc-ovs",
 			MountPath: "/etc/openvswitch",
 			ReadOnly:  false,
@@ -187,16 +177,6 @@ func GetOvsDbVolumeMounts() []corev1.VolumeMount {
 func GetVswitchdVolumeMounts() []corev1.VolumeMount {
 	return []corev1.VolumeMount{
 		{
-			Name:      "etc-machine-id",
-			MountPath: "/etc/machine-id",
-			ReadOnly:  true,
-		},
-		{
-			Name:      "etc-localtime",
-			MountPath: "/etc/localtime",
-			ReadOnly:  true,
-		},
-		{
 			Name:      "var-run",
 			MountPath: "/var/run/openvswitch",
 			ReadOnly:  false,
@@ -222,16 +202,6 @@ func GetVswitchdVolumeMounts() []corev1.VolumeMount {
 // GetOvnControllerVolumeMounts - ovn-controller VolumeMounts
 func GetOvnControllerVolumeMounts() []corev1.VolumeMount {
 	return []corev1.VolumeMount{
-		{
-			Name:      "etc-machine-id",
-			MountPath: "/etc/machine-id",
-			ReadOnly:  true,
-		},
-		{
-			Name:      "etc-localtime",
-			MountPath: "/etc/localtime",
-			ReadOnly:  true,
-		},
 		{
 			Name:      "var-run",
 			MountPath: "/var/run/openvswitch",
