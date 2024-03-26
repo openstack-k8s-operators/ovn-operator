@@ -21,4 +21,4 @@ source $(dirname $0)/functions
 wait_for_ovsdb_server
 
 set -ex
-ovs-vsctl set open . external-ids:ovn-encap-ip=${OvnEncapIP}
+ovs-vsctl --no-wait set open . external-ids:ovn-encap-ip=${OvnEncapIP}
