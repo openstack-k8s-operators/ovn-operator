@@ -193,6 +193,7 @@ func CreateOVSDaemonSet(
 			VolumeMounts: GetOvsDbVolumeMounts(),
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
+			LivenessProbe:            ovsDbLivenessProbe,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		},
 		{
@@ -219,6 +220,7 @@ func CreateOVSDaemonSet(
 			VolumeMounts: GetVswitchdVolumeMounts(),
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
+			LivenessProbe:            ovsVswitchdLivenessProbe,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		},
 	}
