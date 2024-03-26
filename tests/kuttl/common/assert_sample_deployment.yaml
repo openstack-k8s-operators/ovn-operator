@@ -311,9 +311,10 @@ kind: TestAssert
 commands:
     - script: |
         num_nodes=$(oc get nodes -l node-role.kubernetes.io/worker -o name | wc -l)
-        # check the number of ovn-controller pods that are running
+        # check the number of ovn-controller* pods that are running
         num_pods=$(oc get pods -n $NAMESPACE -l service=ovn-controller -o name --field-selector=status.phase=Running | wc -l)
-        if [ "$num_nodes" -ne "$((num_pods/2))" ]; then
+        # for each nodes, two pods are spawned - ovn-controller and ovn-controller-ovs
+        if [ "$((num_nodes * 2))" -ne "$num_pods" ]; then
           echo "Cluster has $num_nodes nodes but OVNController spawned $num_pods pods, it should have $num_nodes * 2"
           exit 1
         fi
