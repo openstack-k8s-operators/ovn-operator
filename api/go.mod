@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/go-logr/logr v1.4.1
 	github.com/google/uuid v1.6.0
-	github.com/onsi/gomega v1.31.1
+	github.com/onsi/gomega v1.32.0
 	github.com/openstack-k8s-operators/lib-common/modules/common v0.3.1-0.20240314165949-fec16b14c33b
 	k8s.io/api v0.28.8
 	k8s.io/apimachinery v0.28.8
