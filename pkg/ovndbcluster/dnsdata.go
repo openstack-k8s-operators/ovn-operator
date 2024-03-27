@@ -17,29 +17,32 @@ func DNSData(
 	ctx context.Context,
 	helper *helper.Helper,
 	serviceName string,
-	ip string,
+	ipList []string,
 	instance *ovnv1.OVNDBCluster,
-	ovnPod corev1.Pod,
 	serviceLabels map[string]string,
 ) error {
 	// ovsdbserver-(sb|nb) entry
 	headlessDNSHostname := serviceName + "." + instance.Namespace + ".svc"
-	dnsHostCname := infranetworkv1.DNSHost{
-		IP: ip,
-		Hostnames: []string{
-			headlessDNSHostname,
-		},
+	dnsHosts := []infranetworkv1.DNSHost{}
+	for _, ip := range ipList {
+		record := infranetworkv1.DNSHost{
+			IP: ip,
+			Hostnames: []string{
+				headlessDNSHostname,
+			},
+		}
+		dnsHosts = append(dnsHosts, record)
+
 	}
 
 	// Create DNSData object
 	dnsData := &infranetworkv1.DNSData{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ovnPod.Name,
-			Namespace: ovnPod.Namespace,
+			Name:      serviceName,
+			Namespace: instance.Namespace,
 			Labels:    serviceLabels,
 		},
 	}
-	dnsHosts := []infranetworkv1.DNSHost{dnsHostCname}
 
 	_, err := controllerutil.CreateOrPatch(ctx, helper.GetClient(), dnsData, func() error {
 		dnsData.Spec.Hosts = dnsHosts

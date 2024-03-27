@@ -311,32 +311,20 @@ func GetDNSData(name types.NamespacedName) *infranetworkv1.DNSData {
 	return dns
 }
 
-func GetDNSDataList(name types.NamespacedName, labelSelector string) *infranetworkv1.DNSDataList {
-	dnsList := &infranetworkv1.DNSDataList{}
-	dnsListOpts := client.ListOptions{
-		Namespace: name.Namespace,
-	}
-	ml := client.MatchingLabels{
-		"service": labelSelector,
-	}
-	ml.ApplyToList(&dnsListOpts)
-	Eventually(func(g Gomega) {
-		g.Expect(k8sClient.List(ctx, dnsList, &dnsListOpts)).Should(Succeed())
-	}).Should(Succeed())
+func GetDNSDataHostsList(namespace string, dnsEntryName string) []infranetworkv1.DNSHost {
+	dnsEntry := GetDNSData(types.NamespacedName{Name: dnsEntryName, Namespace: namespace})
 
-	return dnsList
+	return dnsEntry.Spec.Hosts
 }
 
-func GetDNSDataHostnameIP(dnsDataName string, namespace string, dnsHostname string) string {
-	dnsEntry := GetDNSData(types.NamespacedName{Name: dnsDataName, Namespace: namespace})
-	for _, host := range dnsEntry.Spec.Hosts {
-		for i, hostname := range host.Hostnames {
-			if hostname == dnsHostname {
-				return dnsEntry.Spec.Hosts[i].IP
-			}
+func CheckDNSDataContainsIp(namespace string, dnsEntryName string, ip string) bool {
+	hostList := GetDNSDataHostsList(namespace, dnsEntryName)
+	for _, host := range hostList {
+		if host.IP == ip {
+			return true
 		}
 	}
-	return ""
+	return false
 }
 
 func GetPod(name types.NamespacedName) *corev1.Pod {

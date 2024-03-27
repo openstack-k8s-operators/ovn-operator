@@ -734,12 +734,6 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 				err = fmt.Errorf("Error while deleting service with name %s: %w", fullServiceName, err)
 				return ctrl.Result{}, err
 			}
-			// Delete DNS records for deleted services/pods
-			namespace := helper.GetBeforeObject().GetNamespace()
-			err = deleteDNSData(ctx, helper, fullServiceName, namespace)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
 		}
 	}
 
@@ -748,6 +742,7 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 	// When the cluster is attached to an external network, create DNS record for every
 	// cluster member so it can be resolved from outside cluster (edpm nodes)
 	if instance.Spec.NetworkAttachment != "" {
+		var dnsIPsList []string
 		for _, ovnPod := range podList.Items[:*(instance.Spec.Replicas)] {
 			svc, err = service.GetServiceWithName(
 				ctx,
@@ -760,23 +755,23 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 			}
 
 			dnsIP, err := getPodIPInNetwork(ovnPod, instance.Namespace, instance.Spec.NetworkAttachment)
+			dnsIPsList = append(dnsIPsList, dnsIP)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 
-			// Create DNSData CR
-			err = ovndbcluster.DNSData(
-				ctx,
-				helper,
-				serviceName,
-				dnsIP,
-				instance,
-				ovnPod,
-				serviceLabels,
-			)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
+		}
+		// Create DNSData CR
+		err = ovndbcluster.DNSData(
+			ctx,
+			helper,
+			serviceName,
+			dnsIPsList,
+			instance,
+			serviceLabels,
+		)
+		if err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 	// dbAddress will contain ovsdbserver-(nb|sb).openstack.svc or empty
