@@ -16,6 +16,11 @@
 set -ex
 DB_TYPE="{{ .DB_TYPE }}"
 DB_PORT="{{ .DB_PORT }}"
+{{- if .TLS }}
+DB_SCHEME="pssl"
+{{- else }}
+DB_SCHEME="ptcp"
+{{- end }}
 RAFT_PORT="{{ .RAFT_PORT }}"
 NAMESPACE="{{ .NAMESPACE }}"
 OPTS=""
@@ -33,8 +38,11 @@ else
     DB_ADDR="[::]"
 fi
 
+# The --cluster-remote-addr / --cluster-local-addr options will have effect
+# only on bootstrap, when we assume the leadership role for the first pod.
+# Later, cli arguments are still passed, but raft membership hints are already
+# stored in the databases, and hence the arguments are of no effect.
 if [[ "$(hostname)" != "{{ .SERVICE_NAME }}-0" ]]; then
-    rm -f /etc/ovn/ovn${DB_TYPE}_db.db
     #ovsdb-tool join-cluster /etc/ovn/ovn${DB_TYPE}_db.db ${DB_NAME} tcp:$(hostname).{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local:${RAFT_PORT} tcp:{{ .SERVICE_NAME }}-0.{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local:${RAFT_PORT}
     OPTS="--db-${DB_TYPE}-cluster-remote-addr={{ .SERVICE_NAME }}-0.{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local --db-${DB_TYPE}-cluster-remote-port=${RAFT_PORT}"
 fi
@@ -73,4 +81,45 @@ set "$@" --ovn-${DB_TYPE}-log=-vconsole:{{ .OVN_LOG_LEVEL }}
 set "$@" --ovn-${DB_TYPE}-logfile=/dev/null
 
 # don't log to file (we already log to console)
-$@ ${OPTS} run_${DB_TYPE}_ovsdb -- -vfile:off
+$@ ${OPTS} run_${DB_TYPE}_ovsdb -- -vfile:off &
+
+# Once the database is running, we will attempt to configure db options
+CTLCMD="ovn-${DB_TYPE}ctl --no-leader-only"
+
+# Nothing special about the first pod, we just know that it always exists with
+# replicas > 0 and use it for configuration. In theory, this could be executed
+# in any other pod.
+if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
+    # The command will wait until the daemon is connected and the DB is available
+    # All following ctl invocation will use the local DB replica in the daemon
+    export OVN_${DB_TYPE^^}_DAEMON=$(${CTLCMD} --pidfile --detach)
+
+{{- if .TLS }}
+    ${CTLCMD} set-ssl {{.OVNDB_KEY_PATH}} {{.OVNDB_CERT_PATH}} {{.OVNDB_CACERT_PATH}}
+    ${CTLCMD} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
+{{- end }}
+
+    # OVN does not support setting inactivity-probe through --remote cli arg so
+    # we have to set it after database is up.
+    #
+    # In theory, ovsdb.local-config(5) could be used to configure inactivity
+    # probe using a local ovsdb-server. But the future of this database is
+    # unclear, and it was largely abandoned by the community in mid-flight, so
+    # no tools exist to configure connections using this database. It may even
+    # be that this scheme will be abandoned in the future, because its features
+    # are covered by ovs text config file support added in latest ovs releases.
+    #
+    # TODO: Consider migrating inactivity probe setting  to config files when
+    # we update to ovs 3.3. See --config-file in ovsdb-server(1) for more
+    # details.
+    while [ "$(${CTLCMD} get connection . inactivity_probe)" != "{{ .OVN_INACTIVITY_PROBE }}" ]; do
+        ${CTLCMD} --inactivity-probe={{ .OVN_INACTIVITY_PROBE }} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
+    done
+    ${CTLCMD} list connection
+
+    # The daemon is no longer needed, kill it
+    kill $(cat $OVN_RUNDIR/ovn-${DB_TYPE}ctl.pid)
+    unset OVN_${DB_TYPE^^}_DAEMON
+fi
+
+wait
