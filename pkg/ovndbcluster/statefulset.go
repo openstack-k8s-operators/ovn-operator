@@ -56,7 +56,6 @@ func StatefulSet(
 	}
 
 	var preStopCmd []string
-	var postStartCmd []string
 	cmd := []string{"/usr/bin/dumb-init"}
 	args := []string{"--single-child", "--", "/bin/bash", "-c", ServiceCommand}
 	//
@@ -69,19 +68,11 @@ func StatefulSet(
 	}
 	readinessProbe.Exec = livenessProbe.Exec
 
-	postStartCmd = []string{
-		"/usr/local/bin/container-scripts/settings.sh",
-	}
 	preStopCmd = []string{
 		"/usr/local/bin/container-scripts/cleanup.sh",
 	}
 
 	lifecycle := &corev1.Lifecycle{
-		PostStart: &corev1.LifecycleHandler{
-			Exec: &corev1.ExecAction{
-				Command: postStartCmd,
-			},
-		},
 		PreStop: &corev1.LifecycleHandler{
 			Exec: &corev1.ExecAction{
 				Command: preStopCmd,
@@ -124,6 +115,19 @@ func StatefulSet(
 		volumeMounts = append(volumeMounts, svc.CreateVolumeMounts(serviceName)...)
 	}
 
+	// NOTE(ihar) ovndb pods leave the raft cluster on delete; it's important
+	// that they are not interrupted and have a good chance to propagate the
+	// leave message to the leader. In general case, this should happen near
+	// instantly. But if the leader pod is itself down / restarting, it may take
+	// it some time to recover and start processing messages from other members.
+	// The default value of 30 seconds is sometimes not enough. In local testing,
+	// 60 seconds seems enough, but we'll take a significantly more conservative
+	// approach here and set it to 5 minutes.
+	//
+	// If the leader is not back even after 5 minutes, we'll give up
+	// nevertheless, and manual cluster recovery will be needed.
+	terminationGracePeriodSeconds := int64(300)
+
 	statefulset := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
@@ -133,15 +137,17 @@ func StatefulSet(
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
-			ServiceName: serviceName,
-			Replicas:    instance.Spec.Replicas,
+			ServiceName:         serviceName,
+			PodManagementPolicy: appsv1.ParallelPodManagement,
+			Replicas:            instance.Spec.Replicas,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: annotations,
 					Labels:      labels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: instance.RbacResourceName(),
+					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
+					ServiceAccountName:            instance.RbacResourceName(),
 					Containers: []corev1.Container{
 						{
 							Name:                     serviceName,
