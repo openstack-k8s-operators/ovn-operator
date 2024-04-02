@@ -237,6 +237,10 @@ spec:
                   generation, then the controller has not processed the latest changes.
                 format: int64
                 type: integer
+              ovsNumberReady:
+                description: ovsNumberReady of ovs instances
+                format: int32
+                type: integer
             type: object
         type: object
     served: true

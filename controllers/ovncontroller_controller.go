@@ -451,12 +451,16 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	// TODO check when/if Init, Update, or Upgrade should/could be skipped
 	//
 
-	serviceLabels := map[string]string{
+	ovnServiceLabels := map[string]string{
 		common.AppSelector: ovnv1.ServiceNameOvnController,
 	}
 
+	ovsServiceLabels := map[string]string{
+		common.AppSelector: ovnv1.ServiceNameOvs,
+	}
+
 	// Create additional Physical Network Attachments
-	networkAttachments, err := ovncontroller.CreateAdditionalNetworks(ctx, helper, instance, serviceLabels)
+	networkAttachments, err := ovncontroller.CreateAdditionalNetworks(ctx, helper, instance, ovsServiceLabels)
 	if err != nil {
 		Log.Info(fmt.Sprintf("Failed to create additional networks: %s", err))
 		return ctrl.Result{}, err
@@ -524,14 +528,9 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		return ctrlResult, nil
 	}
 
-	// Define a new DaemonSet object
-	ovnDaemonSet, err := ovncontroller.DaemonSet(instance, inputHash, serviceLabels, serviceAnnotations)
-	if err != nil {
-		Log.Error(err, "Failed to create OVNController DaemonSet")
-		return ctrl.Result{}, err
-	}
+	// Define a new DaemonSet object for OVNController
 	dset := daemonset.NewDaemonSet(
-		ovnDaemonSet,
+		ovncontroller.CreateOVNDaemonSet(instance, inputHash, ovnServiceLabels),
 		time.Duration(5)*time.Second,
 	)
 
@@ -556,8 +555,34 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	instance.Status.DesiredNumberScheduled = dset.GetDaemonSet().Status.DesiredNumberScheduled
 	instance.Status.NumberReady = dset.GetDaemonSet().Status.NumberReady
 
+	// Define a new DaemonSet object for OVS (ovsdb-server + ovs-vswitchd)
+	ovsdset := daemonset.NewDaemonSet(
+		ovncontroller.CreateOVSDaemonSet(instance, inputHash, ovsServiceLabels, serviceAnnotations),
+		time.Duration(5)*time.Second,
+	)
+
+	ctrlResult, err = ovsdset.CreateOrPatch(ctx, helper)
+	if err != nil {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.DeploymentReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.DeploymentReadyErrorMessage,
+			err.Error()))
+		return ctrlResult, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.DeploymentReadyCondition,
+			condition.RequestedReason,
+			condition.SeverityInfo,
+			condition.DeploymentReadyRunningMessage))
+		return ctrlResult, nil
+	}
+
+	instance.Status.OVSNumberReady = ovsdset.GetDaemonSet().Status.NumberReady
+
 	// verify if network attachment matches expectations
-	networkReady, networkAttachmentStatus, err := nad.VerifyNetworkStatusFromAnnotation(ctx, helper, networkAttachmentsNoPhysNet, serviceLabels, instance.Status.NumberReady)
+	networkReady, networkAttachmentStatus, err := nad.VerifyNetworkStatusFromAnnotation(ctx, helper, networkAttachmentsNoPhysNet, ovsServiceLabels, instance.Status.NumberReady)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -577,7 +602,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		return ctrl.Result{}, err
 	}
 
-	if instance.Status.NumberReady == instance.Status.DesiredNumberScheduled {
+	if instance.Status.NumberReady == instance.Status.DesiredNumberScheduled && instance.Status.OVSNumberReady == instance.Status.DesiredNumberScheduled {
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
 	}
 	// create DaemonSet - end
@@ -614,8 +639,9 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 
 	// create OVN Config Job - start
-	if instance.Status.NumberReady == instance.Status.DesiredNumberScheduled {
-		jobsDef, err := ovncontroller.ConfigJob(ctx, helper, r.Client, instance, sbCluster, serviceLabels)
+	// Waits for OVS pods to run the configJob which basically will set config into OVS database
+	if instance.Status.OVSNumberReady == instance.Status.DesiredNumberScheduled {
+		jobsDef, err := ovncontroller.ConfigJob(ctx, helper, r.Client, instance, sbCluster, ovnServiceLabels)
 		if err != nil {
 			Log.Error(err, "Failed to create OVN controller configuration Job")
 			return ctrl.Result{}, err
@@ -662,7 +688,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		}
 		instance.Status.Conditions.MarkTrue(condition.ServiceConfigReadyCondition, condition.ServiceConfigReadyMessage)
 	} else {
-		Log.Info("OVNController DaemonSet not ready yet. Configuration job cannot be started.")
+		Log.Info("OVS DaemonSet not ready yet. Configuration job cannot be started.")
 		return ctrl.Result{Requeue: true}, nil
 	}
 	// create OVN Config Job - end

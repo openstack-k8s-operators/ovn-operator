@@ -14,7 +14,6 @@ package ovncontroller
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
@@ -27,30 +26,19 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-// DaemonSet func
-func DaemonSet(
+func CreateOVNDaemonSet(
 	instance *ovnv1.OVNController,
 	configHash string,
 	labels map[string]string,
-	annotations map[string]string,
-) (*appsv1.DaemonSet, error) {
+) *appsv1.DaemonSet {
+	volumes := GetOvnControllerVolumes(instance.Name, instance.Namespace)
+	mounts := GetOvnControllerVolumeMounts()
 
-	runAsUser := int64(0)
-	privileged := true
-
-	volumes := GetVolumes(instance.Name, instance.Namespace)
-	commonVolumeMounts := []corev1.VolumeMount{}
-
-	// add CA bundle if defined
-	if instance.Spec.TLS.CaBundleSecretName != "" {
-		volumes = append(volumes, instance.Spec.TLS.CreateVolume())
-		commonVolumeMounts = append(commonVolumeMounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
+	args := []string{
+		"ovn-controller --pidfile unix:/run/openvswitch/db.sock",
 	}
 
-	ovnControllerVolumeMounts := append(GetOvnControllerVolumeMounts(), commonVolumeMounts...)
-
 	// add OVN dbs cert and CA
-	var ovnControllerTLSArgs []string
 	if instance.Spec.TLS.Enabled() {
 		svc := tls.Service{
 			SecretName: *instance.Spec.TLS.GenericService.SecretName,
@@ -59,14 +47,91 @@ func DaemonSet(
 			CaMount:    ptr.To(ovn_common.OVNDbCaCertPath),
 		}
 		volumes = append(volumes, svc.CreateVolume(ovnv1.ServiceNameOvnController))
-		ovnControllerVolumeMounts = append(ovnControllerVolumeMounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOvnController)...)
-		ovnControllerTLSArgs = []string{
+		mounts = append(mounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOvnController)...)
+
+		// add CA bundle if defined
+		if instance.Spec.TLS.CaBundleSecretName != "" {
+			volumes = append(volumes, instance.Spec.TLS.CreateVolume())
+			mounts = append(mounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
+		}
+
+		args = append(args, []string{
 			fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath),
 			fmt.Sprintf("--private-key=%s", ovn_common.OVNDbKeyPath),
 			fmt.Sprintf("--ca-cert=%s", ovn_common.OVNDbCaCertPath),
-		}
+		}...)
 	}
 
+	runAsUser := int64(0)
+	privileged := true
+
+	envVars := map[string]env.Setter{}
+	envVars["CONFIG_HASH"] = env.SetValue(configHash)
+
+	containers := []corev1.Container{
+		{
+			Name:    "ovn-controller",
+			Command: []string{"/bin/bash", "-c"},
+			Args:    args,
+			Lifecycle: &corev1.Lifecycle{
+				PreStop: &corev1.LifecycleHandler{
+					Exec: &corev1.ExecAction{
+						Command: []string{"/usr/share/ovn/scripts/ovn-ctl", "stop_controller"},
+					},
+				},
+			},
+			Image: instance.Spec.OvnContainerImage,
+			SecurityContext: &corev1.SecurityContext{
+				Capabilities: &corev1.Capabilities{
+					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
+					Drop: []corev1.Capability{},
+				},
+				RunAsUser:  &runAsUser,
+				Privileged: &privileged,
+			},
+			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			VolumeMounts: mounts,
+			// TODO: consider the fact that resources are now double booked
+			Resources:                instance.Spec.Resources,
+			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+		},
+	}
+
+	daemonset := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ovnv1.ServiceNameOvnController,
+			Namespace: instance.Namespace,
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					ServiceAccountName: instance.RbacResourceName(),
+					Containers:         containers,
+					Volumes:            volumes,
+				},
+			},
+		},
+	}
+
+	if instance.Spec.NodeSelector != nil && len(instance.Spec.NodeSelector) > 0 {
+		daemonset.Spec.Template.Spec.NodeSelector = instance.Spec.NodeSelector
+	}
+
+	return daemonset
+}
+
+func CreateOVSDaemonSet(
+	instance *ovnv1.OVNController,
+	configHash string,
+	labels map[string]string,
+	annotations map[string]string,
+) *appsv1.DaemonSet {
 	//
 	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 	//
@@ -84,72 +149,85 @@ func DaemonSet(
 		InitialDelaySeconds: 3,
 	}
 
-	var ovsDbPreStopCmd []string
-	var ovsDbCmd []string
-	var ovsDbArgs []string
-
-	var ovsVswitchdCmd []string
-	var ovsVswitchdArgs []string
-	var ovsVswitchdPreStopCmd []string
-
-	var ovnControllerCmd []string
-	var ovnControllerArgs []string
-	var ovnControllerPreStopCmd []string
-
 	ovsDbLivenessProbe.Exec = &corev1.ExecAction{
 		Command: []string{
 			"/usr/bin/ovs-vsctl",
 			"show",
 		},
 	}
-	ovsDbCmd = []string{
-		"/usr/bin/dumb-init",
-	}
-	ovsDbArgs = []string{
-		"--single-child", "--", "/usr/local/bin/container-scripts/start-ovsdb-server.sh",
-	}
-	ovsDbPreStopCmd = []string{
-		"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovs-vswitchd",
-	}
-
 	ovsVswitchdLivenessProbe.Exec = &corev1.ExecAction{
 		Command: []string{
 			"/usr/bin/ovs-appctl",
 			"bond/show",
 		},
 	}
-	ovsVswitchdCmd = []string{
-		"/usr/sbin/ovs-vswitchd",
-	}
-	ovsVswitchdArgs = []string{
-		"--pidfile", "--mlockall",
-	}
-	ovsVswitchdPreStopCmd = []string{
-		"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovsdb-server",
-	}
 
-	ovnControllerCmd = []string{
-		"/bin/bash", "-c",
-	}
-	ovnControllerArgs = []string{
-		strings.Join(
-			append(
-				[]string{"/usr/local/bin/container-scripts/net_setup.sh && ovn-controller"},
-				append(ovnControllerTLSArgs, "--pidfile", "unix:/run/openvswitch/db.sock")...,
-			),
-			" ",
-		),
-	}
-	ovnControllerPreStopCmd = []string{
-		"/usr/share/ovn/scripts/ovn-ctl", "stop_controller",
-	}
+	runAsUser := int64(0)
+	privileged := true
 
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 
+	containers := []corev1.Container{
+		{
+			Name:    "ovsdb-server",
+			Command: []string{"/usr/bin/dumb-init"},
+			Args:    []string{"--single-child", "--", "/usr/local/bin/container-scripts/start-ovsdb-server.sh"},
+			Lifecycle: &corev1.Lifecycle{
+				PreStop: &corev1.LifecycleHandler{
+					Exec: &corev1.ExecAction{
+						Command: []string{"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovs-vswitchd"},
+					},
+				},
+			},
+			Image: instance.Spec.OvsContainerImage,
+			SecurityContext: &corev1.SecurityContext{
+				Capabilities: &corev1.Capabilities{
+					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
+					Drop: []corev1.Capability{},
+				},
+				RunAsUser:  &runAsUser,
+				Privileged: &privileged,
+			},
+			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			VolumeMounts: GetOvsDbVolumeMounts(),
+			// TODO: consider the fact that resources are now double booked
+			Resources:                instance.Spec.Resources,
+			LivenessProbe:            ovsDbLivenessProbe,
+			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+		},
+		{
+			Name:    "ovs-vswitchd",
+			Command: []string{"/bin/bash", "-c"},
+			Args:    []string{"/usr/local/bin/container-scripts/net_setup.sh && /usr/sbin/ovs-vswitchd --pidfile --mlockall"},
+			Lifecycle: &corev1.Lifecycle{
+				PreStop: &corev1.LifecycleHandler{
+					Exec: &corev1.ExecAction{
+						Command: []string{"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovsdb-server"},
+					},
+				},
+			},
+			Image: instance.Spec.OvsContainerImage,
+			SecurityContext: &corev1.SecurityContext{
+				Capabilities: &corev1.Capabilities{
+					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
+					Drop: []corev1.Capability{},
+				},
+				RunAsUser:  &runAsUser,
+				Privileged: &privileged,
+			},
+			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			VolumeMounts: GetVswitchdVolumeMounts(),
+			// TODO: consider the fact that resources are now double booked
+			Resources:                instance.Spec.Resources,
+			LivenessProbe:            ovsVswitchdLivenessProbe,
+			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+		},
+	}
+
 	daemonset := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ovnv1.ServiceNameOvnController,
+			Name:      ovnv1.ServiceNameOvs,
 			Namespace: instance.Namespace,
 		},
 		Spec: appsv1.DaemonSetSpec{
@@ -158,104 +236,24 @@ func DaemonSet(
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels:      labels,
-					Annotations: annotations,
+					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: instance.RbacResourceName(),
-					Containers: []corev1.Container{
-						// ovsdb-server container
-						{
-							Name:    "ovsdb-server",
-							Command: ovsDbCmd,
-							Args:    ovsDbArgs,
-							Lifecycle: &corev1.Lifecycle{
-								PreStop: &corev1.LifecycleHandler{
-									Exec: &corev1.ExecAction{
-										Command: ovsDbPreStopCmd,
-									},
-								},
-							},
-							Image: instance.Spec.OvsContainerImage,
-							SecurityContext: &corev1.SecurityContext{
-								Capabilities: &corev1.Capabilities{
-									Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
-									Drop: []corev1.Capability{},
-								},
-								RunAsUser:  &runAsUser,
-								Privileged: &privileged,
-							},
-							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-							VolumeMounts:             append(GetOvsDbVolumeMounts(), commonVolumeMounts...),
-							Resources:                instance.Spec.Resources,
-							LivenessProbe:            ovsDbLivenessProbe,
-							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-						}, {
-							// ovs-vswitchd container
-							Name:    "ovs-vswitchd",
-							Command: ovsVswitchdCmd,
-							Args:    ovsVswitchdArgs,
-							Lifecycle: &corev1.Lifecycle{
-								PreStop: &corev1.LifecycleHandler{
-									Exec: &corev1.ExecAction{
-										Command: ovsVswitchdPreStopCmd,
-									},
-								},
-							},
-							Image: instance.Spec.OvsContainerImage,
-							SecurityContext: &corev1.SecurityContext{
-								Capabilities: &corev1.Capabilities{
-									Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
-									Drop: []corev1.Capability{},
-								},
-								RunAsUser:  &runAsUser,
-								Privileged: &privileged,
-							},
-							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-							VolumeMounts:             append(GetVswitchdVolumeMounts(), commonVolumeMounts...),
-							Resources:                instance.Spec.Resources,
-							LivenessProbe:            ovsVswitchdLivenessProbe,
-							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-						}, {
-							// ovn-controller container
-							// NOTE(slaweq): for some reason, when ovn-controller is started without
-							// bash shell, it fails with error "unrecognized option --pidfile"
-							Name:    "ovn-controller",
-							Command: ovnControllerCmd,
-							Args:    ovnControllerArgs,
-							Lifecycle: &corev1.Lifecycle{
-								PreStop: &corev1.LifecycleHandler{
-									Exec: &corev1.ExecAction{
-										Command: ovnControllerPreStopCmd,
-									},
-								},
-							},
-							Image: instance.Spec.OvnContainerImage,
-							// TODO(slaweq): to check if ovn-controller really needs such security contexts
-							SecurityContext: &corev1.SecurityContext{
-								Capabilities: &corev1.Capabilities{
-									Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
-									Drop: []corev1.Capability{},
-								},
-								RunAsUser:  &runAsUser,
-								Privileged: &privileged,
-							},
-							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-							VolumeMounts:             ovnControllerVolumeMounts,
-							Resources:                instance.Spec.Resources,
-							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-						},
-					},
+					Containers:         containers,
+					Volumes:            GetOvsVolumes(instance.Name, instance.Namespace),
 				},
 			},
 		},
 	}
-	daemonset.Spec.Template.Spec.Volumes = volumes
 
 	if instance.Spec.NodeSelector != nil && len(instance.Spec.NodeSelector) > 0 {
 		daemonset.Spec.Template.Spec.NodeSelector = instance.Spec.NodeSelector
 	}
 
-	return daemonset, nil
+	if len(annotations) > 0 {
+		daemonset.Spec.Template.ObjectMeta.Annotations = annotations
+	}
 
+	return daemonset
 }

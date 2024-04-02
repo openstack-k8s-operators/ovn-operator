@@ -37,6 +37,9 @@ const (
 
 	// ServiceNameOvnController - ovn-controller service name
 	ServiceNameOvnController = "ovn-controller"
+
+	// ServiceNameOvs - ovn-controller-ovs service name
+	ServiceNameOvs = "ovn-controller-ovs"
 )
 
 // OVNControllerSpec defines the desired state of OVNController
@@ -93,6 +96,9 @@ type OVNControllerSpecCore struct {
 type OVNControllerStatus struct {
 	// NumberReady of the OVNController instances
 	NumberReady int32 `json:"numberReady,omitempty"`
+
+	// ovsNumberReady of ovs instances
+	OVSNumberReady int32 `json:"ovsNumberReady,omitempty"`
 
 	// DesiredNumberScheduled - total number of the nodes which should be running Daemon
 	DesiredNumberScheduled int32 `json:"desiredNumberScheduled,omitempty"`

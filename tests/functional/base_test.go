@@ -269,25 +269,29 @@ func SimulateDaemonsetNumberReadyWithPods(name types.NamespacedName, networkIPs 
 		pod.ObjectMeta.Namespace = name.Namespace
 		pod.ObjectMeta.Name = name.Name
 		pod.ObjectMeta.Labels = map[string]string{
-			"service": "ovn-controller",
+			"service": name.Name,
 		}
 
 		// NodeName required for getOVNControllerPods
 		pod.Spec.NodeName = name.Name
 
-		var netStatus []networkv1.NetworkStatus
-		for network, IPs := range networkIPs {
-			netStatus = append(
-				netStatus,
-				networkv1.NetworkStatus{
-					Name: network,
-					IPs:  IPs,
-				},
-			)
+		// If networkIPs is empty, skip adding network status annotations
+		if len(networkIPs) > 0 {
+			var netStatus []networkv1.NetworkStatus
+			for network, IPs := range networkIPs {
+				netStatus = append(
+					netStatus,
+					networkv1.NetworkStatus{
+						Name: network,
+						IPs:  IPs,
+					},
+				)
+			}
+			netStatusAnnotation, err := json.Marshal(netStatus)
+			Expect(err).NotTo(HaveOccurred())
+			pod.Annotations[networkv1.NetworkStatusAnnot] = string(netStatusAnnotation)
 		}
-		netStatusAnnotation, err := json.Marshal(netStatus)
-		Expect(err).NotTo(HaveOccurred())
-		pod.Annotations[networkv1.NetworkStatusAnnot] = string(netStatusAnnotation)
+
 		Expect(k8sClient.Create(ctx, pod)).Should(Succeed())
 	}
 
