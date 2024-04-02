@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	operatorv1 "github.com/openshift/api/operator/v1"
 	infranetworkv1 "github.com/openstack-k8s-operators/infra-operator/apis/network/v1beta1"
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
@@ -97,6 +98,7 @@ func (r *OVNDBClusterReconciler) GetLogger(ctx context.Context) logr.Logger {
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
 //+kubebuilder:rbac:groups=k8s.cni.cncf.io,resources=network-attachment-definitions,verbs=get;list;watch
 //+kubebuilder:rbac:groups=network.openstack.org,resources=dnsdata,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="operator.openshift.io",resources=dnses,verbs=get;list;watch
 
 // service account, role, rolebinding
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch
@@ -607,6 +609,8 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		internalDbAddress := []string{}
 		var svcPort int32
 		scheme := "tcp"
+		// Get DNS Cluster suffix
+		DNSSuffix := getDNSDomain(ctx, r.GetClient(), r.GetLogger(ctx))
 		if instance.Spec.TLS.Enabled() {
 			scheme = "ssl"
 		}
@@ -615,7 +619,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 
 			// Filter out headless services
 			if svc.Spec.ClusterIP != "None" {
-				internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, ovnv1.DNSSuffix, svcPort))
+				internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, DNSSuffix, svcPort))
 			}
 		}
 
@@ -639,6 +643,23 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	}
 	Log.Info("Reconciled Service successfully")
 	return ctrl.Result{}, nil
+}
+
+func getDNSDomain(ctx context.Context, c client.Client, Log logr.Logger) string {
+	DNSDomain := ovnv1.DNSSuffix
+	DNSClusterInfoList := &operatorv1.DNSList{}
+	err := c.List(ctx, DNSClusterInfoList)
+	if err != nil {
+		Log.Info(fmt.Sprintf("Warning: Couldn't retrieve DNS cluster info, using default DNS Suffix: %s", DNSDomain))
+		return DNSDomain
+	}
+	// Using this approach in case CP have multiple domains
+	// also it does not depend on the DNS CR name.
+	// ATM in case of multiple domains will return last one.
+	for _, dns := range DNSClusterInfoList.Items {
+		DNSDomain = dns.Status.ClusterDomain
+	}
+	return DNSDomain
 }
 
 func getPodIPInNetwork(ovnPod corev1.Pod, namespace string, networkAttachment string) (string, error) {

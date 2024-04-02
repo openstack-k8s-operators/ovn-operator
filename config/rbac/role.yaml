@@ -144,6 +144,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - operator.openshift.io
+  resources:
+  - dnses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - ovn.openstack.org
   resources:
   - ovncontroller
