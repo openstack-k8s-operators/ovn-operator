@@ -586,7 +586,6 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
 		instance.Status.Conditions.MarkTrue(condition.ExposeServiceReadyCondition, condition.ExposeServiceReadyMessage)
 		internalDbAddress := []string{}
-		raftAddress := []string{}
 		var svcPort int32
 		scheme := "tcp"
 		if instance.Spec.TLS.Enabled() {
@@ -598,7 +597,6 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 			// Filter out headless services
 			if svc.Spec.ClusterIP != "None" {
 				internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, ovnv1.DNSSuffix, svcPort))
-				raftAddress = append(raftAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, ovnv1.DNSSuffix, svc.Spec.Ports[1].Port))
 			}
 		}
 
@@ -609,8 +607,6 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 
 		// Set DB Address
 		instance.Status.InternalDBAddress = strings.Join(internalDbAddress, ",")
-		// Set RaftAddress
-		instance.Status.RaftAddress = strings.Join(raftAddress, ",")
 	}
 	Log.Info("Reconciled Service successfully")
 	instance.Status.ObservedGeneration = instance.Generation

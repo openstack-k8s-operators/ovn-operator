@@ -135,9 +135,6 @@ type OVNDBClusterStatus struct {
 	// Conditions
 	Conditions condition.Conditions `json:"conditions,omitempty" optional:"true"`
 
-	// RaftAddress -
-	RaftAddress string `json:"raftAddress,omitempty"`
-
 	// DBAddress - DB IP address used by external nodes
 	DBAddress string `json:"dbAddress,omitempty"`
 
