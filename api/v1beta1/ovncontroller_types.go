@@ -77,14 +77,7 @@ type OVNControllerSpecCore struct {
 	// +kubebuilder:validation:Optional
 	// NetworkAttachment is a NetworkAttachment resource name to expose the service to the given network.
 	// If specified the IP address of this network is used as the OvnEncapIP.
-	// Deprecated: superseded by NetworkAttachments
 	NetworkAttachment string `json:"networkAttachment"`
-
-	// +kubebuilder:validation:Optional
-	// NetworkAttachments are NetworkAttachment resources used to expose the service to the specified networks.
-	// If present, the IP of the attachment named "tenant", will be used as the OvnEncapIP.
-
-	NetworkAttachments []string `json:"networkAttachments,omitempty"`
 
 	// +kubebuilder:validation:Optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
