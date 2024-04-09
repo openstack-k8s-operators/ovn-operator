@@ -120,11 +120,6 @@ func (in *OVNControllerSpecCore) DeepCopyInto(out *OVNControllerSpecCore) {
 			(*out)[key] = val
 		}
 	}
-	if in.NetworkAttachments != nil {
-		in, out := &in.NetworkAttachments, &out.NetworkAttachments
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
 	in.TLS.DeepCopyInto(&out.TLS)
 }
 
