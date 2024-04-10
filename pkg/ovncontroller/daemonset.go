@@ -14,6 +14,7 @@ package ovncontroller
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
@@ -72,7 +73,7 @@ func CreateOVNDaemonSet(
 		{
 			Name:    "ovn-controller",
 			Command: []string{"/bin/bash", "-c"},
-			Args:    args,
+			Args:    []string{strings.Join(args, " ")},
 			Lifecycle: &corev1.Lifecycle{
 				PreStop: &corev1.LifecycleHandler{
 					Exec: &corev1.ExecAction{
