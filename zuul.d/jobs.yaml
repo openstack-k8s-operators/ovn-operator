@@ -4,5 +4,6 @@
     parent: neutron-operator-tempest-multinode
     dependencies: ["openstack-k8s-operators-content-provider"]
     vars:
+      cifmw_run_test_role: tempest
       cifmw_tempest_tests_allowed:
         - neutron_tempest_plugin.scenario
