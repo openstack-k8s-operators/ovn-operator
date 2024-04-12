@@ -238,9 +238,6 @@ spec:
                   generation, then the controller has not processed the latest changes.
                 format: int64
                 type: integer
-              raftAddress:
-                description: RaftAddress -
-                type: string
               readyCount:
                 description: ReadyCount of OVN DBCluster instances
                 format: int32

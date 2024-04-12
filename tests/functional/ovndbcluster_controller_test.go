@@ -473,7 +473,6 @@ var _ = Describe("OVNDBCluster controller", func() {
 				OVNDBCluster := GetOVNDBCluster(OVNDBClusterName)
 				g.Expect(OVNDBCluster.Status.DBAddress).To(HavePrefix("ssl:"))
 				g.Expect(OVNDBCluster.Status.InternalDBAddress).To(HavePrefix("ssl:"))
-				g.Expect(OVNDBCluster.Status.RaftAddress).To(HavePrefix("ssl:"))
 			}, timeout, interval).Should(Succeed())
 
 			// check scripts configure TLS
