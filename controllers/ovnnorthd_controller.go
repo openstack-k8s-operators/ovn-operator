@@ -297,15 +297,6 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 
 	Log.Info("Reconciling Service")
 
-	if !controllerutil.ContainsFinalizer(instance, helper.GetFinalizer()) {
-		// If the service object doesn't have our finalizer, add it.
-		controllerutil.AddFinalizer(instance, helper.GetFinalizer())
-		// Register the finalizer immediately to avoid orphaning resources on delete
-		err := r.Update(ctx, instance)
-
-		return ctrl.Result{}, err
-	}
-
 	// Service account, role, binding
 	rbacRules := []rbacv1.PolicyRule{
 		{
