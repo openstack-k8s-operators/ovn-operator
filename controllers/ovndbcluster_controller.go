@@ -124,6 +124,17 @@ func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
+	helper, err := helper.NewHelper(
+		instance,
+		r.Client,
+		r.Kclient,
+		r.Scheme,
+		Log,
+	)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	//
 	// initialize status
 	//
@@ -156,17 +167,6 @@ func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 	if instance.Status.NetworkAttachments == nil {
 		instance.Status.NetworkAttachments = map[string][]string{}
-	}
-
-	helper, err := helper.NewHelper(
-		instance,
-		r.Client,
-		r.Kclient,
-		r.Scheme,
-		Log,
-	)
-	if err != nil {
-		return ctrl.Result{}, err
 	}
 
 	// Always patch the instance status when exiting this function so we can persist any changes.
