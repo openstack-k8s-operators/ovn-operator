@@ -124,6 +124,17 @@ func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
+	helper, err := helper.NewHelper(
+		instance,
+		r.Client,
+		r.Kclient,
+		r.Scheme,
+		Log,
+	)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	//
 	// initialize status
 	//
@@ -149,23 +160,13 @@ func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	)
 
 	instance.Status.Conditions.Init(&cl)
+	instance.Status.ObservedGeneration = instance.Generation
 
 	if instance.Status.Hash == nil {
 		instance.Status.Hash = map[string]string{}
 	}
 	if instance.Status.NetworkAttachments == nil {
 		instance.Status.NetworkAttachments = map[string][]string{}
-	}
-
-	helper, err := helper.NewHelper(
-		instance,
-		r.Client,
-		r.Kclient,
-		r.Scheme,
-		Log,
-	)
-	if err != nil {
-		return ctrl.Result{}, err
 	}
 
 	// Always patch the instance status when exiting this function so we can persist any changes.
@@ -602,7 +603,6 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		instance.Status.InternalDBAddress = strings.Join(internalDbAddress, ",")
 	}
 	Log.Info("Reconciled Service successfully")
-	instance.Status.ObservedGeneration = instance.Generation
 	return ctrl.Result{}, nil
 }
 

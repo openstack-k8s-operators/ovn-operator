@@ -111,6 +111,17 @@ func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
+	helper, err := helper.NewHelper(
+		instance,
+		r.Client,
+		r.Kclient,
+		r.Scheme,
+		Log,
+	)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	//
 	// initialize status
 	//
@@ -134,20 +145,10 @@ func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	)
 
 	instance.Status.Conditions.Init(&cl)
+	instance.Status.ObservedGeneration = instance.Generation
 
 	if instance.Status.NetworkAttachments == nil {
 		instance.Status.NetworkAttachments = map[string][]string{}
-	}
-
-	helper, err := helper.NewHelper(
-		instance,
-		r.Client,
-		r.Kclient,
-		r.Scheme,
-		Log,
-	)
-	if err != nil {
-		return ctrl.Result{}, err
 	}
 
 	// Always patch the instance status when exiting this function so we can persist any changes.
@@ -295,15 +296,6 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	Log := r.GetLogger(ctx)
 
 	Log.Info("Reconciling Service")
-
-	if !controllerutil.ContainsFinalizer(instance, helper.GetFinalizer()) {
-		// If the service object doesn't have our finalizer, add it.
-		controllerutil.AddFinalizer(instance, helper.GetFinalizer())
-		// Register the finalizer immediately to avoid orphaning resources on delete
-		err := r.Update(ctx, instance)
-
-		return ctrl.Result{}, err
-	}
 
 	// Service account, role, binding
 	rbacRules := []rbacv1.PolicyRule{
@@ -500,7 +492,6 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	// create Deployment - end
 
 	Log.Info("Reconciled Service successfully")
-	instance.Status.ObservedGeneration = instance.Generation
 	return ctrl.Result{}, nil
 }
 

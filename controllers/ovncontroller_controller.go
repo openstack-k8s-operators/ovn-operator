@@ -174,6 +174,7 @@ func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	)
 
 	instance.Status.Conditions.Init(&cl)
+	instance.Status.ObservedGeneration = instance.Generation
 
 	if instance.Status.Hash == nil {
 		instance.Status.Hash = map[string]string{}
@@ -675,7 +676,6 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	// create OVN Config Job - end
 
 	Log.Info("Reconciled Service successfully")
-	instance.Status.ObservedGeneration = instance.Generation
 
 	return ctrl.Result{}, nil
 }
