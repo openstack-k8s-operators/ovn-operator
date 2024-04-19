@@ -67,11 +67,6 @@ type OVNNorthdSpecCore struct {
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
 	// +kubebuilder:validation:Optional
-	// NetworkAttachment is a NetworkAttachment resource name to expose the service to the given network.
-	// If specified the IP address of this network is used as the dbAddress connection.
-	NetworkAttachment string `json:"networkAttachment"`
-
-	// +kubebuilder:validation:Optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// TLS - Parameters related to TLS
 	TLS tls.SimpleService `json:"tls,omitempty"`
@@ -90,16 +85,12 @@ type OVNNorthdStatus struct {
 	// Conditions
 	Conditions condition.Conditions `json:"conditions,omitempty" optional:"true"`
 
-	// NetworkAttachments status of the deployment pods
-	NetworkAttachments map[string][]string `json:"networkAttachments,omitempty"`
-
 	//ObservedGeneration - the most recent generation observed for this service. If the observed generation is less than the spec generation, then the controller has not processed the latest changes.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-//+kubebuilder:printcolumn:name="NetworkAttachments",type="string",JSONPath=".status.networkAttachments",description="NetworkAttachments"
 //+kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[0].status",description="Status"
 //+kubebuilder:printcolumn:name="Message",type="string",JSONPath=".status.conditions[0].message",description="Message"
 

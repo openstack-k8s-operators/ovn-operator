@@ -37,7 +37,6 @@ const (
 func Deployment(
 	instance *ovnv1.OVNNorthd,
 	labels map[string]string,
-	annotations map[string]string,
 	nbEndpoint string,
 	sbEndpoint string,
 	envVars map[string]env.Setter,
@@ -117,8 +116,7 @@ func Deployment(
 			Replicas: instance.Spec.Replicas,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Annotations: annotations,
-					Labels:      labels,
+					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: instance.RbacResourceName(),
