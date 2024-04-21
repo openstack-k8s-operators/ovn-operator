@@ -18,7 +18,6 @@ import (
 	"strings"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
-	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -30,7 +29,6 @@ import (
 // ConfigJob - prepare job to configure ovn-controller
 func ConfigJob(
 	ctx context.Context,
-	h *helper.Helper,
 	k8sClient client.Client,
 	instance *ovnv1.OVNController,
 	sbCluster *ovnv1.OVNDBCluster,

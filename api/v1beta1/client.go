@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/go-logr/logr"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -88,8 +88,9 @@ func getItems(list client.ObjectList) []client.Object {
 }
 
 // OVNDBClusterNamespaceMapFunc - DBCluster Watch Function
-func OVNDBClusterNamespaceMapFunc(crs client.ObjectList, reader client.Reader, log logr.Logger) handler.MapFunc {
+func OVNDBClusterNamespaceMapFunc(crs client.ObjectList, reader client.Reader) handler.MapFunc {
 	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		log := log.FromContext(ctx)
 		result := []reconcile.Request{}
 
 		// get all CRs from the same namespace, right now there should only be one

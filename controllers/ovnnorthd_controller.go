@@ -188,8 +188,7 @@ func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OVNNorthdReconciler) SetupWithManager(mgr ctrl.Manager, ctx context.Context) error {
-	Log := r.GetLogger(ctx)
+func (r *OVNNorthdReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	crs := &ovnv1.OVNNorthdList{}
 	// index caBundleSecretNameField
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &ovnv1.OVNNorthd{}, caBundleSecretNameField, func(rawObj client.Object) []string {
@@ -221,7 +220,7 @@ func (r *OVNNorthdReconciler) SetupWithManager(mgr ctrl.Manager, ctx context.Con
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
-		Watches(&ovnv1.OVNDBCluster{}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), Log))).
+		Watches(&ovnv1.OVNDBCluster{}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient()))).
 		Watches(
 			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSrc),
@@ -274,7 +273,7 @@ func (r *OVNNorthdReconciler) reconcileDelete(ctx context.Context, instance *ovn
 	return ctrl.Result{}, nil
 }
 
-func (r *OVNNorthdReconciler) reconcileUpdate(ctx context.Context, instance *ovnv1.OVNNorthd, helper *helper.Helper) (ctrl.Result, error) {
+func (r *OVNNorthdReconciler) reconcileUpdate(ctx context.Context) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 
 	Log.Info("Reconciling Service update")
@@ -283,7 +282,7 @@ func (r *OVNNorthdReconciler) reconcileUpdate(ctx context.Context, instance *ovn
 	return ctrl.Result{}, nil
 }
 
-func (r *OVNNorthdReconciler) reconcileUpgrade(ctx context.Context, instance *ovnv1.OVNNorthd, helper *helper.Helper) (ctrl.Result, error) {
+func (r *OVNNorthdReconciler) reconcileUpgrade(ctx context.Context) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 
 	Log.Info("Reconciling Service upgrade")
@@ -362,7 +361,7 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	}
 
 	// Handle service update
-	ctrlResult, err := r.reconcileUpdate(ctx, instance, helper)
+	ctrlResult, err := r.reconcileUpdate(ctx)
 	if err != nil {
 		return ctrlResult, err
 	} else if (ctrlResult != ctrl.Result{}) {
@@ -370,7 +369,7 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	}
 
 	// Handle service upgrade
-	ctrlResult, err = r.reconcileUpgrade(ctx, instance, helper)
+	ctrlResult, err = r.reconcileUpgrade(ctx)
 	if err != nil {
 		return ctrlResult, err
 	} else if (ctrlResult != ctrl.Result{}) {

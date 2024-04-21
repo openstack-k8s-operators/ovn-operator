@@ -1,3 +1,1 @@
 package ovnnorthd
-
-const ()

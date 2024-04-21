@@ -56,7 +56,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // OVNDBClusterReconciler reconciles a OVNDBCluster object
@@ -293,7 +292,7 @@ func (r *OVNDBClusterReconciler) reconcileDelete(ctx context.Context, instance *
 	return ctrl.Result{}, nil
 }
 
-func (r *OVNDBClusterReconciler) reconcileUpdate(ctx context.Context, instance *ovnv1.OVNDBCluster, helper *helper.Helper) (ctrl.Result, error) {
+func (r *OVNDBClusterReconciler) reconcileUpdate(ctx context.Context) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 
 	Log.Info("Reconciling Service update")
@@ -305,7 +304,7 @@ func (r *OVNDBClusterReconciler) reconcileUpdate(ctx context.Context, instance *
 	return ctrl.Result{}, nil
 }
 
-func (r *OVNDBClusterReconciler) reconcileUpgrade(ctx context.Context, instance *ovnv1.OVNDBCluster, helper *helper.Helper) (ctrl.Result, error) {
+func (r *OVNDBClusterReconciler) reconcileUpgrade(ctx context.Context) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 
 	Log.Info("Reconciling Service upgrade")
@@ -479,7 +478,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	//
 
 	// Handle service update
-	ctrlResult, err := r.reconcileUpdate(ctx, instance, helper)
+	ctrlResult, err := r.reconcileUpdate(ctx)
 	if err != nil {
 		return ctrlResult, err
 	} else if (ctrlResult != ctrl.Result{}) {
@@ -487,7 +486,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	}
 
 	// Handle service upgrade
-	ctrlResult, err = r.reconcileUpgrade(ctx, instance, helper)
+	ctrlResult, err = r.reconcileUpgrade(ctx)
 	if err != nil {
 		return ctrlResult, err
 	} else if (ctrlResult != ctrl.Result{}) {
@@ -609,7 +608,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 func getPodIPInNetwork(ovnPod corev1.Pod, namespace string, networkAttachment string) (string, error) {
 	netStat, err := nad.GetNetworkStatusFromAnnotation(ovnPod.Annotations)
 	if err != nil {
-		err = fmt.Errorf("Error while getting the Network Status for pod %s: %v", ovnPod.Name, err)
+		err = fmt.Errorf("Error while getting the Network Status for pod %s: %w", ovnPod.Name, err)
 		return "", err
 	}
 	for _, v := range netStat {
@@ -622,21 +621,6 @@ func getPodIPInNetwork(ovnPod corev1.Pod, namespace string, networkAttachment st
 	// If this is reached it means that no IP was found, construct error and return
 	err = fmt.Errorf("Error while getting IP address from pod %s in network %s, IP is empty", ovnPod.Name, networkAttachment)
 	return "", err
-}
-
-func deleteDNSData(ctx context.Context, helper *helper.Helper, dnsName string, namespace string) error {
-	// Delete DNS records for deleted services/pods
-	dnsData := &infranetworkv1.DNSData{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      dnsName,
-			Namespace: namespace,
-		},
-	}
-	err := helper.GetClient().Delete(ctx, dnsData)
-	if err != nil && !k8s_errors.IsNotFound(err) {
-		return fmt.Errorf("Error while cleaning up DNS record %s: %w", dnsName, err)
-	}
-	return nil
 }
 
 func (r *OVNDBClusterReconciler) reconcileServices(

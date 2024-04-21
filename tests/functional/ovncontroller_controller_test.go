@@ -20,18 +20,19 @@ import (
 	"encoding/json"
 	"fmt"
 
-	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2" //revive:disable:dot-imports
+	. "github.com/onsi/gomega"    //revive:disable:dot-imports
+
+	//revive:disable-next-line:dot-imports
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
+
+	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-	//	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
-	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 )
 
 var _ = Describe("OVNController controller", func() {
@@ -745,7 +746,7 @@ var _ = Describe("OVNController controller", func() {
 
 		It("applies meaningful defaults", func() {
 			ovnController := GetOVNController(ovnControllerName)
-			Expect(*ovnController.Spec.ExternalIDS.EnableChassisAsGateway).To(Equal(true))
+			Expect(*ovnController.Spec.ExternalIDS.EnableChassisAsGateway).To(BeTrue())
 			Expect(ovnController.Spec.ExternalIDS.OvnEncapType).To(Equal("geneve"))
 			Expect(ovnController.Spec.ExternalIDS.OvnBridge).To(Equal("br-int"))
 			Expect(ovnController.Spec.ExternalIDS.SystemID).To(Equal("random"))
