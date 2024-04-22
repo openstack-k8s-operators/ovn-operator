@@ -193,7 +193,7 @@ func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager, ctx context.Context) error {
+func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	crs := &ovnv1.OVNControllerList{}
 	// index caBundleSecretNameField
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &ovnv1.OVNController{}, caBundleSecretNameField, func(rawObj client.Object) []string {
@@ -227,7 +227,7 @@ func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager, ctx context
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
-		Watches(&ovnv1.OVNDBCluster{}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient(), r.GetLogger(ctx)))).
+		Watches(&ovnv1.OVNDBCluster{}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNDBClusterNamespaceMapFunc(crs, mgr.GetClient()))).
 		Watches(
 			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSrc),
@@ -283,8 +283,6 @@ func (r *OVNControllerReconciler) reconcileDelete(ctx context.Context, instance 
 
 func (r *OVNControllerReconciler) reconcileInit(
 	ctx context.Context,
-	instance *ovnv1.OVNController,
-	helper *helper.Helper,
 ) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 
@@ -297,7 +295,7 @@ func (r *OVNControllerReconciler) reconcileInit(
 	return ctrl.Result{}, nil
 }
 
-func (r *OVNControllerReconciler) reconcileUpdate(ctx context.Context, instance *ovnv1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
+func (r *OVNControllerReconciler) reconcileUpdate(ctx context.Context) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 
 	Log.Info("Reconciling Service update")
@@ -306,7 +304,7 @@ func (r *OVNControllerReconciler) reconcileUpdate(ctx context.Context, instance 
 	return ctrl.Result{}, nil
 }
 
-func (r *OVNControllerReconciler) reconcileUpgrade(ctx context.Context, instance *ovnv1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
+func (r *OVNControllerReconciler) reconcileUpgrade(ctx context.Context) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 
 	Log.Info("Reconciling Service upgrade")
@@ -487,7 +485,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 
 	// Handle service init
-	ctrlResult, err := r.reconcileInit(ctx, instance, helper)
+	ctrlResult, err := r.reconcileInit(ctx)
 	if err != nil {
 		return ctrlResult, err
 	} else if (ctrlResult != ctrl.Result{}) {
@@ -495,7 +493,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 
 	// Handle service update
-	ctrlResult, err = r.reconcileUpdate(ctx, instance, helper)
+	ctrlResult, err = r.reconcileUpdate(ctx)
 	if err != nil {
 		return ctrlResult, err
 	} else if (ctrlResult != ctrl.Result{}) {
@@ -503,7 +501,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 
 	// Handle service upgrade
-	ctrlResult, err = r.reconcileUpgrade(ctx, instance, helper)
+	ctrlResult, err = r.reconcileUpgrade(ctx)
 	if err != nil {
 		return ctrlResult, err
 	} else if (ctrlResult != ctrl.Result{}) {
@@ -623,7 +621,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	// create OVN Config Job - start
 	// Waits for OVS pods to run the configJob which basically will set config into OVS database
 	if instance.Status.OVSNumberReady == instance.Status.DesiredNumberScheduled {
-		jobsDef, err := ovncontroller.ConfigJob(ctx, helper, r.Client, instance, sbCluster, ovnServiceLabels)
+		jobsDef, err := ovncontroller.ConfigJob(ctx, r.Client, instance, sbCluster, ovnServiceLabels)
 		if err != nil {
 			Log.Error(err, "Failed to create OVN controller configuration Job")
 			return ctrl.Result{}, err

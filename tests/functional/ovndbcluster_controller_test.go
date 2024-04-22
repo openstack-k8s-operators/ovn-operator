@@ -20,11 +20,14 @@ import (
 	"encoding/json"
 	"fmt"
 
-	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	. "github.com/onsi/ginkgo/v2" //revive:disable:dot-imports
+	. "github.com/onsi/gomega"    //revive:disable:dot-imports
+
+	//revive:disable-next-line:dot-imports
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
+
+	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -57,8 +60,8 @@ var _ = Describe("OVNDBCluster controller", func() {
 					}
 
 					Eventually(func(g Gomega) int {
-						DnsHostsList := GetDNSDataHostsList(statefulSetName.Namespace, "ovsdbserver-"+DnsName)
-						return len(DnsHostsList)
+						DNSHostsList := GetDNSDataHostsList(statefulSetName.Namespace, "ovsdbserver-"+DnsName)
+						return len(DNSHostsList)
 					}).Should(BeNumerically("==", 3))
 
 					// Scale down to 1
@@ -70,8 +73,8 @@ var _ = Describe("OVNDBCluster controller", func() {
 
 					// Check if dnsdata CR is down to 1
 					Eventually(func() int {
-						listDns := GetDNSDataHostsList(statefulSetName.Namespace, "ovsdbserver-"+DnsName)
-						return len(listDns)
+						listDNS := GetDNSDataHostsList(statefulSetName.Namespace, "ovsdbserver-"+DnsName)
+						return len(listDNS)
 					}).Should(BeNumerically("==", 1))
 				},
 				Entry("DNS entry NB", "nb"),
@@ -92,14 +95,14 @@ var _ = Describe("OVNDBCluster controller", func() {
 
 					// Check that DNSData info has been created with correct IP (10.0.0.1)
 					Eventually(func(g Gomega) {
-						g.Expect(CheckDNSDataContainsIp(cluster.Namespace, "ovsdbserver-sb", "10.0.0.1")).Should(BeTrue())
+						g.Expect(CheckDNSDataContainsIP(cluster.Namespace, "ovsdbserver-sb", "10.0.0.1")).Should(BeTrue())
 					}).Should(Succeed())
 
 					// Modify pod IP section
 					pod := GetPod(types.NamespacedName{Name: "ovsdbserver-sb-0", Namespace: cluster.Namespace})
 					// Create new pod NAD and add it to POD
 					netStatus := []networkv1.NetworkStatus{
-						networkv1.NetworkStatus{
+						{
 							Name: cluster.Namespace + "/internalapi",
 							IPs:  []string{"10.0.0.10"},
 						},
@@ -114,13 +117,13 @@ var _ = Describe("OVNDBCluster controller", func() {
 					Eventually(func(g Gomega) {
 						c := GetOVNDBCluster(clusterName)
 						// Change something just to call reconcile loop
-						*&c.Spec.ElectionTimer += 1000
+						c.Spec.ElectionTimer += 1000
 						g.Expect(k8sClient.Update(ctx, c)).Should(Succeed())
 					}).Should(Succeed())
 
 					// Check that DNSData info has been modified with correct IP (10.0.0.10)
 					Eventually(func(g Gomega) {
-						g.Expect(CheckDNSDataContainsIp(cluster.Namespace, "ovsdbserver-sb", "10.0.0.1")).Should(BeTrue())
+						g.Expect(CheckDNSDataContainsIP(cluster.Namespace, "ovsdbserver-sb", "10.0.0.1")).Should(BeTrue())
 					}).Should(Succeed())
 
 				},
@@ -238,18 +241,18 @@ var _ = Describe("OVNDBCluster controller", func() {
 			// - ovsdbserver-sb-0 (cluster type)
 			Eventually(func(g Gomega) {
 				serviceListWithoutTypeLabel := GetServicesListWithLabel(namespace)
-				g.Expect(len(serviceListWithoutTypeLabel.Items)).To(Equal(2))
+				g.Expect(serviceListWithoutTypeLabel.Items).To(HaveLen(2))
 			}).Should(Succeed())
 
 			Eventually(func(g Gomega) {
 				serviceListWithClusterType := GetServicesListWithLabel(namespace, map[string]string{"type": "cluster"})
-				g.Expect(len(serviceListWithClusterType.Items)).To(Equal(1))
+				g.Expect(serviceListWithClusterType.Items).To(HaveLen(1))
 				g.Expect(serviceListWithClusterType.Items[0].Name).To(Equal("ovsdbserver-sb-0"))
 			}).Should(Succeed())
 
 			Eventually(func(g Gomega) {
 				serviceListWithHeadlessType := GetServicesListWithLabel(namespace, map[string]string{"type": "headless"})
-				g.Expect(len(serviceListWithHeadlessType.Items)).To(Equal(1))
+				g.Expect(serviceListWithHeadlessType.Items).To(HaveLen(1))
 				g.Expect(serviceListWithHeadlessType.Items[0].Name).To(Equal("ovsdbserver-sb"))
 			}).Should(Succeed())
 		})

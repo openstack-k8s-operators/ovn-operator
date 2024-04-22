@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega" //revive:disable:dot-imports
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -62,11 +62,6 @@ func GetTLSOVNNorthdSpec() ovnv1.OVNNorthdSpec {
 		},
 	}
 	return spec
-}
-
-func CreateOVNNorthd(namespace string, OVNNorthdName string, spec ovnv1.OVNNorthdSpec) client.Object {
-	name := ovn.CreateOVNNorthd(namespace, spec)
-	return ovn.GetOVNNorthd(name)
 }
 
 func GetOVNNorthd(name types.NamespacedName) *ovnv1.OVNNorthd {
@@ -109,10 +104,6 @@ func CreateOVNDBCluster(namespace string, spec ovnv1.OVNDBClusterSpec) client.Ob
 	return ovn.GetOVNDBCluster(name)
 }
 
-func UpdateOVNDBCluster(cluster *ovnv1.OVNDBCluster) {
-	k8sClient.Update(ctx, cluster)
-}
-
 func OVNDBClusterConditionGetter(name types.NamespacedName) condition.Conditions {
 	instance := ovn.GetOVNDBCluster(name)
 	return instance.Status.Conditions
@@ -135,7 +126,7 @@ func CreateOVNDBClusters(namespace string, nad map[string][]string, replicas int
 		// OVNDBCluster doesn't allow multiple NADs, hence map len
 		// must be <= 1
 		Expect(len(nad)).Should(BeNumerically("<=", 1))
-		for k, _ := range nad {
+		for k := range nad {
 			if strings.Contains(k, "/") {
 				// k = namespace/nad_name, split[1] will return nad_name (e.g. internalapi)
 				stringNad = strings.Split(k, "/")[1]
@@ -150,7 +141,7 @@ func CreateOVNDBClusters(namespace string, nad map[string][]string, replicas int
 		spec.Replicas = &replicas
 
 		instance := CreateOVNDBCluster(namespace, spec)
-		instance_name := types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+		instanceName := types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 
 		dbName := "nb"
 		if db == ovnv1.SBDBType {
@@ -168,7 +159,7 @@ func CreateOVNDBClusters(namespace string, nad map[string][]string, replicas int
 		// with all information (Status.DBAddress and internalDBAddress
 		// are set at the end of the reconcileService)
 		Eventually(func(g Gomega) {
-			ovndbcluster := ovn.GetOVNDBCluster(instance_name)
+			ovndbcluster := ovn.GetOVNDBCluster(instanceName)
 			endpoint := ""
 			// Check External endpoint when NAD is set
 			if len(nad) == 0 {
@@ -179,7 +170,7 @@ func CreateOVNDBClusters(namespace string, nad map[string][]string, replicas int
 			g.Expect(endpoint).ToNot(BeEmpty())
 		}).Should(Succeed())
 
-		dbs = append(dbs, instance_name)
+		dbs = append(dbs, instanceName)
 
 	}
 
@@ -322,7 +313,7 @@ func GetDNSDataHostsList(namespace string, dnsEntryName string) []infranetworkv1
 	return dnsEntry.Spec.Hosts
 }
 
-func CheckDNSDataContainsIp(namespace string, dnsEntryName string, ip string) bool {
+func CheckDNSDataContainsIP(namespace string, dnsEntryName string, ip string) bool {
 	hostList := GetDNSDataHostsList(namespace, dnsEntryName)
 	for _, host := range hostList {
 		if host.IP == ip {
@@ -342,7 +333,7 @@ func GetPod(name types.NamespacedName) *corev1.Pod {
 }
 
 func UpdatePod(pod *corev1.Pod) {
-	k8sClient.Update(ctx, pod)
+	Expect(k8sClient.Update(ctx, pod)).Should(Succeed())
 }
 
 func GetServicesListWithLabel(namespace string, labelSelectorMap ...map[string]string) *corev1.ServiceList {
