@@ -40,7 +40,6 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/deployment"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
-	nad "github.com/openstack-k8s-operators/lib-common/modules/common/networkattachment"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
@@ -82,7 +81,6 @@ func (r *OVNNorthdReconciler) GetLogger(ctx context.Context) logr.Logger {
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;patch;update;delete;
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
-//+kubebuilder:rbac:groups=k8s.cni.cncf.io,resources=network-attachment-definitions,verbs=get;list;watch
 
 // service account, role, rolebinding
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update
@@ -136,7 +134,6 @@ func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// initialize conditions used later as Status=Unknown
 	cl := condition.CreateList(
 		condition.UnknownCondition(condition.InputReadyCondition, condition.InitReason, condition.InputReadyInitMessage),
-		condition.UnknownCondition(condition.NetworkAttachmentsReadyCondition, condition.InitReason, condition.NetworkAttachmentsReadyInitMessage),
 		condition.UnknownCondition(condition.DeploymentReadyCondition, condition.InitReason, condition.DeploymentReadyInitMessage),
 		condition.UnknownCondition(condition.ServiceAccountReadyCondition, condition.InitReason, condition.ServiceAccountReadyInitMessage),
 		condition.UnknownCondition(condition.RoleReadyCondition, condition.InitReason, condition.RoleReadyInitMessage),
@@ -146,10 +143,6 @@ func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	instance.Status.Conditions.Init(&cl)
 	instance.Status.ObservedGeneration = instance.Generation
-
-	if instance.Status.NetworkAttachments == nil {
-		instance.Status.NetworkAttachments = map[string][]string{}
-	}
 
 	// Always patch the instance status when exiting this function so we can persist any changes.
 	defer func() {
@@ -327,39 +320,6 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 		common.AppSelector: ovnv1.ServiceNameOvnNorthd,
 	}
 
-	// network to attach to
-	networkAttachments := []string{}
-	if instance.Spec.NetworkAttachment != "" {
-		networkAttachments = append(networkAttachments, instance.Spec.NetworkAttachment)
-
-		_, err = nad.GetNADWithName(ctx, helper, instance.Spec.NetworkAttachment, instance.Namespace)
-		if err != nil {
-			if k8s_errors.IsNotFound(err) {
-				instance.Status.Conditions.Set(condition.FalseCondition(
-					condition.NetworkAttachmentsReadyCondition,
-					condition.RequestedReason,
-					condition.SeverityInfo,
-					condition.NetworkAttachmentsReadyWaitingMessage,
-					instance.Spec.NetworkAttachment))
-				return ctrl.Result{RequeueAfter: time.Second * 10}, fmt.Errorf("network-attachment-definition %s not found", instance.Spec.NetworkAttachment)
-			}
-			instance.Status.Conditions.Set(condition.FalseCondition(
-				condition.NetworkAttachmentsReadyCondition,
-				condition.ErrorReason,
-				condition.SeverityWarning,
-				condition.NetworkAttachmentsReadyErrorMessage,
-				err.Error()))
-			return ctrl.Result{}, err
-		}
-
-	}
-
-	serviceAnnotations, err := nad.CreateNetworksAnnotation(instance.Namespace, networkAttachments)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed create network annotation from %s: %w",
-			instance.Spec.NetworkAttachment, err)
-	}
-
 	// Handle service update
 	ctrlResult, err := r.reconcileUpdate(ctx)
 	if err != nil {
@@ -438,7 +398,7 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 
 	// Define a new Deployment object
 	depl := deployment.NewDeployment(
-		ovnnorthd.Deployment(instance, serviceLabels, serviceAnnotations, nbEndpoint, sbEndpoint, envVars),
+		ovnnorthd.Deployment(instance, serviceLabels, nbEndpoint, sbEndpoint, envVars),
 		time.Duration(5)*time.Second,
 	)
 
@@ -461,27 +421,6 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	}
 
 	instance.Status.ReadyCount = depl.GetDeployment().Status.ReadyReplicas
-
-	// verify if network attachment matches expectations
-	networkReady, networkAttachmentStatus, err := nad.VerifyNetworkStatusFromAnnotation(ctx, helper, networkAttachments, serviceLabels, instance.Status.ReadyCount)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	instance.Status.NetworkAttachments = networkAttachmentStatus
-	if networkReady {
-		instance.Status.Conditions.MarkTrue(condition.NetworkAttachmentsReadyCondition, condition.NetworkAttachmentsReadyMessage)
-	} else {
-		err := fmt.Errorf("not all pods have interfaces with ips as configured in NetworkAttachments: %s", instance.Spec.NetworkAttachment)
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			condition.NetworkAttachmentsReadyCondition,
-			condition.ErrorReason,
-			condition.SeverityWarning,
-			condition.NetworkAttachmentsReadyErrorMessage,
-			err.Error()))
-
-		return ctrlResult, nil
-	}
 
 	if instance.Status.ReadyCount > 0 {
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)

@@ -17,7 +17,6 @@ limitations under the License.
 package functional_test
 
 import (
-	"encoding/json"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2" //revive:disable:dot-imports
@@ -26,7 +25,6 @@ import (
 	//revive:disable-next-line:dot-imports
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
 
-	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -131,138 +129,6 @@ var _ = Describe("OVNNorthd controller", func() {
 		})
 	})
 
-	When("OVNNorthd is created with networkAttachments", func() {
-		var ovnNorthdName types.NamespacedName
-
-		BeforeEach(func() {
-			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
-			DeferCleanup(DeleteOVNDBClusters, dbs)
-			spec := GetDefaultOVNNorthdSpec()
-			spec.NetworkAttachment = "internalapi"
-			ovnNorthdName = ovn.CreateOVNNorthd(namespace, spec)
-			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
-		})
-
-		It("reports that the definition is missing", func() {
-			th.ExpectConditionWithDetails(
-				ovnNorthdName,
-				ConditionGetterFunc(OVNNorthdConditionGetter),
-				condition.NetworkAttachmentsReadyCondition,
-				corev1.ConditionFalse,
-				condition.RequestedReason,
-				"NetworkAttachment resources missing: internalapi",
-			)
-		})
-		It("reports that network attachment is missing", func() {
-			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
-			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
-			DeferCleanup(th.DeleteInstance, nad)
-
-			deplName := types.NamespacedName{
-				Namespace: namespace,
-				Name:      "ovn-northd",
-			}
-
-			depl := th.GetDeployment(deplName)
-
-			expectedAnnotation, err := json.Marshal(
-				[]networkv1.NetworkSelectionElement{
-					{
-						Name:             "internalapi",
-						Namespace:        namespace,
-						InterfaceRequest: "internalapi",
-					}})
-			Expect(err).ShouldNot(HaveOccurred())
-			Expect(depl.Spec.Template.ObjectMeta.Annotations).To(
-				HaveKeyWithValue("k8s.v1.cni.cncf.io/networks", string(expectedAnnotation)),
-			)
-
-			// We don't add network attachment status annotations to the Pods
-			// to simulate that the network attachments are missing.
-			//th.SimulateDeploymentReadyWithPods(deplName, map[string][]string{})
-
-			th.ExpectConditionWithDetails(
-				ovnNorthdName,
-				ConditionGetterFunc(OVNNorthdConditionGetter),
-				condition.NetworkAttachmentsReadyCondition,
-				corev1.ConditionFalse,
-				condition.ErrorReason,
-				"NetworkAttachments error occurred "+
-					"not all pods have interfaces with ips as configured in NetworkAttachments: internalapi",
-			)
-		})
-		It("reports that an IP is missing", func() {
-			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
-			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
-			DeferCleanup(th.DeleteInstance, nad)
-
-			deplName := types.NamespacedName{
-				Namespace: namespace,
-				Name:      "ovn-northd",
-			}
-
-			depl := th.GetDeployment(deplName)
-
-			expectedAnnotation, err := json.Marshal(
-				[]networkv1.NetworkSelectionElement{
-					{
-						Name:             "internalapi",
-						Namespace:        namespace,
-						InterfaceRequest: "internalapi",
-					}})
-			Expect(err).ShouldNot(HaveOccurred())
-			Expect(depl.Spec.Template.ObjectMeta.Annotations).To(
-				HaveKeyWithValue("k8s.v1.cni.cncf.io/networks", string(expectedAnnotation)),
-			)
-
-			// We simulate that there is no IP associated with the internalapi
-			// network attachment
-			th.SimulateDeploymentReadyWithPods(
-				deplName,
-				map[string][]string{namespace + "/internalapi": {}},
-			)
-
-			th.ExpectConditionWithDetails(
-				ovnNorthdName,
-				ConditionGetterFunc(OVNNorthdConditionGetter),
-				condition.NetworkAttachmentsReadyCondition,
-				corev1.ConditionFalse,
-				condition.ErrorReason,
-				"NetworkAttachments error occurred "+
-					"not all pods have interfaces with ips as configured in NetworkAttachments: internalapi",
-			)
-		})
-		It("reports NetworkAttachmentsReady if the Pods got the proper annotations", func() {
-			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
-			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
-			DeferCleanup(th.DeleteInstance, nad)
-
-			deplName := types.NamespacedName{
-				Namespace: namespace,
-				Name:      "ovn-northd",
-			}
-
-			th.SimulateDeploymentReadyWithPods(
-				deplName,
-				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
-			)
-
-			th.ExpectCondition(
-				ovnNorthdName,
-				ConditionGetterFunc(OVNNorthdConditionGetter),
-				condition.NetworkAttachmentsReadyCondition,
-				corev1.ConditionTrue,
-			)
-
-			Eventually(func(g Gomega) {
-				ovnNorthd := GetOVNNorthd(ovnNorthdName)
-				g.Expect(ovnNorthd.Status.NetworkAttachments).To(
-					Equal(map[string][]string{namespace + "/internalapi": {"10.0.0.1"}}))
-
-			}, timeout, interval).Should(Succeed())
-		})
-	})
-
 	When("OVNNorthd is created with TLS", func() {
 		var ovnNorthdName types.NamespacedName
 
@@ -270,12 +136,8 @@ var _ = Describe("OVNNorthd controller", func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
 			spec := GetTLSOVNNorthdSpec()
-			spec.NetworkAttachment = "internalapi"
 			ovnNorthdName = ovn.CreateOVNNorthd(namespace, spec)
 			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
-			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
-			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
-			DeferCleanup(th.DeleteInstance, nad)
 		})
 
 		It("reports that the CA secret is missing", func() {
@@ -337,7 +199,7 @@ var _ = Describe("OVNNorthd controller", func() {
 				Name:      "ovn-northd",
 			}
 			th.SimulateDeploymentReadyWithPods(
-				deploymentName, map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+				deploymentName, map[string][]string{},
 			)
 
 			d := th.GetDeployment(deploymentName)
@@ -384,7 +246,7 @@ var _ = Describe("OVNNorthd controller", func() {
 				Name:      "ovn-northd",
 			}
 			th.SimulateDeploymentReadyWithPods(
-				deploymentName, map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+				deploymentName, map[string][]string{},
 			)
 
 			originalHash := GetEnvVarValue(
@@ -430,7 +292,7 @@ var _ = Describe("OVNNorthd controller", func() {
 				Name:      "ovn-northd",
 			}
 			th.SimulateDeploymentReadyWithPods(
-				deploymentName, map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+				deploymentName, map[string][]string{},
 			)
 
 			originalHash := GetEnvVarValue(
