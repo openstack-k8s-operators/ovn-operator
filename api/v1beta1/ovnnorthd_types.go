@@ -59,7 +59,7 @@ type OVNNorthdSpecCore struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=info
 	// LogLevel - Set log level info, dbg, emer etc
-	LogLevel string `json:"logLevel"`
+	LogLevel string `json:"logLevel,omitempty"`
 
 	// +kubebuilder:validation:Optional
 	// Resources - Compute Resources required by this service (Limits/Requests).
