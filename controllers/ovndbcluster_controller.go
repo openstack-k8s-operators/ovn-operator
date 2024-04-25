@@ -823,9 +823,6 @@ func (r *OVNDBClusterReconciler) createHashOfInputHashes(
 	}
 	if hashMap, changed := util.SetHash(instance.Status.Hash, common.InputHashName, hash); changed {
 		instance.Status.Hash = hashMap
-		if err := r.Client.Status().Update(ctx, instance); err != nil {
-			return hash, err
-		}
 		Log.Info(fmt.Sprintf("Input maps hash %s - %s", common.InputHashName, hash))
 	}
 	return hash, nil
