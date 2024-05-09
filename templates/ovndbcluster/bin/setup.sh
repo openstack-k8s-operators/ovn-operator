@@ -62,13 +62,10 @@ set "$@" --db-${DB_TYPE}-port=${DB_PORT}
 set "$@" --ovn-${DB_TYPE}-db-ssl-key={{.OVNDB_KEY_PATH}}
 set "$@" --ovn-${DB_TYPE}-db-ssl-cert={{.OVNDB_CERT_PATH}}
 set "$@" --ovn-${DB_TYPE}-db-ssl-ca-cert={{.OVNDB_CACERT_PATH}}
-set "$@" --db-${DB_TYPE}-cluster-local-proto=ssl
-set "$@" --db-${DB_TYPE}-cluster-remote-proto=ssl
 set "$@" --db-${DB_TYPE}-create-insecure-remote=no
-{{- else }}
+{{- end }}
 set "$@" --db-${DB_TYPE}-cluster-local-proto=tcp
 set "$@" --db-${DB_TYPE}-cluster-remote-proto=tcp
-{{- end }}
 
 # log to console
 set "$@" --ovn-${DB_TYPE}-log=-vconsole:{{ .OVN_LOG_LEVEL }}

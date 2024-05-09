@@ -493,7 +493,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 				ContainSubstring("-db-ssl-key="),
 				ContainSubstring("-db-ssl-cert="),
 				ContainSubstring("-db-ssl-ca-cert="),
-				ContainSubstring("-cluster-remote-proto=ssl"),
+				ContainSubstring("-cluster-remote-proto=tcp"),
 			))
 
 			th.ExpectCondition(
