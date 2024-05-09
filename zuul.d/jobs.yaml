@@ -6,3 +6,21 @@
     vars:
       cifmw_tempest_tests_allowed:
         - neutron_tempest_plugin.scenario
+      cifmw_edpm_prepare_kustomizations:
+        - apiVersion: kustomize.config.k8s.io/v1beta1
+          kind: Kustomization
+          namespace: openstack
+          patches:
+          - patch: |-
+              apiVersion: core.openstack.org/v1beta1
+              kind: OpenStackControlPlane
+              metadata:
+                name: unused
+              spec:
+                ovn:
+                  template:
+                    ovnDBCluster:
+                      ovndbcluster-nb:
+                        replicas: 3
+            target:
+              kind: OpenStackControlPlane
