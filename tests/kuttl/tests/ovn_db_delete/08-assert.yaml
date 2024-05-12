@@ -1,0 +1,48 @@
+#
+# Check for:
+#
+# - 1 OVNDBCluster CR
+# - 1 Pod for OVNDBCluster nb CR
+# - 1 Pod for OVNDBCluster sb CR
+#
+
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  finalizers:
+  - OVNDBCluster
+  name: ovndbcluster-nb-sample
+spec:
+  replicas: 1
+status:
+  readyCount: 1
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ovsdbserver-nb
+spec:
+  replicas: 1
+status:
+  availableReplicas: 1
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  finalizers:
+  - OVNDBCluster
+  name: ovndbcluster-sb-sample
+spec:
+  replicas: 1
+status:
+  readyCount: 1
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ovsdbserver-sb
+spec:
+  replicas: 1
+status:
+  availableReplicas: 1
+---

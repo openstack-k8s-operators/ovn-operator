@@ -1,0 +1,7 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      oc delete pods -n $NAMESPACE -l service=ovsdbserver-nb
+  - script: |
+      oc delete pods -n $NAMESPACE -l service=ovsdbserver-sb
