@@ -434,11 +434,11 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	//
 
 	ovnServiceLabels := map[string]string{
-		common.AppSelector: ovnv1.ServiceNameOvnController,
+		common.AppSelector: ovnv1.ServiceNameOVNController,
 	}
 
 	ovsServiceLabels := map[string]string{
-		common.AppSelector: ovnv1.ServiceNameOvs,
+		common.AppSelector: ovnv1.ServiceNameOVS,
 	}
 
 	// Create additional Physical Network Attachments
@@ -629,7 +629,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		return ctrl.Result{}, err
 	}
 	for _, jobDef := range jobsDef {
-		configHashKey := ovnv1.OvnConfigHash + "-" + jobDef.Spec.Template.Spec.NodeName
+		configHashKey := ovnv1.OVNConfigHash + "-" + jobDef.Spec.Template.Spec.NodeName
 		configHash := instance.Status.Hash[configHashKey]
 		configJob := job.NewJob(
 			jobDef,
@@ -684,13 +684,13 @@ func (r *OVNControllerReconciler) generateServiceConfigMaps(
 	envVars *map[string]env.Setter,
 ) error {
 	// Create/update configmaps from templates
-	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnv1.ServiceNameOvnController), map[string]string{})
+	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnv1.ServiceNameOVNController), map[string]string{})
 
 	templateParameters := make(map[string]interface{})
 	if instance.Spec.NetworkAttachment != "" {
-		templateParameters["OvnEncapNIC"] = nad.GetNetworkIFName(instance.Spec.NetworkAttachment)
+		templateParameters["OVNEncapNIC"] = nad.GetNetworkIFName(instance.Spec.NetworkAttachment)
 	} else {
-		templateParameters["OvnEncapNIC"] = "eth0"
+		templateParameters["OVNEncapNIC"] = "eth0"
 	}
 	cms := []util.Template{
 		// ScriptsConfigMap
@@ -715,7 +715,7 @@ func (r *OVNControllerReconciler) generateExternalConfigMaps(
 	envVars *map[string]env.Setter,
 ) error {
 	// Create/update configmaps from templates
-	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnv1.ServiceNameOvnController), map[string]string{})
+	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnv1.ServiceNameOVNController), map[string]string{})
 
 	externalEndpoint, err := sbCluster.GetExternalEndpoint()
 	if err != nil {
@@ -723,8 +723,8 @@ func (r *OVNControllerReconciler) generateExternalConfigMaps(
 	}
 
 	externalTemplateParameters := make(map[string]interface{})
-	externalTemplateParameters["OvnRemote"] = externalEndpoint
-	externalTemplateParameters["OvnEncapType"] = instance.Spec.ExternalIDS.OvnEncapType
+	externalTemplateParameters["OVNRemote"] = externalEndpoint
+	externalTemplateParameters["OVNEncapType"] = instance.Spec.ExternalIDS.OvnEncapType
 
 	cms := []util.Template{
 		// EDP ConfigMap

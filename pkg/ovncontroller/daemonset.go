@@ -32,8 +32,8 @@ func CreateOVNDaemonSet(
 	configHash string,
 	labels map[string]string,
 ) *appsv1.DaemonSet {
-	volumes := GetOvnControllerVolumes(instance.Name, instance.Namespace)
-	mounts := GetOvnControllerVolumeMounts()
+	volumes := GetOVNControllerVolumes(instance.Name, instance.Namespace)
+	mounts := GetOVNControllerVolumeMounts()
 
 	args := []string{
 		"ovn-controller --pidfile unix:/run/openvswitch/db.sock",
@@ -47,8 +47,8 @@ func CreateOVNDaemonSet(
 			KeyMount:   ptr.To(ovn_common.OVNDbKeyPath),
 			CaMount:    ptr.To(ovn_common.OVNDbCaCertPath),
 		}
-		volumes = append(volumes, svc.CreateVolume(ovnv1.ServiceNameOvnController))
-		mounts = append(mounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOvnController)...)
+		volumes = append(volumes, svc.CreateVolume(ovnv1.ServiceNameOVNController))
+		mounts = append(mounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOVNController)...)
 
 		// add CA bundle if defined
 		if instance.Spec.TLS.CaBundleSecretName != "" {
@@ -100,7 +100,7 @@ func CreateOVNDaemonSet(
 
 	daemonset := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ovnv1.ServiceNameOvnController,
+			Name:      ovnv1.ServiceNameOVNController,
 			Namespace: instance.Namespace,
 		},
 		Spec: appsv1.DaemonSetSpec{
@@ -191,7 +191,7 @@ func CreateOVSDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts: GetOvsDbVolumeMounts(),
+			VolumeMounts: GetOVSDbVolumeMounts(),
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			LivenessProbe:            ovsDbLivenessProbe,
@@ -228,7 +228,7 @@ func CreateOVSDaemonSet(
 
 	daemonset := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ovnv1.ServiceNameOvs,
+			Name:      ovnv1.ServiceNameOVS,
 			Namespace: instance.Namespace,
 		},
 		Spec: appsv1.DaemonSetSpec{
@@ -242,7 +242,7 @@ func CreateOVSDaemonSet(
 				Spec: corev1.PodSpec{
 					ServiceAccountName: instance.RbacResourceName(),
 					Containers:         containers,
-					Volumes:            GetOvsVolumes(instance.Name, instance.Namespace),
+					Volumes:            GetOVSVolumes(instance.Name, instance.Namespace),
 				},
 			},
 		},

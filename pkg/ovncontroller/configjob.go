@@ -57,13 +57,13 @@ func ConfigJob(
 	}
 
 	envVars := map[string]env.Setter{}
-	envVars["OvnBridge"] = env.SetValue(instance.Spec.ExternalIDS.OvnBridge)
-	envVars["OvnRemote"] = env.SetValue(internalEndpoint)
-	envVars["OvnEncapType"] = env.SetValue(instance.Spec.ExternalIDS.OvnEncapType)
-	envVars["OvnAvailabilityZones"] = env.SetValue(strings.Join(instance.Spec.ExternalIDS.OvnAvailabilityZones, ":"))
+	envVars["OVNBridge"] = env.SetValue(instance.Spec.ExternalIDS.OvnBridge)
+	envVars["OVNRemote"] = env.SetValue(internalEndpoint)
+	envVars["OVNEncapType"] = env.SetValue(instance.Spec.ExternalIDS.OvnEncapType)
+	envVars["OVNAvailabilityZones"] = env.SetValue(strings.Join(instance.Spec.ExternalIDS.OvnAvailabilityZones, ":"))
 	envVars["EnableChassisAsGateway"] = env.SetValue(fmt.Sprintf("%t", *instance.Spec.ExternalIDS.EnableChassisAsGateway))
 	envVars["PhysicalNetworks"] = env.SetValue(getPhysicalNetworks(instance))
-	envVars["OvnHostName"] = EnvDownwardAPI("spec.nodeName")
+	envVars["OVNHostName"] = EnvDownwardAPI("spec.nodeName")
 
 	for _, ovnPod := range ovnPods.Items {
 		jobs = append(
@@ -93,11 +93,11 @@ func ConfigJob(
 										Privileged: &privileged,
 									},
 									Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-									VolumeMounts: GetOvnControllerVolumeMounts(),
+									VolumeMounts: GetOVNControllerVolumeMounts(),
 									Resources:    instance.Spec.Resources,
 								},
 							},
-							Volumes:  GetOvnControllerVolumes(instance.Name, instance.Namespace),
+							Volumes:  GetOVNControllerVolumes(instance.Name, instance.Namespace),
 							NodeName: ovnPod.Spec.NodeName,
 						},
 					},

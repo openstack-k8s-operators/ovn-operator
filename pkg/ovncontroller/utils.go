@@ -47,7 +47,7 @@ func getOVNControllerPods(
 		Namespace: instance.Namespace,
 	}
 	client.MatchingLabels{
-		"service": ovnv1.ServiceNameOvnController,
+		"service": ovnv1.ServiceNameOVNController,
 	}.ApplyToList(podListOpts)
 
 	if err := k8sClient.List(ctx, podList, podListOpts); err != nil {

@@ -316,7 +316,7 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	//
 
 	serviceLabels := map[string]string{
-		common.AppSelector: ovnv1.ServiceNameOvnNorthd,
+		common.AppSelector: ovnv1.ServiceNameOVNNorthd,
 	}
 
 	// Handle service update

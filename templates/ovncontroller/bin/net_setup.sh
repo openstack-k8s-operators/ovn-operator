@@ -14,11 +14,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-OvnEncapIP=$(ip -o addr show dev {{ .OvnEncapNIC }} scope global | awk '{print $4}' | cut -d/ -f1)
+OVNEncapIP=$(ip -o addr show dev {{ .OVNEncapNIC }} scope global | awk '{print $4}' | cut -d/ -f1)
 
 source $(dirname $0)/functions
 
 wait_for_ovsdb_server
 
 set -ex
-ovs-vsctl --no-wait set open . external-ids:ovn-encap-ip=${OvnEncapIP}
+ovs-vsctl --no-wait set open . external-ids:ovn-encap-ip=${OVNEncapIP}

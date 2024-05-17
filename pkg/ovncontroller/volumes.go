@@ -6,8 +6,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// GetVolumes -
-func GetOvnControllerVolumes(name string, namespace string) []corev1.Volume {
+func GetOVNControllerVolumes(name string, namespace string) []corev1.Volume {
 
 	var scriptsVolumeDefaultMode int32 = 0755
 	directoryOrCreate := corev1.HostPathDirectoryOrCreate
@@ -83,8 +82,7 @@ func GetOvnControllerVolumes(name string, namespace string) []corev1.Volume {
 
 }
 
-// GetVolumes -
-func GetOvsVolumes(name string, namespace string) []corev1.Volume {
+func GetOVSVolumes(name string, namespace string) []corev1.Volume {
 
 	var scriptsVolumeDefaultMode int32 = 0755
 	directoryOrCreate := corev1.HostPathDirectoryOrCreate
@@ -142,8 +140,8 @@ func GetOvsVolumes(name string, namespace string) []corev1.Volume {
 
 }
 
-// GetOvsDbVolumeMounts - ovsdb-server VolumeMounts
-func GetOvsDbVolumeMounts() []corev1.VolumeMount {
+// GetOVSDbVolumeMounts - ovsdb-server VolumeMounts
+func GetOVSDbVolumeMounts() []corev1.VolumeMount {
 	return []corev1.VolumeMount{
 		{
 			Name:      "etc-ovs",
@@ -199,8 +197,8 @@ func GetVswitchdVolumeMounts() []corev1.VolumeMount {
 	}
 }
 
-// GetOvnControllerVolumeMounts - ovn-controller VolumeMounts
-func GetOvnControllerVolumeMounts() []corev1.VolumeMount {
+// GetOVNControllerVolumeMounts - ovn-controller VolumeMounts
+func GetOVNControllerVolumeMounts() []corev1.VolumeMount {
 	return []corev1.VolumeMount{
 		{
 			Name:      "var-run",
