@@ -608,7 +608,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 func getPodIPInNetwork(ovnPod corev1.Pod, namespace string, networkAttachment string) (string, error) {
 	netStat, err := nad.GetNetworkStatusFromAnnotation(ovnPod.Annotations)
 	if err != nil {
-		err = fmt.Errorf("Error while getting the Network Status for pod %s: %w", ovnPod.Name, err)
+		err = fmt.Errorf("error while getting the Network Status for pod %s: %w", ovnPod.Name, err)
 		return "", err
 	}
 	for _, v := range netStat {
@@ -619,7 +619,7 @@ func getPodIPInNetwork(ovnPod corev1.Pod, namespace string, networkAttachment st
 		}
 	}
 	// If this is reached it means that no IP was found, construct error and return
-	err = fmt.Errorf("Error while getting IP address from pod %s in network %s, IP is empty", ovnPod.Name, networkAttachment)
+	err = fmt.Errorf("error while getting IP address from pod %s in network %s, IP is empty", ovnPod.Name, networkAttachment)
 	return "", err
 }
 
@@ -708,7 +708,7 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 				svcLabels,
 			)
 			if err != nil {
-				err = fmt.Errorf("Error while deleting service with name %s: %w", fullServiceName, err)
+				err = fmt.Errorf("error while deleting service with name %s: %w", fullServiceName, err)
 				return ctrl.Result{}, err
 			}
 		}
