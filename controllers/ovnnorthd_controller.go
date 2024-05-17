@@ -92,7 +92,6 @@ func (r *OVNNorthdReconciler) GetLogger(ctx context.Context) logr.Logger {
 
 // Reconcile - OVN Northd
 func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, _err error) {
-	_ = context.Background()
 	Log := r.GetLogger(ctx)
 
 	// Fetch the OVNNorthd instance
