@@ -6,5 +6,5 @@ commands:
       oc patch OVNController -n $NAMESPACE ovncontroller-sample --type='json' -p='[{
         "op": "replace",
         "path": "/spec/nicMappings",
-        "value":{"datacentre3":"ospbr3"}
+        "value":{"data-centre3":"ospbr3"}
       }]'

@@ -69,7 +69,7 @@ function configure_physical_networks {
     for physicalNetwork in ${PhysicalNetworks}; do
         br_name="br-${physicalNetwork}"
         bridgeMapping="${physicalNetwork}:${br_name}"
-        if [ -z "$OvnBridgeMappings"]; then
+        if [ -z "$OvnBridgeMappings" ]; then
             OvnBridgeMappings=$bridgeMapping
             br_new=$br_name
         else
@@ -98,7 +98,7 @@ function configure_physical_networks {
     # Add the new bridges.
     for br_name in ${br_to_add}; do
         ovs-vsctl --may-exist add-br ${br_name}
-        ovs-vsctl --may-exist add-port ${br_name} ${br_name##*-}
+        ovs-vsctl --may-exist add-port ${br_name} ${br_name#*-}
     done
 
     # Delete the old bridges not longer present in "OvnBridgeMappings" and the
