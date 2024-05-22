@@ -12,7 +12,8 @@ commands:
         controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller-ovs -o name|head -1)
         oc rsh -n $NAMESPACE ${controller_pod} ip link show dev datacentre2 || exit 1
         oc rsh -n $NAMESPACE ${controller_pod} ip link show dev br-datacentre2 || exit 1
-        oc rsh -n $NAMESPACE ${controller_pod} ip link show dev datacentre3 2>&1 | grep "does not exist" || exit 1
-        oc rsh -n $NAMESPACE ${controller_pod} ip link show dev br-datacentre3 2>&1 | grep "does not exist" || exit 1
+        oc rsh -n $NAMESPACE ${controller_pod} ovs-vsctl list-ports br-datacentre2 | grep datacentre2 || exit 1
+        oc rsh -n $NAMESPACE ${controller_pod} ip link show dev data-centre3 2>&1 | grep "does not exist" || exit 1
+        oc rsh -n $NAMESPACE ${controller_pod} ip link show dev br-data-centre3 2>&1 | grep "does not exist" || exit 1
         oc rsh -n $NAMESPACE ${controller_pod} ovs-vsctl --if-exists get open . external_ids:ovn-bridge-mappings | grep -q "datacentre2:br-datacentre2" || exit 1
         exit 0

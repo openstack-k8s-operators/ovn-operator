@@ -18,4 +18,4 @@ delete:
   name: datacentre2
 - apiVersion: k8s.cni.cncf.io/v1
   kind: NetworkAttachmentDefinition
-  name: datacentre3
+  name: data-centre3
