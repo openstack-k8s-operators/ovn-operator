@@ -568,9 +568,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 
 	instance.Status.NetworkAttachments = networkAttachmentStatus
-	if networkReady {
-		instance.Status.Conditions.MarkTrue(condition.NetworkAttachmentsReadyCondition, condition.NetworkAttachmentsReadyMessage)
-	} else {
+	if !networkReady {
 		err := fmt.Errorf("not all pods have interfaces with ips as configured in NetworkAttachments: %s", instance.Spec.NetworkAttachment)
 		instance.Status.Conditions.Set(condition.FalseCondition(
 			condition.NetworkAttachmentsReadyCondition,
@@ -581,6 +579,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 
 		return ctrl.Result{}, err
 	}
+	instance.Status.Conditions.MarkTrue(condition.NetworkAttachmentsReadyCondition, condition.NetworkAttachmentsReadyMessage)
 
 	if instance.Status.NumberReady == instance.Status.DesiredNumberScheduled && instance.Status.OVSNumberReady == instance.Status.DesiredNumberScheduled {
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
@@ -620,57 +619,56 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 
 	// create OVN Config Job - start
 	// Waits for OVS pods to run the configJob which basically will set config into OVS database
-	if instance.Status.OVSNumberReady == instance.Status.DesiredNumberScheduled {
-		jobsDef, err := ovncontroller.ConfigJob(ctx, r.Client, instance, sbCluster, ovnServiceLabels)
-		if err != nil {
-			Log.Error(err, "Failed to create OVN controller configuration Job")
-			return ctrl.Result{}, err
-		}
-		for _, jobDef := range jobsDef {
-			configHashKey := ovnv1.OvnConfigHash + "-" + jobDef.Spec.Template.Spec.NodeName
-			configHash := instance.Status.Hash[configHashKey]
-			configJob := job.NewJob(
-				jobDef,
-				configHashKey,
-				false,
-				time.Duration(5)*time.Second,
-				configHash,
-			)
-			ctrlResult, err = configJob.DoJob(ctx, helper)
-			if (ctrlResult != ctrl.Result{}) {
-				instance.Status.Conditions.Set(
-					condition.FalseCondition(
-						condition.ServiceConfigReadyCondition,
-						condition.RequestedReason,
-						condition.SeverityInfo,
-						condition.ServiceConfigReadyMessage,
-					),
-				)
-				return ctrlResult, nil
-			}
-			if err != nil {
-				Log.Error(err, "Failed to configure OVN controller")
-				instance.Status.Conditions.Set(
-					condition.FalseCondition(
-						condition.ServiceConfigReadyCondition,
-						condition.RequestedReason,
-						condition.SeverityInfo,
-						condition.ServiceConfigReadyErrorMessage,
-						err.Error(),
-					),
-				)
-				return ctrl.Result{}, err
-			}
-			if configJob.HasChanged() {
-				instance.Status.Hash[configHashKey] = configJob.GetHash()
-				Log.Info(fmt.Sprintf("Job %s hash added - %s", jobDef.Name, instance.Status.Hash[configHashKey]))
-			}
-		}
-		instance.Status.Conditions.MarkTrue(condition.ServiceConfigReadyCondition, condition.ServiceConfigReadyMessage)
-	} else {
+	if instance.Status.OVSNumberReady != instance.Status.DesiredNumberScheduled {
 		Log.Info("OVS DaemonSet not ready yet. Configuration job cannot be started.")
 		return ctrl.Result{Requeue: true}, nil
 	}
+	jobsDef, err := ovncontroller.ConfigJob(ctx, r.Client, instance, sbCluster, ovnServiceLabels)
+	if err != nil {
+		Log.Error(err, "Failed to create OVN controller configuration Job")
+		return ctrl.Result{}, err
+	}
+	for _, jobDef := range jobsDef {
+		configHashKey := ovnv1.OvnConfigHash + "-" + jobDef.Spec.Template.Spec.NodeName
+		configHash := instance.Status.Hash[configHashKey]
+		configJob := job.NewJob(
+			jobDef,
+			configHashKey,
+			false,
+			time.Duration(5)*time.Second,
+			configHash,
+		)
+		ctrlResult, err = configJob.DoJob(ctx, helper)
+		if (ctrlResult != ctrl.Result{}) {
+			instance.Status.Conditions.Set(
+				condition.FalseCondition(
+					condition.ServiceConfigReadyCondition,
+					condition.RequestedReason,
+					condition.SeverityInfo,
+					condition.ServiceConfigReadyMessage,
+				),
+			)
+			return ctrlResult, nil
+		}
+		if err != nil {
+			Log.Error(err, "Failed to configure OVN controller")
+			instance.Status.Conditions.Set(
+				condition.FalseCondition(
+					condition.ServiceConfigReadyCondition,
+					condition.RequestedReason,
+					condition.SeverityInfo,
+					condition.ServiceConfigReadyErrorMessage,
+					err.Error(),
+				),
+			)
+			return ctrl.Result{}, err
+		}
+		if configJob.HasChanged() {
+			instance.Status.Hash[configHashKey] = configJob.GetHash()
+			Log.Info(fmt.Sprintf("Job %s hash added - %s", jobDef.Name, instance.Status.Hash[configHashKey]))
+		}
+	}
+	instance.Status.Conditions.MarkTrue(condition.ServiceConfigReadyCondition, condition.ServiceConfigReadyMessage)
 	// create OVN Config Job - end
 
 	Log.Info("Reconciled Service successfully")
