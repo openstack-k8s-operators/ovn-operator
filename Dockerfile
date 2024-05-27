@@ -43,7 +43,7 @@ ARG USER_ID=65532
 ARG IMAGE_COMPONENT="ovn-operator-container"
 ARG IMAGE_NAME="ovn-operator"
 ARG IMAGE_VERSION="1.0.0"
-ARG IMAGE_SUMMARY="Ovn Operator"
+ARG IMAGE_SUMMARY="OVN Operator"
 ARG IMAGE_DESC="This image includes the ovn-operator"
 ARG IMAGE_TAGS="cn-openstack openstack"
 
