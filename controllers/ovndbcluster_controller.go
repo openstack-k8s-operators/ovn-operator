@@ -719,7 +719,9 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 	// cluster member so it can be resolved from outside cluster (edpm nodes)
 	if instance.Spec.NetworkAttachment != "" {
 		var dnsIPsList []string
-		for _, ovnPod := range podList.Items[:*(instance.Spec.Replicas)] {
+		// TODO(averdagu): use built in Min once go1.21 is used
+		minLen := ovn_common.Min(len(podList.Items), int(*(instance.Spec.Replicas)))
+		for _, ovnPod := range podList.Items[:minLen] {
 			svc, err = service.GetServiceWithName(
 				ctx,
 				helper,
@@ -737,7 +739,9 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 			}
 
 		}
-		// Create DNSData CR
+		// DNSData info is called every reconcile loop to ensure that even if a pod gets
+		// restarted and it's IP has changed, the DNSData CR will have the correct info.
+		// If nothing changed this won't modify the current dnsmasq pod.
 		err = ovndbcluster.DNSData(
 			ctx,
 			helper,
@@ -748,6 +752,14 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 		)
 		if err != nil {
 			return ctrl.Result{}, err
+		}
+		// It can be possible that not all pods are ready, so DNSData won't
+		// have complete information, return error to retrigger reconcile loop
+		// Returning here instead of at the beggining of the for is done to
+		// expose the already created pods to other services/dataplane nodes
+		if len(podList.Items) < int(*(instance.Spec.Replicas)) {
+			err = fmt.Errorf("not all pods are yet created, number of expected pods: %v, current pods: %v", *(instance.Spec.Replicas), len(podList.Items))
+			return ctrl.Result{RequeueAfter: 1 * time.Second}, err
 		}
 	}
 	// dbAddress will contain ovsdbserver-(nb|sb).openstack.svc or empty
