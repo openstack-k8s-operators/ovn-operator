@@ -1,0 +1,9 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+commands:
+  - script: |
+      $OVN_KUTTL_DIR/../common/scripts/check_cluster_status.sh nb 3
+      test $? -eq 0
+  - script: |
+      $OVN_KUTTL_DIR/../common/scripts/check_cluster_status.sh sb 3
+      test $? -eq 0
