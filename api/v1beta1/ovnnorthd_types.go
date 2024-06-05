@@ -31,6 +31,8 @@ const (
 	OVNNorthdContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-northd:current-podified"
 	// ServiceNameOVNNorthd -
 	ServiceNameOVNNorthd = "ovn-northd"
+	// TODO: remove when all external consumers switch to ServiceNameOVNNorthd
+	ServiceNameOvnNorthd = "ovn-northd"
 )
 
 // OVNNorthdSpec defines the desired state of OVNNorthd
