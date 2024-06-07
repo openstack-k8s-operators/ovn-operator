@@ -1,2 +1,2 @@
-ovn-remote: {{ .OvnRemote }}
-ovn-encap-type: {{ .OvnEncapType }}
+ovn-remote: {{ .OVNRemote }}
+ovn-encap-type: {{ .OVNEncapType }}

@@ -25,21 +25,23 @@ import (
 )
 
 const (
-	// OvnConfigHash - OvnConfigHash key
-	OvnConfigHash = "OvnConfigHash"
+	// OVNConfigHash - OVNConfigHash key
+	OVNConfigHash = "OvnConfigHash"
 
 	// Container image fall-back defaults
 
-	// OvnControllerOvsContainerImage is the fall-back container image for OVNController ovs-*
-	OvnControllerOvsContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-base:current-podified"
-	// OvnControllerContainerImage is the fall-back container image for OVNController ovn-controller
-	OvnControllerContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-controller:current-podified"
+	// OVNControllerOVSContainerImage is the fall-back container image for OVNController ovs-*
+	OVNControllerOVSContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-base:current-podified"
+	// OVNControllerContainerImage is the fall-back container image for OVNController ovn-controller
+	OVNControllerContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-controller:current-podified"
 
-	// ServiceNameOvnController - ovn-controller service name
+	// ServiceNameOVNController - ovn-controller service name
+	ServiceNameOVNController = "ovn-controller"
+	// TODO: remove when all external consumers switch to ServiceNameOVNController
 	ServiceNameOvnController = "ovn-controller"
 
-	// ServiceNameOvs - ovn-controller-ovs service name
-	ServiceNameOvs = "ovn-controller-ovs"
+	// ServiceNameOVS - ovn-controller-ovs service name
+	ServiceNameOVS = "ovn-controller-ovs"
 )
 
 // OVNControllerSpec defines the desired state of OVNController
@@ -76,7 +78,7 @@ type OVNControllerSpecCore struct {
 
 	// +kubebuilder:validation:Optional
 	// NetworkAttachment is a NetworkAttachment resource name to expose the service to the given network.
-	// If specified the IP address of this network is used as the OvnEncapIP.
+	// If specified the IP address of this network is used as the OVNEncapIP.
 	NetworkAttachment string `json:"networkAttachment"`
 
 	// +kubebuilder:validation:Optional

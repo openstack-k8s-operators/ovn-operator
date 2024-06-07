@@ -15,13 +15,13 @@
 # under the License.
 
 # Configs are obtained from ENV variables.
-OvnBridge=${OvnBridge:-"br-int"}
-OvnRemote=${OvnRemote:-"tcp:localhost:6642"}
-OvnEncapType=${OvnEncapType:-"geneve"}
-OvnAvailabilityZones=${OvnAvailabilityZones:-""}
+OVNBridge=${OVNBridge:-"br-int"}
+OVNRemote=${OVNRemote:-"tcp:localhost:6642"}
+OVNEncapType=${OVNEncapType:-"geneve"}
+OVNAvailabilityZones=${OVNAvailabilityZones:-""}
 EnableChassisAsGateway=${EnableChassisAsGateway:-true}
 PhysicalNetworks=${PhysicalNetworks:-""}
-OvnHostName=${OvnHostName:-""}
+OVNHostName=${OVNHostName:-""}
 
 function wait_for_ovsdb_server {
     while true; do
@@ -29,7 +29,7 @@ function wait_for_ovsdb_server {
         if [ $? -eq 0 ]; then
             break
         else
-            echo "Ovsdb-server seems not be ready yet. Waiting..."
+            echo "ovsdb-server seems not be ready yet. Waiting..."
             sleep 1
         fi
     done
@@ -37,18 +37,18 @@ function wait_for_ovsdb_server {
 
 # configure external-ids in OVS
 function configure_external_ids {
-    ovs-vsctl set open . external-ids:ovn-bridge=${OvnBridge}
-    ovs-vsctl set open . external-ids:ovn-remote=${OvnRemote}
-    ovs-vsctl set open . external-ids:ovn-encap-type=${OvnEncapType}
-    if [ -n "$OvnHostName" ]; then
-        ovs-vsctl set open . external-ids:hostname=${OvnHostName}
+    ovs-vsctl set open . external-ids:ovn-bridge=${OVNBridge}
+    ovs-vsctl set open . external-ids:ovn-remote=${OVNRemote}
+    ovs-vsctl set open . external-ids:ovn-encap-type=${OVNEncapType}
+    if [ -n "$OVNHostName" ]; then
+        ovs-vsctl set open . external-ids:hostname=${OVNHostName}
     fi
     local cms_options=""
     if [ "$EnableChassisAsGateway" == "true" ]; then
         cms_options="enable-chassis-as-gw"
     fi
-    if [ -n "$OvnAvailabilityZones" ]; then
-        cms_options+=",availability-zones="$OvnAvailabilityZones
+    if [ -n "$OVNAvailabilityZones" ]; then
+        cms_options+=",availability-zones="$OVNAvailabilityZones
     fi
     if [ -n "${cms_options}" ]; then
         ovs-vsctl set open . external-ids:ovn-cms-options=${cms_options#,}
@@ -64,16 +64,16 @@ function set_difference {
 
 # Configure bridge mappings and physical bridges
 function configure_physical_networks {
-    local OvnBridgeMappings=""
+    local OVNBridgeMappings=""
     local br_new=""
     for physicalNetwork in ${PhysicalNetworks}; do
         br_name="br-${physicalNetwork}"
         bridgeMapping="${physicalNetwork}:${br_name}"
-        if [ -z "$OvnBridgeMappings" ]; then
-            OvnBridgeMappings=$bridgeMapping
+        if [ -z "$OVNBridgeMappings" ]; then
+            OVNBridgeMappings=$bridgeMapping
             br_new=$br_name
         else
-            OvnBridgeMappings="${OvnBridgeMappings},${bridgeMapping}"
+            OVNBridgeMappings="${OVNBridgeMappings},${bridgeMapping}"
             br_new="${br_new} ${br_name}"
         fi
     done
@@ -101,7 +101,7 @@ function configure_physical_networks {
         ovs-vsctl --may-exist add-port ${br_name} ${br_name#*-}
     done
 
-    # Delete the old bridges not longer present in "OvnBridgeMappings" and the
+    # Delete the old bridges not longer present in "OVNBridgeMappings" and the
     # patch ports in "br-int".
     for br_name in ${br_to_delete}; do
         # List all ports "type=patch", retrieve the "options:peer" parameter
@@ -115,7 +115,7 @@ function configure_physical_networks {
                 port_type=$(ovs-vsctl --column=type --bare list interface ${iface})
                 if [ "$port_type" == "patch" ]; then
                     peer=$(ovs-vsctl get interface ${iface} options:peer)
-                    ovs-vsctl --if-exists del-port ${OvnBridge} ${peer}
+                    ovs-vsctl --if-exists del-port ${OVNBridge} ${peer}
                 fi
             done
             ovs-vsctl --if-exists del-br ${br_name}
@@ -123,8 +123,8 @@ function configure_physical_networks {
     done
 
     # Set or remove the local OVS Open vSwitch "external-ids:ovn-bridge-mappings"
-    if [ -n "$OvnBridgeMappings" ]; then
-        ovs-vsctl set open . external-ids:ovn-bridge-mappings=${OvnBridgeMappings}
+    if [ -n "$OVNBridgeMappings" ]; then
+        ovs-vsctl set open . external-ids:ovn-bridge-mappings=${OVNBridgeMappings}
     else
         ovs-vsctl --if-exists remove open . external_ids ovn-bridge-mappings
     fi

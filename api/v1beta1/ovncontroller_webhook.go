@@ -24,19 +24,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-// OvnControllerDefaults -
-type OvnControllerDefaults struct {
-	OvsContainerImageURL           string
-	OvnControllerContainerImageURL string
+// OVNControllerDefaults -
+type OVNControllerDefaults struct {
+	OVSContainerImageURL           string
+	OVNControllerContainerImageURL string
 }
 
-var ovnDefaults OvnControllerDefaults
+var ovnDefaults OVNControllerDefaults
 
 // log is for logging in this package.
 var ovncontrollerlog = logf.Log.WithName("ovncontroller-resource")
 
 // SetupOVNControllerDefaults - initialize OVNController spec defaults for use with either internal or external webhooks
-func SetupOVNControllerDefaults(defaults OvnControllerDefaults) {
+func SetupOVNControllerDefaults(defaults OVNControllerDefaults) {
 	ovnDefaults = defaults
 	ovncontrollerlog.Info("OVNController defaults initialized", "defaults", defaults)
 }
@@ -61,10 +61,10 @@ func (r *OVNController) Default() {
 // Default - set defaults for this OVNController spec
 func (spec *OVNControllerSpec) Default() {
 	if spec.OvsContainerImage == "" {
-		spec.OvsContainerImage = ovnDefaults.OvsContainerImageURL
+		spec.OvsContainerImage = ovnDefaults.OVSContainerImageURL
 	}
 	if spec.OvnContainerImage == "" {
-		spec.OvnContainerImage = ovnDefaults.OvnControllerContainerImageURL
+		spec.OvnContainerImage = ovnDefaults.OVNControllerContainerImageURL
 	}
 	spec.OVNControllerSpecCore.Default()
 }

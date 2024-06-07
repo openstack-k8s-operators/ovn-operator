@@ -81,8 +81,8 @@ func Deployment(
 			KeyMount:   ptr.To(ovn_common.OVNDbKeyPath),
 			CaMount:    ptr.To(ovn_common.OVNDbCaCertPath),
 		}
-		volumes = append(volumes, svc.CreateVolume(ovnv1.ServiceNameOvnNorthd))
-		volumeMounts = append(volumeMounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOvnNorthd)...)
+		volumes = append(volumes, svc.CreateVolume(ovnv1.ServiceNameOVNNorthd))
+		volumeMounts = append(volumeMounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOVNNorthd)...)
 
 		args = append(args,
 			fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath),
@@ -106,7 +106,7 @@ func Deployment(
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ovnv1.ServiceNameOvnNorthd,
+			Name:      ovnv1.ServiceNameOVNNorthd,
 			Namespace: instance.Namespace,
 		},
 		Spec: appsv1.DeploymentSpec{
@@ -122,7 +122,7 @@ func Deployment(
 					ServiceAccountName: instance.RbacResourceName(),
 					Containers: []corev1.Container{
 						{
-							Name:                     ovnv1.ServiceNameOvnNorthd,
+							Name:                     ovnv1.ServiceNameOVNNorthd,
 							Command:                  []string{cmd},
 							Args:                     args,
 							Image:                    instance.Spec.ContainerImage,
@@ -146,7 +146,7 @@ func Deployment(
 	deployment.Spec.Template.Spec.Affinity = affinity.DistributePods(
 		common.AppSelector,
 		[]string{
-			ovnv1.ServiceNameOvnNorthd,
+			ovnv1.ServiceNameOVNNorthd,
 		},
 		corev1.LabelHostname,
 	)

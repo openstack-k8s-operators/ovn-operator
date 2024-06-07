@@ -45,10 +45,10 @@ const (
 
 	// Container image fall-back defaults
 
-	// OvnNBContainerImage is the fall-back container image for OVNDBCluster NB
-	OvnNBContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-nb-db-server:current-podified"
-	// OvnSBContainerImage is the fall-back container image for OVNDBCluster SB
-	OvnSBContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-sb-db-server:current-podified"
+	// OVNNBContainerImage is the fall-back container image for OVNDBCluster NB
+	OVNNBContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-nb-db-server:current-podified"
+	// OVNSBContainerImage is the fall-back container image for OVNDBCluster SB
+	OVNSBContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-sb-db-server:current-podified"
 )
 
 // OVNDBClusterSpec defines the desired state of OVNDBCluster

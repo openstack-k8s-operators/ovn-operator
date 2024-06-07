@@ -27,9 +27,11 @@ import (
 const (
 	// Container image fall-back defaults
 
-	// OvnNorthdContainerImage is the fall-back container image for OVNNorthd
-	OvnNorthdContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-northd:current-podified"
-	// ServiceNameOvnNorthd -
+	// OVNNorthdContainerImage is the fall-back container image for OVNNorthd
+	OVNNorthdContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-northd:current-podified"
+	// ServiceNameOVNNorthd -
+	ServiceNameOVNNorthd = "ovn-northd"
+	// TODO: remove when all external consumers switch to ServiceNameOVNNorthd
 	ServiceNameOvnNorthd = "ovn-northd"
 )
 

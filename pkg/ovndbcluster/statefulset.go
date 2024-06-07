@@ -31,8 +31,8 @@ const (
 	// ServiceCommand -
 	ServiceCommand = "/usr/local/bin/container-scripts/setup.sh"
 
-	// PvcSuffixEtcOvn -
-	PvcSuffixEtcOvn = "-etc-ovn"
+	// PVCSuffixEtcOVN -
+	PVCSuffixEtcOVN = "-etc-ovn"
 )
 
 // StatefulSet func
@@ -95,7 +95,7 @@ func StatefulSet(
 
 	// create Volume and VolumeMounts
 	volumes := GetDBClusterVolumes(instance.Name)
-	volumeMounts := GetDBClusterVolumeMounts(instance.Name + PvcSuffixEtcOvn)
+	volumeMounts := GetDBClusterVolumeMounts(instance.Name + PVCSuffixEtcOVN)
 
 	// add CA bundle if defined
 	if instance.Spec.TLS.CaBundleSecretName != "" {
@@ -181,7 +181,7 @@ func StatefulSet(
 	statefulset.Spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:            instance.Name + PvcSuffixEtcOvn,
+				Name:            instance.Name + PVCSuffixEtcOVN,
 				Namespace:       instance.Namespace,
 				Labels:          labels,
 				OwnerReferences: []metav1.OwnerReference{*ownerRef},

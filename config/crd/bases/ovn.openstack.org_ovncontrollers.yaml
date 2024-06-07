@@ -75,7 +75,7 @@ spec:
               networkAttachment:
                 description: NetworkAttachment is a NetworkAttachment resource name
                   to expose the service to the given network. If specified the IP
-                  address of this network is used as the OvnEncapIP.
+                  address of this network is used as the OVNEncapIP.
                 type: string
               nicMappings:
                 additionalProperties:
