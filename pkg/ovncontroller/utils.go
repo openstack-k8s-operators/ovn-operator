@@ -15,6 +15,7 @@ package ovncontroller
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
@@ -31,9 +32,10 @@ func getPhysicalNetworks(
 	//               the same name as "br-<physical network>"
 	// NOTE(slaweq): interface names aren't important as inside Pod they will be
 	//               named based on the NicMappings keys
-	return strings.Join(
-		maps.Keys(instance.Spec.NicMappings), " ",
-	)
+	// Need to pass sorted data as Map is unordered
+	nicMappings := maps.Keys(instance.Spec.NicMappings)
+	sort.Strings(nicMappings)
+	return strings.Join(nicMappings, " ")
 }
 
 func getOVNControllerPods(
