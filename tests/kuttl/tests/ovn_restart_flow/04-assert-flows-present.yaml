@@ -1,0 +1,17 @@
+#
+# Check for:
+#
+# - Check that the flow added to the test bridge "br-test-flows" is present
+#   after the ovn-controller has been restarted.
+#   Expected flow: "table=100, priority=200 actions=drop"
+
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 300
+commands:
+    - script: |
+        node=$(oc get nodes -o name|sort|head -1| sed "s|node/||g")
+        controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller-ovs --field-selector spec.nodeName=$node -o name | head -1)
+        expected_flows="table=100, priority=200 actions=drop"
+        oc rsh -n $NAMESPACE --container ovs-vswitchd $controller_pod ovs-ofctl dump-flows br-test-flows --no-stats | grep -q "$expected_flows" || exit 1
+        oc rsh -n $NAMESPACE --container ovs-vswitchd $controller_pod ovs-vsctl --if-exists del-br br-test-flows
