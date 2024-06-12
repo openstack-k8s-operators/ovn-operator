@@ -620,6 +620,87 @@ var _ = Describe("OVNController controller", func() {
 			DeferCleanup(th.DeleteInstance, instance)
 		})
 
+		It("reports that the networkattachment definition is created with OwnerReferences set", func() {
+			nad := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      "physnet1",
+			}
+			// Ensure OwnerReferences set correctly for the created Network Attachment
+			Eventually(func(g Gomega) {
+				g.Expect(GetNAD(nad).ObjectMeta.OwnerReferences[0].Name).To(Equal(
+					OVNControllerName.Name))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("reports that the networkattachment definition is updated with nicMappings update", func() {
+			nad := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      "physnet1",
+			}
+			// Ensure NAD exists with defined interface
+			Eventually(func(g Gomega) {
+				g.Expect(GetNAD(nad).Spec.Config).Should(
+					ContainSubstring("enp2s0.100"))
+			}, timeout, interval).Should(Succeed())
+
+			// Update Interface in NicMappings
+			Eventually(func(g Gomega) {
+				ovnController := GetOVNController(OVNControllerName)
+				ovnController.Spec.NicMappings = map[string]string{
+					"physnet1": "enp3s0.100",
+				}
+				g.Expect(k8sClient.Update(ctx, ovnController)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			// Ensure OwnerReferences set correctly for the updated Network Attachment
+			Eventually(func(g Gomega) {
+				g.Expect(GetNAD(nad).ObjectMeta.OwnerReferences[0].Name).To(Equal(
+					OVNControllerName.Name))
+			}, timeout, interval).Should(Succeed())
+
+			// Ensure Interface updated in the Network Attachment
+			Eventually(func(g Gomega) {
+				g.Expect(GetNAD(nad).Spec.Config).Should(
+					ContainSubstring("enp3s0.100"))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("should not update the networkattachment definition created externally", func() {
+			nad := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      "physnet1",
+			}
+			// Ensure NAD exists with defined interface
+			Eventually(func(g Gomega) {
+				g.Expect(GetNAD(nad).Spec.Config).Should(
+					ContainSubstring("enp2s0.100"))
+			}, timeout, interval).Should(Succeed())
+
+			extNADName := types.NamespacedName{Namespace: namespace, Name: "external"}
+			nadInstance := CreateNAD(extNADName)
+			DeferCleanup(th.DeleteInstance, nadInstance)
+
+			// Update NicMappings to use existing Network Attachment
+			Eventually(func(g Gomega) {
+				ovnController := GetOVNController(OVNControllerName)
+				ovnController.Spec.NicMappings = map[string]string{
+					"external": "enp3s0.100",
+				}
+				g.Expect(k8sClient.Update(ctx, ovnController)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			// Ensure OwnerReferences not added to not managed Network Attachment
+			Eventually(func(g Gomega) {
+				g.Expect(GetNAD(extNADName).ObjectMeta.OwnerReferences).Should(BeNil())
+			}, timeout, interval).Should(Succeed())
+
+			// Ensure Interface not updated in not managed Network Attachment
+			Eventually(func(g Gomega) {
+				g.Expect(GetNAD(extNADName).Spec.Config).ShouldNot(
+					ContainSubstring("enp3s0.100"))
+			}, timeout, interval).Should(Succeed())
+		})
+
 		It("reports that the networkattachment definition is created based on nic configs", func() {
 			daemonSetName := types.NamespacedName{
 				Namespace: namespace,

@@ -25,8 +25,8 @@ import (
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 )
 
-// CreateAdditionalNetworks - creates network attachement definitions based on the provided mappings
-func CreateAdditionalNetworks(
+// CreateOrUpdateAdditionalNetworks - create or update network attachment definitions based on the provided mappings
+func CreateOrUpdateAdditionalNetworks(
 	ctx context.Context,
 	h *helper.Helper,
 	instance *ovnv1.OVNController,
@@ -37,6 +37,11 @@ func CreateAdditionalNetworks(
 	var networkAttachments []string
 
 	for physNet, interfaceName := range instance.Spec.NicMappings {
+		nadSpec := netattdefv1.NetworkAttachmentDefinitionSpec{
+			Config: fmt.Sprintf(
+				`{"cniVersion": "0.3.1", "name": "%s", "type": "host-device", "device": "%s"}`,
+				physNet, interfaceName),
+		}
 		nad = &netattdefv1.NetworkAttachmentDefinition{}
 		err := h.GetClient().Get(
 			ctx,
@@ -48,26 +53,39 @@ func CreateAdditionalNetworks(
 		)
 		if err != nil {
 			if !k8s_errors.IsNotFound(err) {
-				return nil, fmt.Errorf("can not get NetworkAttachmentDefinition %s/%s: %w",
+				return nil, fmt.Errorf("cannot get NetworkAttachmentDefinition %s/%s: %w",
 					physNet, interfaceName, err)
 			}
 
+			ownerRef := metav1.NewControllerRef(instance, instance.GroupVersionKind())
 			nad = &netattdefv1.NetworkAttachmentDefinition{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      physNet,
-					Namespace: instance.Namespace,
-					Labels:    labels,
+					Name:            physNet,
+					Namespace:       instance.Namespace,
+					Labels:          labels,
+					OwnerReferences: []metav1.OwnerReference{*ownerRef},
 				},
-				Spec: netattdefv1.NetworkAttachmentDefinitionSpec{
-					Config: fmt.Sprintf(
-						`{"cniVersion": "0.3.1", "name": "%s", "type": "host-device", "device": "%s"}`,
-						physNet, interfaceName),
-				},
+				Spec: nadSpec,
 			}
 			// Request object not found, lets create it
 			if err := h.GetClient().Create(ctx, nad); err != nil {
-				return nil, fmt.Errorf("can not create NetworkAttachmentDefinition %s/%s: %w",
+				return nil, fmt.Errorf("cannot create NetworkAttachmentDefinition %s/%s: %w",
 					physNet, interfaceName, err)
+			}
+		} else {
+			owned := false
+			for _, owner := range nad.GetOwnerReferences() {
+				if owner.Name == instance.Name {
+					owned = true
+					break
+				}
+			}
+			if owned {
+				nad.Spec = nadSpec
+				if err := h.GetClient().Update(ctx, nad); err != nil {
+					return nil, fmt.Errorf("cannot update NetworkAttachmentDefinition %s/%s: %w",
+						physNet, interfaceName, err)
+				}
 			}
 		}
 
