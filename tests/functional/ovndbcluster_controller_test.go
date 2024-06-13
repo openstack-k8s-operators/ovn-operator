@@ -212,6 +212,47 @@ var _ = Describe("OVNDBCluster controller", func() {
 		})
 	})
 
+	When("OVNDBClusters are created with networkAttachments", func() {
+		It("does not break if pods are not created yet", func() {
+			// Create OVNDBCluster with 1 replica
+			spec := GetDefaultOVNDBClusterSpec()
+			spec.NetworkAttachment = "internalapi"
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{namespace + "/internalapi": {"10.0.0.1"}}, 1)
+
+			// Increase replica to 3
+			Eventually(func(g Gomega) {
+				c := GetOVNDBCluster(dbs[0])
+				*c.Spec.Replicas = 3
+				g.Expect(k8sClient.Update(ctx, c)).Should(Succeed())
+			}).Should(Succeed())
+
+			//Check that error occurs
+			Eventually(func(g Gomega) {
+				conditions := GetOVNDBCluster(dbs[0]).Status.Conditions
+				cond := conditions.Get(condition.ExposeServiceReadyCondition)
+				g.Expect(cond.Status).To(Equal(corev1.ConditionFalse))
+			}).Should(Succeed())
+
+			// Decrease replicas back to 1
+			Eventually(func(g Gomega) {
+				c := GetOVNDBCluster(dbs[0])
+				*c.Spec.Replicas = 1
+				g.Expect(k8sClient.Update(ctx, c)).Should(Succeed())
+			}).Should(Succeed())
+
+			//Check that error doesn't happen and instance is ready
+			Eventually(func(g Gomega) {
+				conditions := GetOVNDBCluster(dbs[0]).Status.Conditions
+				cond := conditions.Get(condition.DeploymentReadyCondition)
+				g.Expect(cond.Status).To(Equal(corev1.ConditionTrue))
+			}).Should(Succeed())
+
+		})
+	})
+
 	When("OVNDBCluster is created with networkAttachments", func() {
 		var OVNDBClusterName types.NamespacedName
 		BeforeEach(func() {
