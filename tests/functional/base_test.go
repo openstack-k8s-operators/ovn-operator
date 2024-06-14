@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega" //revive:disable:dot-imports
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -289,6 +290,32 @@ func SimulateDaemonsetNumberReadyWithPods(name types.NamespacedName, networkIPs 
 	}, timeout, interval).Should(Succeed())
 
 	logger.Info("Simulated daemonset success", "on", name)
+}
+
+func CreateNAD(name types.NamespacedName) *networkv1.NetworkAttachmentDefinition {
+	nad := &networkv1.NetworkAttachmentDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name.Name,
+			Namespace: name.Namespace,
+		},
+		Spec: networkv1.NetworkAttachmentDefinitionSpec{
+			Config: "",
+		},
+	}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Create(ctx, nad)).Should(Succeed())
+	}).Should(Succeed())
+
+	return nad
+}
+
+func GetNAD(name types.NamespacedName) *networkv1.NetworkAttachmentDefinition {
+	nad := &networkv1.NetworkAttachmentDefinition{}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, name, nad)).Should(Succeed())
+	}).Should(Succeed())
+
+	return nad
 }
 
 func GetDNSData(name types.NamespacedName) *infranetworkv1.DNSData {

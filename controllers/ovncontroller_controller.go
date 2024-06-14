@@ -441,8 +441,8 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		common.AppSelector: ovnv1.ServiceNameOVS,
 	}
 
-	// Create additional Physical Network Attachments
-	networkAttachments, err := ovncontroller.CreateAdditionalNetworks(ctx, helper, instance, ovsServiceLabels)
+	// Create or Update additional Physical Network Attachments
+	networkAttachments, err := ovncontroller.CreateOrUpdateAdditionalNetworks(ctx, helper, instance, ovsServiceLabels)
 	if err != nil {
 		Log.Info(fmt.Sprintf("Failed to create additional networks: %s", err))
 		return ctrl.Result{}, err
