@@ -562,7 +562,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	instance.Status.OVSNumberReady = ovsdset.GetDaemonSet().Status.NumberReady
 
 	// verify if network attachment matches expectations
-	networkReady, networkAttachmentStatus, err := nad.VerifyNetworkStatusFromAnnotation(ctx, helper, networkAttachmentsNoPhysNet, ovsServiceLabels, instance.Status.NumberReady)
+	networkReady, networkAttachmentStatus, err := nad.VerifyNetworkStatusFromAnnotation(ctx, helper, networkAttachmentsNoPhysNet, ovsServiceLabels, instance.Status.OVSNumberReady)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
