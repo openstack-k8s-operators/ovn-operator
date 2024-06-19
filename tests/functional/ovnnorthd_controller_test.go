@@ -54,7 +54,7 @@ var _ = Describe("OVNNorthd controller", func() {
 			// it to run
 			Eventually(func() []string {
 				return ovn.GetOVNNorthd(ovnNorthdName).Finalizers
-			}, timeout, interval).Should(ContainElement("OVNNorthd"))
+			}, timeout, interval).Should(ContainElement("openstack.org/ovnnorthd"))
 		})
 
 		It("should be in input ready condition", func() {

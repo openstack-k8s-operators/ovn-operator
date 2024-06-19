@@ -168,7 +168,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 			// it to run
 			Eventually(func() []string {
 				return GetOVNDBCluster(OVNDBClusterName).Finalizers
-			}, timeout, interval).Should(ContainElement("OVNDBCluster"))
+			}, timeout, interval).Should(ContainElement("openstack.org/ovndbcluster"))
 		})
 
 		DescribeTable("should not create the config map",

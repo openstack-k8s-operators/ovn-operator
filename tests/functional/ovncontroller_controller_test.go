@@ -62,7 +62,7 @@ var _ = Describe("OVNController controller", func() {
 			// it to run
 			Eventually(func() []string {
 				return GetOVNController(OVNControllerName).Finalizers
-			}, timeout, interval).Should(ContainElement("OVNController"))
+			}, timeout, interval).Should(ContainElement("openstack.org/ovncontroller"))
 		})
 
 		It("should create a ConfigMap for net_setup.sh with eth0 as Interface Name", func() {

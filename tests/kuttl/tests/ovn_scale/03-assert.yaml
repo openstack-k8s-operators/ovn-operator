@@ -9,7 +9,7 @@ apiVersion: ovn.openstack.org/v1beta1
 kind: OVNNorthd
 metadata:
   finalizers:
-  - OVNNorthd
+  - openstack.org/ovnnorthd
   name: ovnnorthd-sample
 spec:
   replicas: 1

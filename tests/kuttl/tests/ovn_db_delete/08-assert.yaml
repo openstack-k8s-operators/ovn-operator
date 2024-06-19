@@ -10,7 +10,7 @@ apiVersion: ovn.openstack.org/v1beta1
 kind: OVNDBCluster
 metadata:
   finalizers:
-  - OVNDBCluster
+  - openstack.org/ovndbcluster
   name: ovndbcluster-nb-sample
 spec:
   replicas: 1
@@ -30,7 +30,7 @@ apiVersion: ovn.openstack.org/v1beta1
 kind: OVNDBCluster
 metadata:
   finalizers:
-  - OVNDBCluster
+  - openstack.org/ovndbcluster
   name: ovndbcluster-sb-sample
 spec:
   replicas: 1
