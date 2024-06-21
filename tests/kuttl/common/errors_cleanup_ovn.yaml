@@ -90,7 +90,7 @@ metadata:
     openshift.io/scc: privileged
   generateName: ovn-controller-ovs-
   labels:
-    service: ovn-controller
+    service: ovn-controller-ovs
 ---
 apiVersion: v1
 kind: Service
