@@ -65,7 +65,7 @@ var _ = Describe("OVNController controller", func() {
 			}, timeout, interval).Should(ContainElement("openstack.org/ovncontroller"))
 		})
 
-		It("should create a ConfigMap for net_setup.sh with eth0 as Interface Name", func() {
+		It("should create a ConfigMap for start-vswitchd.sh with eth0 as Interface Name", func() {
 			scriptsCM := types.NamespacedName{
 				Namespace: OVNControllerName.Namespace,
 				Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "scripts"),
@@ -74,7 +74,7 @@ var _ = Describe("OVNController controller", func() {
 				return *th.GetConfigMap(scriptsCM)
 			}, timeout, interval).ShouldNot(BeNil())
 
-			Expect(th.GetConfigMap(scriptsCM).Data["net_setup.sh"]).Should(
+			Expect(th.GetConfigMap(scriptsCM).Data["start-vswitchd.sh"]).Should(
 				ContainSubstring("addr show dev eth0"))
 
 			th.ExpectCondition(
@@ -179,12 +179,12 @@ var _ = Describe("OVNController controller", func() {
 				th.AssertJobDoesNotExist(configJobOVS)
 			})
 
-			It("should create a ConfigMap for net_setup.sh with eth0 as Interface Name", func() {
+			It("should create a ConfigMap for start-vswitchd.sh with eth0 as Interface Name", func() {
 				Eventually(func() corev1.ConfigMap {
 					return *th.GetConfigMap(scriptsCM)
 				}, timeout, interval).ShouldNot(BeNil())
 
-				Expect(th.GetConfigMap(scriptsCM).Data["net_setup.sh"]).Should(
+				Expect(th.GetConfigMap(scriptsCM).Data["start-vswitchd.sh"]).Should(
 					ContainSubstring("addr show dev eth0"))
 
 				th.ExpectCondition(
@@ -445,7 +445,7 @@ var _ = Describe("OVNController controller", func() {
 
 			}, timeout, interval).Should(Succeed())
 		})
-		It("should create a ConfigMap for net_setup.sh with nic name as Network Attachment and OwnerReferences set", func() {
+		It("should create a ConfigMap for start-vswitchd.sh with nic name as Network Attachment and OwnerReferences set", func() {
 
 			scriptsCM := types.NamespacedName{
 				Namespace: OVNControllerName.Namespace,
@@ -461,7 +461,7 @@ var _ = Describe("OVNController controller", func() {
 			Expect(th.GetConfigMap(scriptsCM).ObjectMeta.OwnerReferences[0].Kind).To(Equal("OVNController"))
 
 			ovncontroller := GetOVNController(OVNControllerName)
-			Expect(th.GetConfigMap(scriptsCM).Data["net_setup.sh"]).Should(
+			Expect(th.GetConfigMap(scriptsCM).Data["start-vswitchd.sh"]).Should(
 				ContainSubstring("addr show dev %s", ovncontroller.Spec.NetworkAttachment))
 		})
 		It("should create an external ConfigMap with expected key-value pairs and OwnerReferences set", func() {

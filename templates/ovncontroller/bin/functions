@@ -23,6 +23,20 @@ EnableChassisAsGateway=${EnableChassisAsGateway:-true}
 PhysicalNetworks=${PhysicalNetworks:-""}
 OVNHostName=${OVNHostName:-""}
 
+ovs_dir=/var/lib/openvswitch
+FLOWS_RESTORE_SCRIPT=$ovs_dir/flows-script
+FLOWS_RESTORE_DIR=$ovs_dir/saved-flows
+SAFE_TO_STOP_OVSDB_SERVER_SEMAPHORE=$ovs_dir/is_safe_to_stop_ovsdb_server
+
+function cleanup_ovsdb_server_semaphore() {
+    rm -f $SAFE_TO_STOP_OVSDB_SERVER_SEMAPHORE 2>&1 > /dev/null
+}
+
+function cleanup_flows_backup() {
+    rm -f $FLOWS_RESTORE_SCRIPT 2>&1 > /dev/null
+    rm -rf $FLOWS_RESTORE_DIR 2>&1 > /dev/null
+}
+
 function wait_for_ovsdb_server {
     while true; do
         /usr/bin/ovs-vsctl show

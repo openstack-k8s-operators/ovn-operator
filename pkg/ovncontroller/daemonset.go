@@ -177,7 +177,7 @@ func CreateOVSDaemonSet(
 			Lifecycle: &corev1.Lifecycle{
 				PreStop: &corev1.LifecycleHandler{
 					Exec: &corev1.ExecAction{
-						Command: []string{"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovs-vswitchd"},
+						Command: []string{"/usr/local/bin/container-scripts/stop-ovsdb-server.sh"},
 					},
 				},
 			},
@@ -199,12 +199,11 @@ func CreateOVSDaemonSet(
 		},
 		{
 			Name:    "ovs-vswitchd",
-			Command: []string{"/bin/bash", "-c"},
-			Args:    []string{"/usr/local/bin/container-scripts/net_setup.sh && /usr/sbin/ovs-vswitchd --pidfile --mlockall"},
+			Command: []string{"/usr/local/bin/container-scripts/start-vswitchd.sh"},
 			Lifecycle: &corev1.Lifecycle{
 				PreStop: &corev1.LifecycleHandler{
 					Exec: &corev1.ExecAction{
-						Command: []string{"/usr/share/openvswitch/scripts/ovs-ctl", "stop", "--no-ovsdb-server"},
+						Command: []string{"/usr/local/bin/container-scripts/stop-vswitchd.sh"},
 					},
 				},
 			},

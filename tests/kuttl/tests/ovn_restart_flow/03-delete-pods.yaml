@@ -1,0 +1,7 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      node=$(oc get nodes -o name|sort|head -1| sed "s|node/||g")
+      controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller-ovs --field-selector spec.nodeName=$node -o name | head -1)
+      oc delete -n $NAMESPACE $controller_pod

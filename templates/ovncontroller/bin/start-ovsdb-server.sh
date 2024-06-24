@@ -13,11 +13,15 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-set -ex
 
-CTL_ARGS="--system-id=random --no-ovs-vswitchd"
+set -ex
+source $(dirname $0)/functions
+
+# Remove the obsolete semaphore file in case it still exists.
+cleanup_ovsdb_server_semaphore
 
 # Initialize or upgrade database if needed
+CTL_ARGS="--system-id=random --no-ovs-vswitchd"
 /usr/share/openvswitch/scripts/ovs-ctl start $CTL_ARGS
 /usr/share/openvswitch/scripts/ovs-ctl stop $CTL_ARGS
 
