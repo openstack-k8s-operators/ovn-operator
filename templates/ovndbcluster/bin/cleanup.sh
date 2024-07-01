@@ -14,9 +14,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 set -ex
+source $(dirname $0)/functions
 
 DB_NAME="OVN_Northbound"
-DB_TYPE="{{ .DB_TYPE }}"
 if [[ "${DB_TYPE}" == "sb" ]]; then
     DB_NAME="OVN_Southbound"
 fi
@@ -42,5 +42,5 @@ fi
 # leaving the database file intact for -0 pod.
 if [[ "$(hostname)" != "{{ .SERVICE_NAME }}-0" ]]; then
     # now that we left, the database file is no longer valid
-    rm -f /etc/ovn/ovn${DB_TYPE}_db.db
+    cleanup_db_file
 fi
