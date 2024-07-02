@@ -14,7 +14,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 set -ex
-DB_TYPE="{{ .DB_TYPE }}"
+source $(dirname $0)/functions
+
 DB_PORT="{{ .DB_PORT }}"
 {{- if .TLS }}
 DB_SCHEME="pssl"
@@ -79,6 +80,12 @@ set "$@" --ovn-${DB_TYPE}-log=-vconsole:{{ .OVN_LOG_LEVEL }}
 # create a log file -> this argument makes sure it doesn't polute OVN_LOGDIR
 # with a nearly empty log file
 set "$@" --ovn-${DB_TYPE}-logfile=/dev/null
+
+# If db file is empty, remove it; otherwise service won't start.
+# See https://issues.redhat.com/browse/FDP-689 for more details.
+if ! [ -s $DB_FILE ]; then
+    cleanup_db_file
+fi
 
 # don't log to file (we already log to console)
 $@ ${OPTS} run_${DB_TYPE}_ovsdb -- -vfile:off &
