@@ -25,6 +25,7 @@ rules:
   - create
   - get
   - list
+  - patch
   - update
   - watch
 - apiGroups:
@@ -159,6 +160,7 @@ rules:
   resources:
   - ovncontrollers/finalizers
   verbs:
+  - patch
   - update
 - apiGroups:
   - ovn.openstack.org
@@ -185,6 +187,7 @@ rules:
   resources:
   - ovndbclusters/finalizers
   verbs:
+  - patch
   - update
 - apiGroups:
   - ovn.openstack.org
@@ -213,6 +216,7 @@ rules:
   resources:
   - ovnnorthds/finalizers
   verbs:
+  - patch
   - update
 - apiGroups:
   - ovn.openstack.org
@@ -230,6 +234,7 @@ rules:
   - create
   - get
   - list
+  - patch
   - update
   - watch
 - apiGroups:
@@ -240,6 +245,7 @@ rules:
   - create
   - get
   - list
+  - patch
   - update
   - watch
 - apiGroups:
