@@ -47,9 +47,6 @@ spec:
       version: v1beta1
   description: OVN Operator
   displayName: OVN Operator
-  icon:
-  - base64data: ""
-    mediatype: ""
   install:
     spec:
       deployments: null
