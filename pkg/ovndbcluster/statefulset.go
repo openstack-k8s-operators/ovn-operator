@@ -57,7 +57,7 @@ func StatefulSet(
 
 	var preStopCmd []string
 	cmd := []string{"/usr/bin/dumb-init"}
-	args := []string{"--single-child", "--", "/bin/bash", "-c", ServiceCommand}
+	args := []string{"--", "/bin/bash", "-c", ServiceCommand}
 	//
 	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 	//
