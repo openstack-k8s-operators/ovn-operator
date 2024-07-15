@@ -87,6 +87,9 @@ if ! [ -s $DB_FILE ]; then
     cleanup_db_file
 fi
 
+# Wait until the ovsdb-tool finishes.
+trap wait_for_ovsdb_tool EXIT
+
 # don't log to file (we already log to console)
 $@ ${OPTS} run_${DB_TYPE}_ovsdb -- -vfile:off &
 
@@ -128,5 +131,8 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
     kill $(cat $OVN_RUNDIR/ovn-${DB_TYPE}ctl.pid)
     unset OVN_${DB_TYPE^^}_DAEMON
 fi
+
+wait_for_ovsdb_tool
+trap - EXIT
 
 wait

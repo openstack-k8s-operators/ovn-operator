@@ -18,3 +18,10 @@ DB_FILE=/etc/ovn/ovn${DB_TYPE}_db.db
 function cleanup_db_file() {
     rm -f $DB_FILE
 }
+
+function wait_for_ovsdb_tool {
+    while pgrep -a ovsdb-tool; do
+        echo "ovsdb-tool still working. Waiting..."
+        sleep 1
+    done
+}
