@@ -130,7 +130,7 @@ spec:
                   values:
                   - ovn-northd
               topologyKey: kubernetes.io/hostname
-            weight: 1
+            weight: 100
       containers:
       - command:
         - /usr/bin/ovn-northd
