@@ -3,4 +3,3 @@ kind: TestStep
 commands:
   - script: |
       oc apply -n $NAMESPACE -f ../../../../config/samples/nad_datacentre2.yaml
-      oc apply -n $NAMESPACE -f ../../../../config/samples/nad_data-centre3.yaml
