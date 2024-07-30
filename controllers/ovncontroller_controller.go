@@ -313,6 +313,113 @@ func (r *OVNControllerReconciler) reconcileUpgrade(ctx context.Context) (ctrl.Re
 	return ctrl.Result{}, nil
 }
 
+// use lib_commons.daemonset.GetDaemonSetWithName once
+// https://github.com/openstack-k8s-operators/lib-common/pull/551
+// is merged
+func getDaemonSetWithName(
+	ctx context.Context,
+	h *helper.Helper,
+	name string,
+	namespace string,
+) (*appsv1.DaemonSet, error) {
+
+	dset := &appsv1.DaemonSet{}
+	err := h.GetClient().Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, dset)
+	if err != nil {
+		return dset, err
+	}
+
+	return dset, nil
+}
+
+func (r *OVNControllerReconciler) ensureCMDeleted(
+	ctx context.Context,
+	h *helper.Helper,
+	instance *ovnv1.OVNController,
+) error {
+	// Delete, if they exist
+	cms := []string{instance.Name + "-config", instance.Name + "-scripts"}
+	for _, cmName := range cms {
+		err := r.deleteConfigMaps(ctx, h, cmName, instance.Namespace)
+		if err != nil && !k8s_errors.IsNotFound(err) {
+			return fmt.Errorf("could not delete config map %s: %w", cmName, err)
+		}
+
+	}
+	return nil
+}
+
+func ensureDSDeleted(
+	ctx context.Context,
+	h *helper.Helper,
+	instance *ovnv1.OVNController,
+) error {
+	// Delete, if they exist, ovn and ovs ds
+	daemonsets := []string{"ovn-controller", "ovn-controller-ovs"}
+	for _, dsName := range daemonsets {
+		ds, err := getDaemonSetWithName(ctx, h, dsName, instance.Namespace)
+		if err != nil && !k8s_errors.IsNotFound(err) {
+			return fmt.Errorf("error getting %s daemonset: %w", dsName, err)
+		} else if err != nil && k8s_errors.IsNotFound(err) {
+			// Already deleted
+			continue
+		}
+
+		// Delete ds
+		err = h.GetClient().Delete(ctx, ds)
+		if err != nil && !k8s_errors.IsNotFound(err) {
+			return fmt.Errorf("error deleting daemonset %s: %w", ds.Name, err)
+		}
+	}
+
+	return nil
+}
+
+func ensureNADDeleted(
+	ctx context.Context,
+	h *helper.Helper,
+	instance *ovnv1.OVNController,
+) error {
+	// Delete NAD if they exist and controller owns it
+	nadList := &netattdefv1.NetworkAttachmentDefinitionList{}
+	err := h.GetClient().List(ctx, nadList)
+	if err != nil {
+		return fmt.Errorf("error getting NAD list: %w", err)
+	}
+	for _, currentNAD := range nadList.Items {
+		owners := currentNAD.GetOwnerReferences()
+		// if owners len is only one, means that if ovn controller is the owner we can
+		// delete it
+		if len(owners) == 1 {
+			if owners[0].Name == instance.Name {
+				err = h.GetClient().Delete(ctx, &currentNAD)
+				if err != nil {
+					return fmt.Errorf("error trying to delete nad %s: %w", currentNAD.Name, err)
+				}
+			}
+		} else if len(owners) > 1 {
+			// this nad has more than one owner, remove ovn-controller as owner but
+			// don't delete it
+			indexToDelete := -1
+			for j, owner := range owners {
+				if owner.Name == instance.Name {
+					indexToDelete = j
+					break
+				}
+			}
+			if indexToDelete != -1 {
+				currentNAD.SetOwnerReferences(append(owners[:indexToDelete], owners[indexToDelete+1:]...))
+				err = h.GetClient().Update(ctx, &currentNAD)
+				if err != nil {
+					return fmt.Errorf("error updating NAD %s after ownerReference update: %w", currentNAD.Name, err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance *ovnv1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 
@@ -337,6 +444,41 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		return rbacResult, err
 	} else if (rbacResult != ctrl.Result{}) {
 		return rbacResult, nil
+	}
+
+	// if ovn-controller has no nicMappings, it's useless create daemonset on
+	// OC nodes, since it won't do anything.
+	if len(instance.Spec.NicMappings) == 0 {
+		// Check if DS are created, if so delete the resources associated with it
+		// Resources associated with ovn-controller:
+		// - ovncontroller-scripts [cm]
+		// - ovncontroller-config [cm]
+		// - ovn-controller [ds]
+		// - ovn-controller-ovs [ds]
+		// - job [it gets deleted once it's finished]
+		err := ensureDSDeleted(ctx, helper, instance)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		err = r.ensureCMDeleted(ctx, helper, instance)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		err = ensureNADDeleted(ctx, helper, instance)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		// Set conditions to true as no more work is needed.
+		instance.Status.Conditions.MarkTrue(condition.NetworkAttachmentsReadyCondition, condition.NetworkAttachmentsReadyMessage)
+		instance.Status.Conditions.MarkTrue(condition.InputReadyCondition, condition.InputReadyMessage)
+		instance.Status.Conditions.MarkTrue(condition.ServiceConfigReadyCondition, condition.ServiceConfigReadyMessage)
+		instance.Status.Conditions.MarkTrue(condition.NetworkAttachmentsReadyCondition, condition.NetworkAttachmentsReadyMessage)
+		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
+		instance.Status.Conditions.MarkTrue(condition.TLSInputReadyCondition, condition.InputReadyMessage)
+		return ctrl.Result{}, nil
 	}
 
 	// ConfigMap
@@ -685,6 +827,28 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	Log.Info("Reconciled Service successfully")
 
 	return ctrl.Result{}, nil
+}
+
+func (r *OVNControllerReconciler) deleteConfigMaps(
+	ctx context.Context,
+	h *helper.Helper,
+	name string,
+	namespace string,
+) error {
+	serviceCM := &corev1.ConfigMap{}
+	err := h.GetClient().Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, serviceCM)
+	if err != nil && !k8s_errors.IsNotFound(err) {
+		return err
+	} else if k8s_errors.IsNotFound(err) {
+		return nil
+	}
+
+	err = h.GetClient().Delete(ctx, serviceCM)
+	if err != nil && !k8s_errors.IsNotFound(err) {
+		return fmt.Errorf("error deleting config map %s: %w", serviceCM.Name, err)
+	}
+
+	return nil
 }
 
 // generateServiceConfigMaps - create configmaps which hold scripts and service configuration

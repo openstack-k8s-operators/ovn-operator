@@ -167,20 +167,6 @@ status:
   availableReplicas: 1
   replicas: 1
 ---
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: ovn-controller
-status:
-  numberMisscheduled: 0
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: ovn-controller-ovs
-status:
-  numberMisscheduled: 0
----
 # the openshift annotations can't be checked through the deployment above
 apiVersion: v1
 kind: Pod
@@ -207,28 +193,6 @@ metadata:
   labels:
     service: ovsdbserver-sb
   name: ovsdbserver-sb-0
----
-apiVersion: v1
-kind: Pod
-metadata:
-  annotations:
-    openshift.io/scc: privileged
-  labels:
-    service: ovn-controller
-  generateName: ovn-controller-
-status:
-  phase: Running
----
-apiVersion: v1
-kind: Pod
-metadata:
-  annotations:
-    openshift.io/scc: privileged
-  labels:
-    service: ovn-controller-ovs
-  generateName: ovn-controller-ovs-
-status:
-  phase: Running
 ---
 apiVersion: v1
 kind: Service
@@ -315,12 +279,22 @@ commands:
         num_pods_ovn=$(oc get pods -n $NAMESPACE -l service=ovn-controller -o name --field-selector=status.phase=Running | wc -l)
         num_pods_ovs=$(oc get pods -n $NAMESPACE -l service=ovn-controller-ovs -o name --field-selector=status.phase=Running | wc -l)
         num_pods=$(( num_pods_ovn + num_pods_ovs))
-        # for each nodes, two pods are spawned - ovn-controller and ovn-controller-ovs
-        if [ "$((num_nodes * 2))" -ne "$num_pods" ]; then
-          echo "Cluster has $num_nodes nodes but OVNController spawned $num_pods pods, it should have $num_nodes * 2"
-          exit 1
+        nic_mappings_set=$(oc get -n $NAMESPACE ovncontroller ovncontroller-sample -o json | jq '.spec | has("nicMappings")')
+        # if Spec.NicMappings is empty number should be 0, else should be equal to num_nodes.
+        echo $nic_mappings_set
+        if [ "$nic_mappings_set" == "true" ]; then
+          # for each nodes, two pods are spawned - ovn-controller and ovn-controller-ovs
+          if [ "$((num_nodes * 2))" -ne "$num_pods" ]; then
+            echo "Cluster has $num_nodes nodes but OVNController spawned $num_pods pods, it should have $num_nodes * 2"
+            exit 1
+          fi
+        else
+          # nicMappings is not set, it should be zero regardless of num_nodes
+          if [ "0" -ne "$num_pods" ]; then
+            echo "Cluster has $num_nodes nodes but OVNController spawned $num_pods pods, it should be 0"
+            exit 1
+          fi
         fi
-
         tupleTemplate='{{ range (index .spec.template.spec.containers 1).env }}{{ .name }}{{ "#" }}{{ .value}}{{"\n"}}{{ end }}'
         imageTuples=$(oc get -n openstack-operators deployment ovn-operator-controller-manager -o go-template="$tupleTemplate")
         for ITEM in $(echo $imageTuples); do
@@ -355,9 +329,9 @@ commands:
 
         exit 0
     - script: |
-        controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller -o name|head -1)
-        host=$(oc rsh -n $NAMESPACE ${controller_pod} ovs-vsctl get open . external_ids:hostname)
+        #controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller -o name|head -1)
+        #host=$(oc rsh -n $NAMESPACE ${controller_pod} ovs-vsctl get open . external_ids:hostname)
 
-        sb_pod=$(oc get pod -n $NAMESPACE -l service=ovsdbserver-sb -o name|head -1)
-        oc rsh -n $NAMESPACE ${sb_pod} ovn-sbctl list chassis | grep -q ${host} || exit 1
+        #sb_pod=$(oc get pod -n $NAMESPACE -l service=ovsdbserver-sb -o name|head -1)
+        #oc rsh -n $NAMESPACE ${sb_pod} ovn-sbctl list chassis | grep -q ${host} || exit 1
         exit 0

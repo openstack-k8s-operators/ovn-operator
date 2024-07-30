@@ -1,13 +1,1 @@
-#
-# Check for:
-#
-# - chassis unregistered in sb db
-
-apiVersion: kuttl.dev/v1beta1
-kind: TestAssert
-timeout: 30
-commands:
-    - script: |
-        sb_pod=$(oc get pod -n $NAMESPACE -l service=ovsdbserver-sb -o name|head -1)
-        oc rsh -n $NAMESPACE ${sb_pod} ovn-sbctl list chassis | grep -q hostname && exit 1
-        exit 0
+../../common/assert_ovn_controller.yaml

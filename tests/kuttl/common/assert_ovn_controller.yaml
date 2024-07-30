@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ovn-controller
+status:
+  numberMisscheduled: 0
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ovn-controller-ovs
+status:
+  numberMisscheduled: 0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    openshift.io/scc: privileged
+  labels:
+    service: ovn-controller
+  generateName: ovn-controller-
+status:
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    openshift.io/scc: privileged
+  labels:
+    service: ovn-controller-ovs
+  generateName: ovn-controller-ovs-
+status:
+  phase: Running
+---
+# This is done also on assert_sample_deployment, it's repeated here to ensure the
+# correct creation of ovn-controller pods
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+commands:
+    - script: |
+        num_nodes=$(oc get nodes -l node-role.kubernetes.io/worker -o name | wc -l)
+        # check the number of ovn-controller* pods that are running
+        num_pods_ovn=$(oc get pods -n $NAMESPACE -l service=ovn-controller -o name --field-selector=status.phase=Running | wc -l)
+        num_pods_ovs=$(oc get pods -n $NAMESPACE -l service=ovn-controller-ovs -o name --field-selector=status.phase=Running | wc -l)
+        num_pods=$(( num_pods_ovn + num_pods_ovs))
+        nic_mappings_set=$(oc get -n $NAMESPACE ovncontroller ovncontroller-sample -o json | jq '.spec | has("nicMappings")')
+        # if Spec.NicMappings is empty number should be 0, else should be equal to num_nodes.
+        echo $nic_mappings_set
+        if [ "$nic_mappings_set" == "true" ]; then
+          # for each nodes, two pods are spawned - ovn-controller and ovn-controller-ovs
+          if [ "$((num_nodes * 2))" -ne "$num_pods" ]; then
+            echo "Cluster has $num_nodes nodes but OVNController spawned $num_pods pods, it should have $num_nodes * 2"
+            exit 1
+          fi
+        else
+          # In this stage nicMappings should be set if not it should be an error
+          echo "Ovn-controller nicMappings is not set."
+          exit 1
+        fi
+        tupleTemplate='{{ range (index .spec.template.spec.containers 1).env }}{{ .name }}{{ "#" }}{{ .value}}{{"\n"}}{{ end }}'
+        imageTuples=$(oc get -n openstack-operators deployment ovn-operator-controller-manager -o go-template="$tupleTemplate")
+        for ITEM in $(echo $imageTuples); do
+          # it is an image
+          if echo $ITEM | grep 'RELATED_IMAGE' &> /dev/null; then
+            NAME=$(echo $ITEM | sed -e 's|^RELATED_IMAGE_OVN_\(.*\)_IMAGE.*|\1|')
+            IMG_FROM_ENV=$(echo $ITEM | sed -e 's|^.*#\(.*\)|\1|')
+            template='{{.spec.containerImage}}'
+            case $NAME in
+              CONTROLLER)
+                SERVICE_IMAGE=$(oc get -n $NAMESPACE ovncontroller ovncontroller-sample -o go-template="{{.spec.ovnContainerImage}}")
+                ;;
+              CONTROLLER_OVS)
+                SERVICE_IMAGE=$(oc get -n $NAMESPACE ovncontroller ovncontroller-sample -o go-template="{{.spec.ovsContainerImage}}")
+                ;;
+            esac
+            if [ "$SERVICE_IMAGE" != "$IMG_FROM_ENV" ]; then
+                    echo "$NAME image ($SERVICE_IMAGE) does not equal $IMG_FROM_ENV"
+              exit 1
+            fi
+          fi
+        done
+
+        exit 0
+    - script: |
+        controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller -o name|head -1)
+        host=$(oc rsh -n $NAMESPACE ${controller_pod} ovs-vsctl get open . external_ids:hostname)
+
+        sb_pod=$(oc get pod -n $NAMESPACE -l service=ovsdbserver-sb -o name|head -1)
+        oc rsh -n $NAMESPACE ${sb_pod} ovn-sbctl list chassis | grep -q ${host} || exit 1
+        xit 0

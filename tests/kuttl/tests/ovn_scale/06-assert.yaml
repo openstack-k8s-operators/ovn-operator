@@ -1,8 +1,8 @@
 #
 # Check for:
 #
-# - 1 OVNNorthd CR
-# - 3 Pods for OVNNorthd CR
+# - 1 OVNNorthd CR with no replicas
+# - 0 Pods for OVNNorthd CR
 #
 
 apiVersion: ovn.openstack.org/v1beta1
@@ -12,15 +12,11 @@ metadata:
   - openstack.org/ovnnorthd
   name: ovnnorthd-sample
 spec:
-  replicas: 3
-status:
-  readyCount: 3
+  replicas: 0
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ovn-northd
 spec:
-  replicas: 3
-status:
-  availableReplicas: 3
+  replicas: 0

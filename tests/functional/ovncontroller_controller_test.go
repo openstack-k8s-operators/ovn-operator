@@ -30,17 +30,26 @@ import (
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 )
 
+// GINKGO_ARGS="--focus 'OVNController controller'" make test
 var _ = Describe("OVNController controller", func() {
 
+	// GINKGO_ARGS="--focus 'OVNController controller when A OVNController instance is created'" make test
 	When("A OVNController instance is created", func() {
 		var OVNControllerName types.NamespacedName
 		BeforeEach(func() {
-			instance := CreateOVNController(namespace, GetDefaultOVNControllerSpec())
+			specWithNicMappings := GetDefaultOVNControllerSpec()
+
+			nicMappings := make(map[string]string)
+			nicMappings["examplebr"] = "examplebr"
+			specWithNicMappings.OVNControllerSpecCore.NicMappings = nicMappings
+			instance := CreateOVNController(namespace, specWithNicMappings)
 			OVNControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
 		})
@@ -125,6 +134,7 @@ var _ = Describe("OVNController controller", func() {
 			)
 		})
 
+		// GINKGO_ARGS="--focus 'OVNController controller when A OVNController instance is created when OVNDBCluster instances are available without networkAttachments'" make test
 		When("OVNDBCluster instances are available without networkAttachments", func() {
 			var scriptsCM types.NamespacedName
 			var dbs []types.NamespacedName
@@ -204,6 +214,7 @@ var _ = Describe("OVNController controller", func() {
 			})
 		})
 
+		// GINKGO_ARGS="--focus 'OVNController controller when A OVNController instance is created when OVNDBCluster instances with networkAttachments are available'" make test
 		When("OVNDBCluster instances with networkAttachments are available", func() {
 			var configCM types.NamespacedName
 			var daemonSetName types.NamespacedName
@@ -274,6 +285,7 @@ var _ = Describe("OVNController controller", func() {
 		})
 	})
 
+	// GINKGO_ARGS="--focus 'OVNController controller when OVNController and OVNDBClusters are created with networkAttachments'" make test
 	When("OVNController and OVNDBClusters are created with networkAttachments", func() {
 		var OVNControllerName types.NamespacedName
 		var dbs []types.NamespacedName
@@ -288,6 +300,9 @@ var _ = Describe("OVNController controller", func() {
 			}
 			spec := GetDefaultOVNControllerSpec()
 			spec.NetworkAttachment = "internalapi"
+			nicMappings := make(map[string]string)
+			nicMappings["foo-phynet"] = "foo-bridge"
+			spec.NicMappings = nicMappings
 			instance := CreateOVNController(namespace, spec)
 			OVNControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
@@ -342,11 +357,17 @@ var _ = Describe("OVNController controller", func() {
 			expectedAnnotation, err := json.Marshal(
 				[]networkv1.NetworkSelectionElement{
 					{
+						Name:             "foo-phynet",
+						Namespace:        namespace,
+						InterfaceRequest: "foo-phynet",
+					},
+					{
 						Name:             "internalapi",
 						Namespace:        namespace,
 						InterfaceRequest: "internalapi",
 					},
-				})
+				},
+			)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(
 				HaveKeyWithValue("k8s.v1.cni.cncf.io/networks", string(expectedAnnotation)),
@@ -384,6 +405,11 @@ var _ = Describe("OVNController controller", func() {
 
 			expectedAnnotation, err := json.Marshal(
 				[]networkv1.NetworkSelectionElement{
+					{
+						Name:             "foo-phynet",
+						Namespace:        namespace,
+						InterfaceRequest: "foo-phynet",
+					},
 					{
 						Name:             "internalapi",
 						Namespace:        namespace,
@@ -578,6 +604,7 @@ var _ = Describe("OVNController controller", func() {
 		})
 	})
 
+	// GINKGO_ARGS="--focus 'OVNController controller when OVNController is created with missing networkAttachment'" make test
 	When("OVNController is created with missing networkAttachment", func() {
 		var OVNControllerName types.NamespacedName
 		var dbs []types.NamespacedName
@@ -589,6 +616,9 @@ var _ = Describe("OVNController controller", func() {
 			}
 			spec := GetDefaultOVNControllerSpec()
 			spec.NetworkAttachment = "internalapi"
+			spec.NicMappings = map[string]string{
+				"physnet1": "enp2s0.100",
+			}
 			instance := CreateOVNController(namespace, spec)
 			OVNControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
@@ -606,6 +636,7 @@ var _ = Describe("OVNController controller", func() {
 		})
 	})
 
+	// GINKGO_ARGS="--focus 'OVNController controller when OVNController is created with nic configs'" make test
 	When("OVNController is created with nic configs", func() {
 		var OVNControllerName types.NamespacedName
 		BeforeEach(func() {
@@ -762,24 +793,26 @@ var _ = Describe("OVNController controller", func() {
 		})
 	})
 
+	// GINKGO_ARGS="--focus 'OVNController controller when OVNController is created with networkAttachment and nic configs'" make test
 	When("OVNController is created with networkAttachment and nic configs", func() {
+		var OVNControllerName types.NamespacedName
 		BeforeEach(func() {
-			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
-			DeferCleanup(DeleteOVNDBClusters, dbs)
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
 			spec := GetDefaultOVNControllerSpec()
 			spec.NetworkAttachment = "internalapi"
 			spec.NicMappings = map[string]string{
 				"physnet1": "enp2s0.100",
 			}
 			instance := CreateOVNController(namespace, spec)
+			OVNControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{OVNControllerName.Namespace + "/internalapi": {"10.0.0.1"}}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
 		})
 
 		It("reports that daemonset have annotations for both Networkattachment and nic-configs", func() {
-			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
-			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
-			DeferCleanup(th.DeleteInstance, nad)
-
 			daemonSetName := types.NamespacedName{
 				Namespace: namespace,
 				Name:      "ovn-controller",
@@ -811,8 +844,111 @@ var _ = Describe("OVNController controller", func() {
 				HaveKeyWithValue("k8s.v1.cni.cncf.io/networks", string(expectedAnnotation)),
 			)
 		})
+
+		It("deletes daemonset if nicMappings are removed", func() {
+			// ensure daemonsets/pods are created
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+
+			configCM := types.NamespacedName{
+				Namespace: namespace,
+				Name:      OVNControllerName.Name + "-config",
+			}
+			scriptCM := types.NamespacedName{
+				Namespace: namespace,
+				Name:      OVNControllerName.Name + "-scripts",
+			}
+
+			// ensure daemonsets are created
+			Eventually(func() *appsv1.DaemonSet {
+				return GetDaemonSet(daemonSetName)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			Eventually(func() *appsv1.DaemonSet {
+				return GetDaemonSet(daemonSetNameOVS)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetName,
+				map[string][]string{},
+			)
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetNameOVS,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			// ensure configmaps are created
+			Eventually(func() *corev1.ConfigMap {
+				return GetConfigMap(configCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			Eventually(func() *corev1.ConfigMap {
+				return GetConfigMap(scriptCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			// remove nicMappings
+			Eventually(func(g Gomega) {
+				c := GetOVNController(OVNControllerName)
+				c.Spec.NicMappings = make(map[string]string)
+				g.Expect(k8sClient.Update(ctx, c)).Should(Succeed())
+			}).Should(Succeed())
+
+			// ensure daemonsets are deleted
+			Eventually(func() error {
+				ds := &appsv1.DaemonSet{}
+				err := k8sClient.Get(ctx, daemonSetName, ds)
+				if err == nil {
+					return fmt.Errorf("Daemonset is still present")
+				} else if err != nil && !k8s_errors.IsNotFound(err) {
+					return err
+				}
+				return nil
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func() error {
+				ds := &appsv1.DaemonSet{}
+				err := k8sClient.Get(ctx, daemonSetNameOVS, ds)
+				if err == nil {
+					return fmt.Errorf("OVS Daemonset is still present")
+				} else if err != nil && !k8s_errors.IsNotFound(err) {
+					return err
+				}
+				return nil
+			}, timeout, interval).Should(Succeed())
+
+			// ensure configmaps are deleted
+			Eventually(func() error {
+				cm := &corev1.ConfigMap{}
+				err := k8sClient.Get(ctx, configCM, cm)
+				if err == nil {
+					return fmt.Errorf("config CM is still present")
+				} else if err != nil && !k8s_errors.IsNotFound(err) {
+					return err
+				}
+				return nil
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func() error {
+				cm := &corev1.ConfigMap{}
+				err := k8sClient.Get(ctx, scriptCM, cm)
+				if err == nil {
+					return fmt.Errorf("script CM is still present")
+				} else if err != nil && !k8s_errors.IsNotFound(err) {
+					return err
+				}
+				return nil
+			}, timeout, interval).Should(Succeed())
+		})
 	})
 
+	// GINKGO_ARGS="--focus 'OVNController controller when OVNController is created with empty spec'" make test
 	When("OVNController is created with empty spec", func() {
 		var ovnControllerName types.NamespacedName
 
@@ -834,13 +970,18 @@ var _ = Describe("OVNController controller", func() {
 		})
 	})
 
+	// GINKGO_ARGS="--focus 'OVNController controller when OVNController is created with TLS'" make test
 	When("OVNController is created with TLS", func() {
 		var ovnControllerName types.NamespacedName
 
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
-			instance := CreateOVNController(namespace, GetTLSOVNControllerSpec())
+			specWithNicMappings := GetTLSOVNControllerSpec()
+			nicMappings := make(map[string]string)
+			nicMappings["examplebr"] = "examplebr"
+			specWithNicMappings.OVNControllerSpecCore.NicMappings = nicMappings
+			instance := CreateOVNController(namespace, specWithNicMappings)
 			DeferCleanup(th.DeleteInstance, instance)
 
 			ovnControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
