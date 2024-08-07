@@ -357,13 +357,14 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		_, err := nad.GetNADWithName(ctx, helper, instance.Spec.NetworkAttachment, instance.Namespace)
 		if err != nil {
 			if k8s_errors.IsNotFound(err) {
+				Log.Info(fmt.Sprintf("network-attachment-definition %s not found", instance.Spec.NetworkAttachment))
 				instance.Status.Conditions.Set(condition.FalseCondition(
 					condition.NetworkAttachmentsReadyCondition,
 					condition.RequestedReason,
 					condition.SeverityInfo,
 					condition.NetworkAttachmentsReadyWaitingMessage,
 					instance.Spec.NetworkAttachment))
-				return ctrl.Result{RequeueAfter: time.Second * 10}, fmt.Errorf("network-attachment-definition %s not found", instance.Spec.NetworkAttachment)
+				return ctrl.Result{RequeueAfter: time.Second * 10}, nil
 			}
 			instance.Status.Conditions.Set(condition.FalseCondition(
 				condition.NetworkAttachmentsReadyCondition,
@@ -758,8 +759,8 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 		// Returning here instead of at the beggining of the for is done to
 		// expose the already created pods to other services/dataplane nodes
 		if len(podList.Items) < int(*(instance.Spec.Replicas)) {
-			err = fmt.Errorf("not all pods are yet created, number of expected pods: %v, current pods: %v", *(instance.Spec.Replicas), len(podList.Items))
-			return ctrl.Result{RequeueAfter: 1 * time.Second}, err
+			Log.Info(fmt.Sprintf("not all pods are yet created, number of expected pods: %v, current pods: %v", *(instance.Spec.Replicas), len(podList.Items)))
+			return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 		}
 	}
 	// dbAddress will contain ovsdbserver-(nb|sb).openstack.svc or empty
