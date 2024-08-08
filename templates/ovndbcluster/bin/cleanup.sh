@@ -44,3 +44,6 @@ if [[ "$(hostname)" != "{{ .SERVICE_NAME }}-0" ]]; then
     # now that we left, the database file is no longer valid
     cleanup_db_file
 fi
+
+# Stop the DB server gracefully; this will also end the pod running script.
+/usr/share/ovn/scripts/ovn-ctl stop_${DB_TYPE}_ovsdb
