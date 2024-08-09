@@ -313,6 +313,68 @@ func (r *OVNControllerReconciler) reconcileUpgrade(ctx context.Context) (ctrl.Re
 	return ctrl.Result{}, nil
 }
 
+// use lib_commons.daemonset.GetDaemonSetWithName once
+// https://github.com/openstack-k8s-operators/lib-common/pull/551
+// is merged
+func getDaemonSetWithName(
+	ctx context.Context,
+	h *helper.Helper,
+	name string,
+	namespace string,
+) (*appsv1.DaemonSet, error) {
+
+	dset := &appsv1.DaemonSet{}
+	err := h.GetClient().Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, dset)
+	if err != nil {
+		return dset, err
+	}
+
+	return dset, nil
+}
+
+func (r *OVNControllerReconciler) ensureCMDeleted(
+	ctx context.Context,
+	h *helper.Helper,
+	instance *ovnv1.OVNController,
+) error {
+	// Delete, if they exist, ovn and ovs ds
+	cms := []string{"ovncontroller-config", "ovncontroller-scripts"}
+	for _, cmName := range cms {
+		err := r.deleteConfigMaps(ctx, h, cmName, instance.Namespace)
+		if err != nil && !k8s_errors.IsNotFound(err) {
+			return fmt.Errorf("could not delete config map %v: %w", cmName, err)
+		}
+
+	}
+	return nil
+}
+
+func ensureDSDeleted(
+	ctx context.Context,
+	h *helper.Helper,
+	instance *ovnv1.OVNController,
+) error {
+	// Delete, if they exist, ovn and ovs ds
+	daemonsets := []string{"ovn-controller", "ovn-controller-ovs"}
+	for _, dsName := range daemonsets {
+		ds, err := getDaemonSetWithName(ctx, h, dsName, instance.Namespace)
+		if err != nil && !k8s_errors.IsNotFound(err) {
+			return fmt.Errorf("error getting %s daemonset: %w", dsName, err)
+		} else if err != nil && k8s_errors.IsNotFound(err) {
+			// Already deleted
+			continue
+		}
+
+		// Delete ds
+		err = h.GetClient().Delete(ctx, ds)
+		if err != nil && !k8s_errors.IsNotFound(err) {
+			return fmt.Errorf("error deleting daemonset %s: %w", ds.Name, err)
+		}
+	}
+
+	return nil
+}
+
 func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance *ovnv1.OVNController, helper *helper.Helper) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 
@@ -338,6 +400,38 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	} else if (rbacResult != ctrl.Result{}) {
 		return rbacResult, nil
 	}
+
+	// if ovn-controller has no nicMappings, it's useless create daemonset on
+	// OC nodes, since it won't do anything.
+	if len(instance.Spec.NicMappings) == 0 {
+		// Check if DS are created, if so delete the resources associated with it
+		// Resources associated with ovn-controller:
+		// - ovncontroller-scripts [cm]
+		// - ovncontroller-config [cm]
+		// - ovn-controller [ds]
+		// - ovn-controller-ovs [ds]
+		// - job [it gets deleted once it's done, skip]
+		err := ensureDSDeleted(ctx, helper, instance)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		err = r.ensureCMDeleted(ctx, helper, instance)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		// Set conditions to true as no more work is needed.
+		Log.Info("DEBUG: No nicMappings provided, skipping creation of DS")
+		instance.Status.Conditions.MarkTrue(condition.NetworkAttachmentsReadyCondition, condition.NetworkAttachmentsReadyMessage)
+		instance.Status.Conditions.MarkTrue(condition.InputReadyCondition, condition.InputReadyMessage)
+		instance.Status.Conditions.MarkTrue(condition.ServiceConfigReadyCondition, condition.ServiceConfigReadyMessage)
+		instance.Status.Conditions.MarkTrue(condition.NetworkAttachmentsReadyCondition, condition.NetworkAttachmentsReadyMessage)
+		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
+		instance.Status.Conditions.MarkTrue(condition.TLSInputReadyCondition, condition.InputReadyMessage)
+		return ctrl.Result{}, nil
+	}
+	Log.Info(fmt.Sprintf("DEBUG ARNAU: NicMappings not empty: %v, continuing normal", instance.Spec.NicMappings))
 
 	// ConfigMap
 	configMapVars := make(map[string]env.Setter)
@@ -675,6 +769,29 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	Log.Info("Reconciled Service successfully")
 
 	return ctrl.Result{}, nil
+}
+
+// generateServiceConfigMaps - create configmaps which hold scripts and service configuration
+func (r *OVNControllerReconciler) deleteConfigMaps(
+	ctx context.Context,
+	h *helper.Helper,
+	name string,
+	namespace string,
+) error {
+	serviceCM := &corev1.ConfigMap{}
+	err := h.GetClient().Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, serviceCM)
+	if err != nil && !k8s_errors.IsNotFound(err) {
+		return err
+	} else if k8s_errors.IsNotFound(err) {
+		return nil
+	}
+
+	err = h.GetClient().Delete(ctx, serviceCM)
+	if err != nil && !k8s_errors.IsNotFound(err) {
+		return fmt.Errorf("error deleting config map %s: %w", serviceCM.Name, err)
+	}
+
+	return nil
 }
 
 // generateServiceConfigMaps - create configmaps which hold scripts and service configuration

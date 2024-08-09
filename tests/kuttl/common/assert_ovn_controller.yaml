@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ovn-controller
+status:
+  numberMisscheduled: 0
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ovn-controller-ovs
+status:
+  numberMisscheduled: 0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    openshift.io/scc: privileged
+  labels:
+    service: ovn-controller
+  generateName: ovn-controller-
+status:
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    openshift.io/scc: privileged
+  labels:
+    service: ovn-controller-ovs
+  generateName: ovn-controller-ovs-
+status:
+  phase: Running
