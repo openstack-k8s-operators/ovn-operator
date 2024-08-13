@@ -15,15 +15,8 @@
 # under the License.
 
 set -ex
-source $(dirname $0)/functions
 
-# Remove the obsolete semaphore file in case it still exists.
-cleanup_ovsdb_server_semaphore
-
-# Start the service
-ovsdb-server /etc/openvswitch/conf.db \
-    --pidfile \
-    --remote=punix:/var/run/openvswitch/db.sock \
-    --private-key=db:Open_vSwitch,SSL,private_key \
-    --certificate=db:Open_vSwitch,SSL,certificate \
-    --bootstrap-ca-cert=db:Open_vSwitch,SSL,ca_cert
+# Initialize or upgrade database if needed
+CTL_ARGS="--system-id=random --no-ovs-vswitchd"
+/usr/share/openvswitch/scripts/ovs-ctl start $CTL_ARGS
+/usr/share/openvswitch/scripts/ovs-ctl stop $CTL_ARGS
