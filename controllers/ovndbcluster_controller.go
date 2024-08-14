@@ -409,6 +409,11 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 				err.Error()))
 			return ctrlResult, err
 		} else if (ctrlResult != ctrl.Result{}) {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.TLSInputReadyCondition,
+				condition.RequestedReason,
+				condition.SeverityInfo,
+				fmt.Sprintf(condition.TLSInputReadyWaitingMessage, instance.Spec.TLS.CaBundleSecretName)))
 			return ctrlResult, nil
 		}
 
@@ -429,6 +434,11 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 				err.Error()))
 			return ctrl.Result{}, err
 		} else if (ctrlResult != ctrl.Result{}) {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.TLSInputReadyCondition,
+				condition.RequestedReason,
+				condition.SeverityInfo,
+				fmt.Sprintf(condition.TLSInputReadyWaitingMessage, "one or more cert secrets")))
 			return ctrlResult, nil
 		}
 		configMapVars[tls.TLSHashName] = env.SetValue(hash)

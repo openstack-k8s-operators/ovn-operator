@@ -852,11 +852,8 @@ var _ = Describe("OVNController controller", func() {
 				ConditionGetterFunc(OVNControllerConditionGetter),
 				condition.TLSInputReadyCondition,
 				corev1.ConditionFalse,
-				condition.ErrorReason,
-				fmt.Sprintf(
-					"TLSInput error occured in TLS sources Secret %s/combined-ca-bundle not found",
-					namespace,
-				),
+				condition.RequestedReason,
+				fmt.Sprintf("TLSInput is missing: %s", CABundleSecretName),
 			)
 			th.ExpectCondition(
 				ovnControllerName,
@@ -876,11 +873,8 @@ var _ = Describe("OVNController controller", func() {
 				ConditionGetterFunc(OVNControllerConditionGetter),
 				condition.TLSInputReadyCondition,
 				corev1.ConditionFalse,
-				condition.ErrorReason,
-				fmt.Sprintf(
-					"TLSInput error occured in TLS sources Secret %s/%s not found",
-					namespace, OvnDbCertSecretName,
-				),
+				condition.RequestedReason,
+				fmt.Sprintf(condition.TLSInputReadyWaitingMessage, "one or more cert secrets"),
 			)
 			th.ExpectCondition(
 				ovnControllerName,
