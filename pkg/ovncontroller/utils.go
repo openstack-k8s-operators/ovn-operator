@@ -18,7 +18,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"golang.org/x/exp/maps"
 	corev1 "k8s.io/api/core/v1"
@@ -58,20 +57,4 @@ func getOVNControllerPods(
 	}
 
 	return podList, nil
-}
-
-// EnvDownwardAPI - set env from FieldRef->FieldPath, e.g. status.podIP
-func EnvDownwardAPI(field string) env.Setter {
-	return func(env *corev1.EnvVar) {
-		if env.ValueFrom == nil {
-			env.ValueFrom = &corev1.EnvVarSource{}
-		}
-		env.Value = ""
-
-		if env.ValueFrom.FieldRef == nil {
-			env.ValueFrom.FieldRef = &corev1.ObjectFieldSelector{}
-		}
-
-		env.ValueFrom.FieldRef.FieldPath = field
-	}
 }
