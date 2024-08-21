@@ -63,7 +63,7 @@ func ConfigJob(
 	envVars["OVNAvailabilityZones"] = env.SetValue(strings.Join(instance.Spec.ExternalIDS.OvnAvailabilityZones, ":"))
 	envVars["EnableChassisAsGateway"] = env.SetValue(fmt.Sprintf("%t", *instance.Spec.ExternalIDS.EnableChassisAsGateway))
 	envVars["PhysicalNetworks"] = env.SetValue(getPhysicalNetworks(instance))
-	envVars["OVNHostName"] = EnvDownwardAPI("spec.nodeName")
+	envVars["OVNHostName"] = env.DownwardAPI("spec.nodeName")
 
 	for _, ovnPod := range ovnPods.Items {
 		jobs = append(
