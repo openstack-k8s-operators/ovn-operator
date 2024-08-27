@@ -169,6 +169,24 @@ func CreateOVSDaemonSet(
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 
+	initContainers := []corev1.Container{
+		{
+			Name:    "ovsdb-server-init",
+			Command: []string{"/usr/local/bin/container-scripts/init-ovsdb-server.sh"},
+			Image:   instance.Spec.OvsContainerImage,
+			SecurityContext: &corev1.SecurityContext{
+				Capabilities: &corev1.Capabilities{
+					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
+					Drop: []corev1.Capability{},
+				},
+				RunAsUser:  &runAsUser,
+				Privileged: &privileged,
+			},
+			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			VolumeMounts: GetOVSDbVolumeMounts(),
+		},
+	}
+
 	containers := []corev1.Container{
 		{
 			Name:    "ovsdb-server",
@@ -240,6 +258,7 @@ func CreateOVSDaemonSet(
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: instance.RbacResourceName(),
+					InitContainers:     initContainers,
 					Containers:         containers,
 					Volumes:            GetOVSVolumes(instance.Name, instance.Namespace),
 				},

@@ -890,6 +890,36 @@ var _ = Describe("OVNController controller", func() {
 			)
 		})
 
+		It("OVS Daemonset is created with 3 containers including an init container", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+
+			SimulateDaemonsetNumberReady(daemonSetName)
+
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+
+			SimulateDaemonsetNumberReady(daemonSetNameOVS)
+
+			ds := GetDaemonSet(daemonSetNameOVS)
+
+			Expect(ds.Spec.Template.Spec.InitContainers).To(HaveLen(1))
+			Expect(ds.Spec.Template.Spec.Containers).To(HaveLen(2))
+		})
+
 		It("creates a Daemonset with TLS certs attached", func() {
 			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
 				Name:      CABundleSecretName,
