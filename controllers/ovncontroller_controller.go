@@ -349,7 +349,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	//
 	// Validate the CA cert secret if provided
 	if instance.Spec.TLS.CaBundleSecretName != "" {
-		hash, ctrlResult, err := tls.ValidateCACertSecret(
+		hash, err := tls.ValidateCACertSecret(
 			ctx,
 			helper.GetClient(),
 			types.NamespacedName{
@@ -358,20 +358,21 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 			},
 		)
 		if err != nil {
+			if k8s_errors.IsNotFound(err) {
+				instance.Status.Conditions.Set(condition.FalseCondition(
+					condition.TLSInputReadyCondition,
+					condition.RequestedReason,
+					condition.SeverityInfo,
+					fmt.Sprintf(condition.TLSInputReadyWaitingMessage, instance.Spec.TLS.CaBundleSecretName)))
+				return ctrl.Result{}, nil
+			}
 			instance.Status.Conditions.Set(condition.FalseCondition(
 				condition.TLSInputReadyCondition,
 				condition.ErrorReason,
 				condition.SeverityWarning,
 				condition.TLSInputErrorMessage,
 				err.Error()))
-			return ctrlResult, err
-		} else if (ctrlResult != ctrl.Result{}) {
-			instance.Status.Conditions.Set(condition.FalseCondition(
-				condition.TLSInputReadyCondition,
-				condition.RequestedReason,
-				condition.SeverityInfo,
-				fmt.Sprintf(condition.TLSInputReadyWaitingMessage, instance.Spec.TLS.CaBundleSecretName)))
-			return ctrlResult, nil
+			return ctrl.Result{}, err
 		}
 
 		if hash != "" {
@@ -381,8 +382,16 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 
 	// Validate service cert secret
 	if instance.Spec.TLS.Enabled() {
-		hash, ctrlResult, err := instance.Spec.TLS.ValidateCertSecret(ctx, helper, instance.Namespace)
+		hash, err := instance.Spec.TLS.ValidateCertSecret(ctx, helper, instance.Namespace)
 		if err != nil {
+			if k8s_errors.IsNotFound(err) {
+				instance.Status.Conditions.Set(condition.FalseCondition(
+					condition.TLSInputReadyCondition,
+					condition.RequestedReason,
+					condition.SeverityInfo,
+					fmt.Sprintf(condition.TLSInputReadyWaitingMessage, err.Error())))
+				return ctrl.Result{}, nil
+			}
 			instance.Status.Conditions.Set(condition.FalseCondition(
 				condition.TLSInputReadyCondition,
 				condition.ErrorReason,
@@ -390,13 +399,6 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 				condition.TLSInputErrorMessage,
 				err.Error()))
 			return ctrl.Result{}, err
-		} else if (ctrlResult != ctrl.Result{}) {
-			instance.Status.Conditions.Set(condition.FalseCondition(
-				condition.TLSInputReadyCondition,
-				condition.RequestedReason,
-				condition.SeverityInfo,
-				fmt.Sprintf(condition.TLSInputReadyWaitingMessage, "one or more cert secrets")))
-			return ctrlResult, nil
 		}
 		configMapVars[tls.TLSHashName] = env.SetValue(hash)
 	}
