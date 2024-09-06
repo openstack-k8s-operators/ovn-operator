@@ -874,7 +874,8 @@ var _ = Describe("OVNController controller", func() {
 				condition.TLSInputReadyCondition,
 				corev1.ConditionFalse,
 				condition.RequestedReason,
-				fmt.Sprintf(condition.TLSInputReadyWaitingMessage, "one or more cert secrets"),
+				fmt.Sprintf("TLSInput is missing: secrets \"%s in namespace %s\" not found",
+					OvnDbCertSecretName, namespace),
 			)
 			th.ExpectCondition(
 				ovnControllerName,
