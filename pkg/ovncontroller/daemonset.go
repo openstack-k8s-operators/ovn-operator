@@ -14,7 +14,6 @@ package ovncontroller
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
@@ -35,8 +34,8 @@ func CreateOVNDaemonSet(
 	volumes := GetOVNControllerVolumes(instance.Name, instance.Namespace)
 	mounts := GetOVNControllerVolumeMounts()
 
-	args := []string{
-		"ovn-controller --pidfile unix:/run/openvswitch/db.sock",
+	cmd := []string{
+		"ovn-controller", "--pidfile", "unix:/run/openvswitch/db.sock",
 	}
 
 	// add OVN dbs cert and CA
@@ -56,7 +55,7 @@ func CreateOVNDaemonSet(
 			mounts = append(mounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
 		}
 
-		args = append(args, []string{
+		cmd = append(cmd, []string{
 			fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath),
 			fmt.Sprintf("--private-key=%s", ovn_common.OVNDbKeyPath),
 			fmt.Sprintf("--ca-cert=%s", ovn_common.OVNDbCaCertPath),
@@ -72,8 +71,7 @@ func CreateOVNDaemonSet(
 	containers := []corev1.Container{
 		{
 			Name:    "ovn-controller",
-			Command: []string{"/bin/bash", "-c"},
-			Args:    []string{strings.Join(args, " ")},
+			Command: cmd,
 			Lifecycle: &corev1.Lifecycle{
 				PreStop: &corev1.LifecycleHandler{
 					Exec: &corev1.ExecAction{

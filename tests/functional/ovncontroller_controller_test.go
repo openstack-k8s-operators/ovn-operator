@@ -954,7 +954,7 @@ var _ = Describe("OVNController controller", func() {
 			th.AssertVolumeMountExists("ovn-controller-tls-certs", "ca.crt", svcC.VolumeMounts)
 
 			// check cli args
-			Expect(svcC.Args).To(And(
+			Expect(svcC.Command).To(And(
 				ContainElement(ContainSubstring(fmt.Sprintf("--private-key=%s", ovn_common.OVNDbKeyPath))),
 				ContainElement(ContainSubstring(fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath))),
 				ContainElement(ContainSubstring(fmt.Sprintf("--ca-cert=%s", ovn_common.OVNDbCaCertPath))),
