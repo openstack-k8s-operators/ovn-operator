@@ -1,2 +1,4 @@
 ovn-remote: {{ .OVNRemote }}
+{{if (index . "OVNEncapType")}}
 ovn-encap-type: {{ .OVNEncapType }}
+{{end}}

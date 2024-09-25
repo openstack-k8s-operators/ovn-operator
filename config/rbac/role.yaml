@@ -146,6 +146,12 @@ rules:
 - apiGroups:
   - ovn.openstack.org
   resources:
+  - ovncontroller
+  verbs:
+  - watch
+- apiGroups:
+  - ovn.openstack.org
+  resources:
   - ovncontrollers
   verbs:
   - create

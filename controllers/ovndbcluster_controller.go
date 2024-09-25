@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -86,6 +87,7 @@ func (r *OVNDBClusterReconciler) GetLogger(ctx context.Context) logr.Logger {
 }
 
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovndbclusters,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovncontroller,verbs=watch;
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovndbclusters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovndbclusters/finalizers,verbs=update;patch
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete;
@@ -205,6 +207,7 @@ func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OVNDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	crs := &ovnv1.OVNDBClusterList{}
 	// index caBundleSecretNameField
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &ovnv1.OVNDBCluster{}, caBundleSecretNameField, func(rawObj client.Object) []string {
 		// Extract the secret name from the spec, if one is provided
@@ -238,6 +241,7 @@ func (r *OVNDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
 		Owns(&infranetworkv1.DNSData{}).
+		Watches(&ovnv1.OVNController{}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNCRNamespaceMapFunc(crs, mgr.GetClient()))).
 		Watches(
 			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSrc),
@@ -372,6 +376,15 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 				condition.SeverityWarning,
 				condition.NetworkAttachmentsReadyErrorMessage,
 				err.Error()))
+			return ctrl.Result{}, err
+		}
+	} else if instance.Spec.DBType == ovnv1.SBDBType {
+		// This config map was created by the SB and it only needs to be deleted once
+		// since this reconcile loop can be done by the SB and the NB, filtering so only
+		// one deletes it.
+		Log.Info("NetworkAttachment is empty, deleting external config map")
+		err = r.deleteExternalConfigMaps(ctx, helper, instance.Namespace)
+		if err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -612,6 +625,16 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 
 		// Set DB Address
 		instance.Status.InternalDBAddress = strings.Join(internalDbAddress, ",")
+		if instance.Spec.DBType == ovnv1.SBDBType && instance.Spec.NetworkAttachment != "" {
+			// This config map will populate the sb db address to edpm, can't use the nb
+			// If there's no networkAttachments the configMap is not needed
+			configMapVars := make(map[string]env.Setter)
+			err = r.generateExternalConfigMaps(ctx, helper, instance, serviceName, &configMapVars)
+			if err != nil {
+				Log.Info(fmt.Sprintf("Error while generating external config map: %v", err))
+			}
+		}
+
 	}
 	Log.Info("Reconciled Service successfully")
 	return ctrl.Result{}, nil
@@ -784,6 +807,68 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 
 	Log.Info("Reconciled OVN DB Cluster Service successfully")
 	return ctrl.Result{}, nil
+}
+
+// generateServiceConfigMaps - create create configmaps which hold service configuration
+func (r *OVNDBClusterReconciler) generateExternalConfigMaps(
+	ctx context.Context,
+	h *helper.Helper,
+	instance *ovnv1.OVNDBCluster,
+	serviceName string,
+	envVars *map[string]env.Setter,
+) error {
+	// Create/update configmaps from templates
+	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(serviceName), map[string]string{})
+	log := r.GetLogger(ctx)
+
+	externalEndpoint, err := instance.GetExternalEndpoint()
+	if err != nil {
+		return err
+	}
+
+	externalTemplateParameters := make(map[string]interface{})
+	externalTemplateParameters["OVNRemote"] = externalEndpoint
+
+	ovnController, err := ovnv1.GetOVNController(ctx, h, instance.Namespace)
+	if err != nil {
+		log.Info(fmt.Sprintf("Error on getting OVNController: %v", err))
+		return err
+	}
+	if ovnController != nil {
+		externalTemplateParameters["OVNEncapType"] = ovnController.Spec.ExternalIDS.OvnEncapType
+	}
+
+	cms := []util.Template{
+		// EDP ConfigMap
+		{
+			Name:          "ovncontroller-config",
+			Namespace:     instance.Namespace,
+			Type:          util.TemplateTypeConfig,
+			InstanceType:  instance.Kind,
+			Labels:        cmLabels,
+			ConfigOptions: externalTemplateParameters,
+		},
+	}
+	return configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
+}
+
+func (r *OVNDBClusterReconciler) deleteExternalConfigMaps(
+	ctx context.Context,
+	h *helper.Helper,
+	namespace string,
+) error {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ovncontroller-config",
+			Namespace: namespace,
+		},
+	}
+
+	err := h.GetClient().Delete(ctx, cm)
+	if err != nil && !k8s_errors.IsNotFound(err) {
+		return fmt.Errorf("error deleting external config map %s: %w", cm.Name, err)
+	}
+	return nil
 }
 
 // generateServiceConfigMaps - create create configmaps which hold service configuration
