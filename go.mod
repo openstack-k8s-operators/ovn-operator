@@ -8,15 +8,15 @@ require (
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.4.0
 	github.com/onsi/ginkgo/v2 v2.20.1
 	github.com/onsi/gomega v1.34.1
-	github.com/openstack-k8s-operators/infra-operator/apis v0.4.1-0.20240912140341-4066f2ead41d
-	github.com/openstack-k8s-operators/lib-common/modules/common v0.4.1-0.20240910122823-bdcfe881513b
-	github.com/openstack-k8s-operators/lib-common/modules/test v0.4.1-0.20240910122823-bdcfe881513b
+	github.com/openstack-k8s-operators/infra-operator/apis v0.4.1-0.20240924160156-ab5ffca21875
+	github.com/openstack-k8s-operators/lib-common/modules/common v0.4.1-0.20240926101719-8fc1c3da53f7
+	github.com/openstack-k8s-operators/lib-common/modules/test v0.4.1-0.20240926101719-8fc1c3da53f7
 	github.com/openstack-k8s-operators/ovn-operator/api v0.0.0-20230418071801-b5843d9e05fb
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
-	k8s.io/api v0.29.2
-	k8s.io/apimachinery v0.29.2
-	k8s.io/client-go v0.29.2
+	k8s.io/api v0.29.9
+	k8s.io/apimachinery v0.29.9
+	k8s.io/client-go v0.29.9
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 	sigs.k8s.io/controller-runtime v0.17.6
 )
