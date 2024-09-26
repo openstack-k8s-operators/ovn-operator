@@ -59,7 +59,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 						Name:      "ovsdbserver-" + DnsName,
 					}
 
-					Eventually(func(g Gomega) int {
+					Eventually(func(_ Gomega) int {
 						DNSHostsList := GetDNSDataHostsList(statefulSetName.Namespace, "ovsdbserver-"+DnsName)
 						return len(DNSHostsList)
 					}).Should(BeNumerically("==", 3))
@@ -81,7 +81,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 				Entry("DNS entry SB", "sb"),
 			)
 			DescribeTable("Should update DNSData IP if pod IP changes",
-				func(DNSEntryName string) {
+				func(_ string) {
 					var clusterName types.NamespacedName
 					var OVNSBDBClusterName types.NamespacedName
 					var cluster *ovnv1.OVNDBCluster
