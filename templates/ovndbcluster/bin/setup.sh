@@ -69,6 +69,7 @@ set "$@" --db-${DB_TYPE}-create-insecure-remote=no
 {{- else }}
 set "$@" --db-${DB_TYPE}-cluster-local-proto=tcp
 set "$@" --db-${DB_TYPE}-cluster-remote-proto=tcp
+set "$@" --db-${DB_TYPE}-create-insecure-remote=yes
 {{- end }}
 
 # log to console
@@ -106,8 +107,10 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
 
 {{- if .TLS }}
     ${CTLCMD} set-ssl {{.OVNDB_KEY_PATH}} {{.OVNDB_CERT_PATH}} {{.OVNDB_CACERT_PATH}}
-    ${CTLCMD} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
+{{- else }}
+    ${CTLCMD} del-ssl
 {{- end }}
+    ${CTLCMD} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
 
     # OVN does not support setting inactivity-probe through --remote cli arg so
     # we have to set it after database is up.
