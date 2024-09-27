@@ -54,7 +54,7 @@ func Deployment(
 		PeriodSeconds:       5,
 		InitialDelaySeconds: 5,
 	}
-	cmd := ServiceCommand
+	cmd := []string{ServiceCommand}
 	args := []string{
 		"-vfile:off",
 		fmt.Sprintf("-vconsole:%s", instance.Spec.LogLevel),
@@ -123,7 +123,7 @@ func Deployment(
 					Containers: []corev1.Container{
 						{
 							Name:                     ovnv1.ServiceNameOVNNorthd,
-							Command:                  []string{cmd},
+							Command:                  cmd,
 							Args:                     args,
 							Image:                    instance.Spec.ContainerImage,
 							SecurityContext:          getOVNNorthdSecurityContext(),
