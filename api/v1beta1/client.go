@@ -52,6 +52,26 @@ func getDBClusters(
 	return ovnDBList, nil
 }
 
+func GetOVNController(
+	ctx context.Context,
+	h *helper.Helper,
+	namespace string,
+) (*OVNController, error) {
+	ovnControllerList := &OVNControllerList{}
+	listOpts := []client.ListOption{
+		client.InNamespace(namespace),
+	}
+	err := h.GetClient().List(ctx, ovnControllerList, listOpts...)
+	if err != nil {
+		return nil, err
+	}
+	if len(ovnControllerList.Items) > 0 {
+		return &ovnControllerList.Items[0], nil
+	}
+
+	return nil, nil
+}
+
 // GetDBClusterByType - return OVNDBCluster for the given dbType
 func GetDBClusterByType(
 	ctx context.Context,
@@ -87,8 +107,8 @@ func getItems(list client.ObjectList) []client.Object {
 	return items
 }
 
-// OVNDBClusterNamespaceMapFunc - DBCluster Watch Function
-func OVNDBClusterNamespaceMapFunc(crs client.ObjectList, reader client.Reader) handler.MapFunc {
+// OVNCRNamespaceMapFunc // Generic function to watch any OVN CR
+func OVNCRNamespaceMapFunc(crs client.ObjectList, reader client.Reader) handler.MapFunc {
 	return func(ctx context.Context, obj client.Object) []reconcile.Request {
 		log := log.FromContext(ctx)
 		result := []reconcile.Request{}

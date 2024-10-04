@@ -85,14 +85,6 @@ var _ = Describe("OVNController controller", func() {
 			)
 		})
 
-		It("should not create an external config map", func() {
-			externalCM := types.NamespacedName{
-				Namespace: OVNControllerName.Namespace,
-				Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "config"),
-			}
-			th.AssertConfigMapDoesNotExist(externalCM)
-		})
-
 		It("should not create a config job", func() {
 			daemonSetName := types.NamespacedName{
 				Namespace: namespace,
@@ -195,17 +187,9 @@ var _ = Describe("OVNController controller", func() {
 				)
 			})
 
-			It("should not create an external config map", func() {
-				externalCM := types.NamespacedName{
-					Namespace: OVNControllerName.Namespace,
-					Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "config"),
-				}
-				th.AssertConfigMapDoesNotExist(externalCM)
-			})
 		})
 
 		When("OVNDBCluster instances with networkAttachments are available", func() {
-			var configCM types.NamespacedName
 			var daemonSetName types.NamespacedName
 			var daemonSetNameOVS types.NamespacedName
 			var dbs []types.NamespacedName
@@ -231,10 +215,6 @@ var _ = Describe("OVNController controller", func() {
 					daemonSetNameOVS,
 					map[string][]string{},
 				)
-				configCM = types.NamespacedName{
-					Namespace: OVNControllerName.Namespace,
-					Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "config"),
-				}
 			})
 
 			It("should create a config job", func() {
@@ -254,23 +234,7 @@ var _ = Describe("OVNController controller", func() {
 				}
 				th.AssertJobDoesNotExist(configJob)
 			})
-			It("should create an external config map", func() {
-				Eventually(func() corev1.ConfigMap {
-					return *th.GetConfigMap(configCM)
-				}, timeout, interval).ShouldNot(BeNil())
-			})
 
-			It("should delete the external config map when networkAttachment is detached from SB DB", func() {
-				Eventually(func() corev1.ConfigMap {
-					return *th.GetConfigMap(configCM)
-				}, timeout, interval).ShouldNot(BeNil())
-				Eventually(func(g Gomega) {
-					ovndbcluster := GetOVNDBCluster(dbs[1])
-					ovndbcluster.Spec.NetworkAttachment = ""
-					g.Expect(k8sClient.Update(ctx, ovndbcluster)).Should(Succeed())
-				}, timeout, interval).Should(Succeed())
-				th.AssertConfigMapDoesNotExist(configCM)
-			})
 		})
 	})
 
@@ -464,118 +428,7 @@ var _ = Describe("OVNController controller", func() {
 			Expect(th.GetConfigMap(scriptsCM).Data["start-vswitchd.sh"]).Should(
 				ContainSubstring("addr show dev %s", ovncontroller.Spec.NetworkAttachment))
 		})
-		It("should create an external ConfigMap with expected key-value pairs and OwnerReferences set", func() {
 
-			externalCM := types.NamespacedName{
-				Namespace: OVNControllerName.Namespace,
-				Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "config"),
-			}
-
-			daemonSetName := types.NamespacedName{
-				Namespace: namespace,
-				Name:      "ovn-controller",
-			}
-			SimulateDaemonsetNumberReadyWithPods(
-				daemonSetName,
-				make(map[string][]string),
-			)
-			daemonSetName = types.NamespacedName{
-				Namespace: namespace,
-				Name:      "ovn-controller-ovs",
-			}
-			SimulateDaemonsetNumberReadyWithPods(
-				daemonSetName,
-				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
-			)
-			ExpectedExternalSBEndpoint := "tcp:ovsdbserver-sb." + namespace + ".svc:6642"
-
-			Eventually(func() corev1.ConfigMap {
-				return *th.GetConfigMap(externalCM)
-			}, timeout, interval).ShouldNot(BeNil())
-
-			// Check OwnerReferences set correctly for the Config Map
-			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Name).To(Equal(OVNControllerName.Name))
-			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Kind).To(Equal("OVNController"))
-
-			Eventually(func(g Gomega) {
-				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
-					ContainSubstring("ovn-remote: %s", ExpectedExternalSBEndpoint))
-			}, timeout, interval).Should(Succeed())
-			Eventually(func(g Gomega) {
-				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
-					ContainSubstring("ovn-encap-type: %s", "geneve"))
-			}, timeout, interval).Should(Succeed())
-		})
-
-		It("should delete an external ConfigMap once SB DBCluster is deleted", func() {
-
-			externalCM := types.NamespacedName{
-				Namespace: OVNControllerName.Namespace,
-				Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "config"),
-			}
-
-			daemonSetName := types.NamespacedName{
-				Namespace: namespace,
-				Name:      "ovn-controller",
-			}
-			SimulateDaemonsetNumberReadyWithPods(
-				daemonSetName,
-				make(map[string][]string),
-			)
-
-			daemonSetNameOVS := types.NamespacedName{
-				Namespace: namespace,
-				Name:      "ovn-controller-ovs",
-			}
-			SimulateDaemonsetNumberReadyWithPods(
-				daemonSetNameOVS,
-				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
-			)
-
-			Eventually(func() corev1.ConfigMap {
-				return *th.GetConfigMap(externalCM)
-			}, timeout, interval).ShouldNot(BeNil())
-
-			DeleteOVNDBClusters(dbs)
-			th.AssertConfigMapDoesNotExist(externalCM)
-		})
-
-		It("should delete an external ConfigMap once SB DBCluster is detached from NAD", func() {
-
-			externalCM := types.NamespacedName{
-				Namespace: OVNControllerName.Namespace,
-				Name:      fmt.Sprintf("%s-%s", OVNControllerName.Name, "config"),
-			}
-
-			daemonSetName := types.NamespacedName{
-				Namespace: namespace,
-				Name:      "ovn-controller",
-			}
-			SimulateDaemonsetNumberReadyWithPods(
-				daemonSetName,
-				make(map[string][]string),
-			)
-			daemonSetNameOVS := types.NamespacedName{
-				Namespace: namespace,
-				Name:      "ovn-controller-ovs",
-			}
-			SimulateDaemonsetNumberReadyWithPods(
-				daemonSetNameOVS,
-				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
-			)
-
-			Eventually(func() corev1.ConfigMap {
-				return *th.GetConfigMap(externalCM)
-			}, timeout, interval).ShouldNot(BeNil())
-
-			// Detach SBCluster from NAD
-			Eventually(func(g Gomega) {
-				ovndbcluster := GetOVNDBCluster(dbs[1])
-				ovndbcluster.Spec.NetworkAttachment = ""
-				g.Expect(k8sClient.Update(ctx, ovndbcluster)).Should(Succeed())
-			}, timeout, interval).Should(Succeed())
-			th.AssertConfigMapDoesNotExist(externalCM)
-		})
 	})
 
 	When("OVNController is created with missing networkAttachment", func() {

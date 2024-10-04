@@ -235,6 +235,10 @@ func CreateOVNController(namespace string, spec ovnv1.OVNControllerSpec) client.
 	return ovn.GetOVNController(name)
 }
 
+func DeleteOVNController(instance types.NamespacedName) {
+	th.DeleteInstance(ovn.GetOVNController(instance))
+}
+
 func GetOVNController(name types.NamespacedName) *ovnv1.OVNController {
 	return ovn.GetOVNController(name)
 }

@@ -171,6 +171,14 @@ var _ = Describe("OVNDBCluster controller", func() {
 			}, timeout, interval).Should(ContainElement("openstack.org/ovndbcluster"))
 		})
 
+		It("should not create an external config map", func() {
+			externalCM := types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      "ovncontroller-config",
+			}
+			th.AssertConfigMapDoesNotExist(externalCM)
+		})
+
 		DescribeTable("should not create the config map",
 			func(cmName string) {
 				cm := types.NamespacedName{
@@ -251,6 +259,28 @@ var _ = Describe("OVNDBCluster controller", func() {
 			}).Should(Succeed())
 
 		})
+
+		It("should create an external config map", func() {
+			var instance *ovnv1.OVNDBCluster
+			spec := GetDefaultOVNDBClusterSpec()
+			spec.NetworkAttachment = "internalapi"
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{namespace + "/internalapi": {"10.0.0.1"}}, 1)
+			if GetOVNDBCluster(dbs[0]).Spec.DBType == ovnv1.SBDBType {
+				instance = GetOVNDBCluster(dbs[0])
+			} else {
+				instance = GetOVNDBCluster(dbs[1])
+			}
+			configCM := types.NamespacedName{
+				Namespace: instance.GetNamespace(),
+				Name:      "ovncontroller-config",
+			}
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(configCM)
+			}, timeout, interval).ShouldNot(BeNil())
+		})
 	})
 
 	When("OVNDBCluster is created with networkAttachments", func() {
@@ -296,6 +326,180 @@ var _ = Describe("OVNDBCluster controller", func() {
 				g.Expect(serviceListWithHeadlessType.Items).To(HaveLen(1))
 				g.Expect(serviceListWithHeadlessType.Items[0].Name).To(Equal("ovsdbserver-sb"))
 			}).Should(Succeed())
+		})
+
+		It("should create an external ConfigMap with expected key-value pairs and OwnerReferences set", func() {
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(
+				statefulSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			externalCM := types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      "ovncontroller-config",
+			}
+
+			ExpectedExternalSBEndpoint := "tcp:ovsdbserver-sb." + namespace + ".svc:6642"
+
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(externalCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			// Check OwnerReferences set correctly for the Config Map
+			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Name).To(Equal(OVNDBClusterName.Name))
+			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Kind).To(Equal("OVNDBCluster"))
+
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-remote: %s", ExpectedExternalSBEndpoint))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("should create an external ConfigMap with ovn-encap-type if OVNController is configured", func() {
+			ExpectedEncapType := "vxlan"
+			// Spawn OVNController with vxlan as ExternalIDs.OvnEncapType
+			ovncontrollerSpec := GetDefaultOVNControllerSpec()
+			ovncontrollerSpec.ExternalIDS.OvnEncapType = ExpectedEncapType
+			ovnController := CreateOVNController(namespace, ovncontrollerSpec)
+			DeferCleanup(th.DeleteInstance, ovnController)
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(
+				statefulSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			externalCM := types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      "ovncontroller-config",
+			}
+
+			ExpectedExternalSBEndpoint := "tcp:ovsdbserver-sb." + namespace + ".svc:6642"
+
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(externalCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			// Check OwnerReferences set correctly for the Config Map
+			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Name).To(Equal(OVNDBClusterName.Name))
+			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Kind).To(Equal("OVNDBCluster"))
+
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-remote: %s", ExpectedExternalSBEndpoint))
+			}, timeout, interval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-encap-type: %s", ExpectedEncapType))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("should remove ovnEncapType if OVNController gets deleted", func() {
+			ExpectedEncapType := "vxlan"
+			// Spawn OVNController with vxlan as ExternalIDs.OvnEncapType
+			ovncontrollerSpec := GetDefaultOVNControllerSpec()
+			ovncontrollerSpec.ExternalIDS.OvnEncapType = ExpectedEncapType
+			ovnController := CreateOVNController(namespace, ovncontrollerSpec)
+			//DeferCleanup(th.DeleteInstance, ovnController)
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(
+				statefulSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			externalCM := types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      "ovncontroller-config",
+			}
+
+			ExpectedExternalSBEndpoint := "tcp:ovsdbserver-sb." + namespace + ".svc:6642"
+
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(externalCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			// Check OwnerReferences set correctly for the Config Map
+			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Name).To(Equal(OVNDBClusterName.Name))
+			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Kind).To(Equal("OVNDBCluster"))
+
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-remote: %s", ExpectedExternalSBEndpoint))
+			}, timeout, interval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-encap-type: %s", ExpectedEncapType))
+			}, timeout, interval).Should(Succeed())
+
+			// This should trigger an OVNDBCluster reconcile and update config map
+			// without ovn-encap-type
+			DeleteOVNController(types.NamespacedName{Name: ovnController.GetName(), Namespace: namespace})
+
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(externalCM)
+			}, timeout, interval).ShouldNot(BeNil())
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-remote: %s", ExpectedExternalSBEndpoint))
+			}, timeout, interval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).ShouldNot(
+					ContainSubstring("ovn-encap-type: %s", ExpectedEncapType))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("should delete an external ConfigMap once SB DBCluster is detached from NAD", func() {
+			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+			nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+			DeferCleanup(th.DeleteInstance, nad)
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(
+				statefulSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			externalCM := types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      "ovncontroller-config",
+			}
+
+			// Should exist externalCM
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(externalCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			// Detach SBCluster from NAD
+			Eventually(func(g Gomega) {
+				ovndbcluster := GetOVNDBCluster(OVNDBClusterName)
+				ovndbcluster.Spec.NetworkAttachment = ""
+				g.Expect(k8sClient.Update(ctx, ovndbcluster)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+			th.AssertConfigMapDoesNotExist(externalCM)
 		})
 
 		It("reports that the definition is missing", func() {
