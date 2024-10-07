@@ -184,6 +184,15 @@ func GetOVNDBCluster(name types.NamespacedName) *ovnv1.OVNDBCluster {
 	return ovn.GetOVNDBCluster(name)
 }
 
+// GetConfigMap -
+func GetConfigMap(name types.NamespacedName) *corev1.ConfigMap {
+	cm := &corev1.ConfigMap{}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, name, cm)).Should(Succeed())
+	}, timeout, interval).Should(Succeed())
+	return cm
+}
+
 // GetDaemonSet -
 func GetDaemonSet(name types.NamespacedName) *appsv1.DaemonSet {
 	ds := &appsv1.DaemonSet{}

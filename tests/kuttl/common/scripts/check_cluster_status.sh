@@ -21,12 +21,13 @@ declare -a pods
 for i in $(seq 0 $((NUM_PODS-1))); do
     pods+=("${POD_PREFIX}-${i}")
 done
-
+echo $pods
 # check each pod replica
 for pod in "${pods[@]}"; do
 
-    echo "Checking status of $pod"
-    output=$(oc exec $pod -n $NAMESPACE -- bash -c "OVS_RUNDIR=/tmp ovs-appctl -t /tmp/$CTL_FILE cluster/status $DB_NAME")
+    echo "Checking status of $pod on namespace $NAMESPACE"
+    output=$(oc rsh -n $NAMESPACE $pod  bash -c "OVS_RUNDIR=/tmp ovs-appctl -t /tmp/$CTL_FILE cluster/status $DB_NAME")
+    echo $output
 
     # Example of part of output string that needs parsing:
     # Status: cluster member
