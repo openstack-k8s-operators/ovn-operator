@@ -62,6 +62,32 @@ func CreateOVNDaemonSet(
 		}...)
 	}
 
+	ovnControllerLivenessProbe := &corev1.Probe{
+		// TODO might need tuning
+		TimeoutSeconds:      5,
+		PeriodSeconds:       5,
+		InitialDelaySeconds: 30,
+	}
+
+	ovnControllerReadinessProbe := &corev1.Probe{
+		// TODO might need tuning
+		TimeoutSeconds:      5,
+		PeriodSeconds:       5,
+		InitialDelaySeconds: 10,
+	}
+
+	ovnControllerLivenessProbe.Exec = &corev1.ExecAction{
+		Command: []string{
+			"/usr/local/bin/container-scripts/liveness.sh",
+		},
+	}
+
+	ovnControllerReadinessProbe.Exec = &corev1.ExecAction{
+		Command: []string{
+			"/usr/local/bin/container-scripts/readiness.sh",
+		},
+	}
+
 	runAsUser := int64(0)
 	privileged := true
 
@@ -88,8 +114,10 @@ func CreateOVNDaemonSet(
 				RunAsUser:  &runAsUser,
 				Privileged: &privileged,
 			},
-			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts: mounts,
+			Env:            env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			VolumeMounts:   mounts,
+			ReadinessProbe: ovnControllerReadinessProbe,
+			LivenessProbe:  ovnControllerLivenessProbe,
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
