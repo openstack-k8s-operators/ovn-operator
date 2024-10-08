@@ -1,0 +1,13 @@
+#
+# Step for:
+#
+# - Reduce the failureThreshold and periodSeconds to detect a failure in OVN SB DB before it reconciles
+#
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+    - script: |
+        oc patch daemonset ovn-controller -n $NAMESPACE --type='json' -p='[
+          {"op": "replace", "path": "/spec/template/spec/containers/0/readinessProbe/periodSeconds", "value": 1},
+          {"op": "replace", "path": "/spec/template/spec/containers/0/readinessProbe/failureThreshold", "value": 1}
+        ]'
