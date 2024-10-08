@@ -1,0 +1,14 @@
+#
+# Check for:
+#
+# - LivenessProbe failure in ovn-controller should restart it once
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    service: ovn-controller
+status:
+  containerStatuses:
+    - name: ovn-controller
+      restartCount: 1

@@ -117,6 +117,29 @@ var _ = Describe("OVNController controller", func() {
 			)
 		})
 
+		It("should have a liveness probe configured", func() {
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			ds := GetDaemonSet(daemonSetName)
+
+			Expect(ds.Spec.Template.Spec.Containers[0].LivenessProbe).ShouldNot(BeNil())
+
+		})
+		It("should have a readiness probe configured", func() {
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			ds := GetDaemonSet(daemonSetName)
+
+			Expect(ds.Spec.Template.Spec.Containers[0].ReadinessProbe).ShouldNot(BeNil())
+
+		})
+
 		When("OVNDBCluster instances are available without networkAttachments", func() {
 			var scriptsCM types.NamespacedName
 			var dbs []types.NamespacedName
@@ -329,6 +352,28 @@ var _ = Describe("OVNController controller", func() {
 				"NetworkAttachments error occurred "+
 					"not all pods have interfaces with ips as configured in NetworkAttachments: internalapi",
 			)
+		})
+		It("should have a liveness probe configured", func() {
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			ds := GetDaemonSet(daemonSetName)
+
+			Expect(ds.Spec.Template.Spec.Containers[0].LivenessProbe).ShouldNot(BeNil())
+
+		})
+		It("should have a readiness probe configured", func() {
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			ds := GetDaemonSet(daemonSetName)
+
+			Expect(ds.Spec.Template.Spec.Containers[0].ReadinessProbe).ShouldNot(BeNil())
+
 		})
 		It("reports that an IP is missing", func() {
 
@@ -613,6 +658,28 @@ var _ = Describe("OVNController controller", func() {
 
 			}, timeout, interval).Should(Succeed())
 		})
+		It("should have a liveness probe configured", func() {
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			ds := GetDaemonSet(daemonSetName)
+
+			Expect(ds.Spec.Template.Spec.Containers[0].LivenessProbe).ShouldNot(BeNil())
+
+		})
+		It("should have a readiness probe configured", func() {
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			ds := GetDaemonSet(daemonSetName)
+
+			Expect(ds.Spec.Template.Spec.Containers[0].ReadinessProbe).ShouldNot(BeNil())
+
+		})
 	})
 
 	When("OVNController is created with networkAttachment and nic configs", func() {
@@ -644,6 +711,8 @@ var _ = Describe("OVNController controller", func() {
 
 			ds := GetDaemonSet(daemonSetName)
 			Expect(ds.Spec.Template.ObjectMeta.Annotations).To(BeNil())
+			Expect(ds.Spec.Template.Spec.Containers[0].LivenessProbe).ShouldNot(BeNil())
+			Expect(ds.Spec.Template.Spec.Containers[0].ReadinessProbe).ShouldNot(BeNil())
 
 			ds = GetDaemonSet(daemonSetNameOVS)
 			expectedAnnotation, err := json.Marshal(
@@ -684,6 +753,28 @@ var _ = Describe("OVNController controller", func() {
 			Expect(ovnController.Spec.ExternalIDS.OvnEncapType).To(Equal("geneve"))
 			Expect(ovnController.Spec.ExternalIDS.OvnBridge).To(Equal("br-int"))
 			Expect(ovnController.Spec.ExternalIDS.SystemID).To(Equal("random"))
+		})
+		It("should have a liveness probe configured", func() {
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			ds := GetDaemonSet(daemonSetName)
+
+			Expect(ds.Spec.Template.Spec.Containers[0].LivenessProbe).ShouldNot(BeNil())
+
+		})
+		It("should have a readiness probe configured", func() {
+
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			ds := GetDaemonSet(daemonSetName)
+
+			Expect(ds.Spec.Template.Spec.Containers[0].ReadinessProbe).ShouldNot(BeNil())
+
 		})
 	})
 
@@ -762,7 +853,11 @@ var _ = Describe("OVNController controller", func() {
 
 			SimulateDaemonsetNumberReady(daemonSetNameOVS)
 
-			ds := GetDaemonSet(daemonSetNameOVS)
+			ds := GetDaemonSet(daemonSetName)
+			Expect(ds.Spec.Template.Spec.Containers[0].LivenessProbe).ShouldNot(BeNil())
+			Expect(ds.Spec.Template.Spec.Containers[0].ReadinessProbe).ShouldNot(BeNil())
+
+			ds = GetDaemonSet(daemonSetNameOVS)
 
 			Expect(ds.Spec.Template.Spec.InitContainers).To(HaveLen(1))
 			Expect(ds.Spec.Template.Spec.Containers).To(HaveLen(2))
@@ -793,6 +888,10 @@ var _ = Describe("OVNController controller", func() {
 			SimulateDaemonsetNumberReady(daemonSetNameOVS)
 
 			ds := GetDaemonSet(daemonSetName)
+			Expect(ds.Spec.Template.Spec.Containers[0].LivenessProbe).ShouldNot(BeNil())
+			Expect(ds.Spec.Template.Spec.Containers[0].ReadinessProbe).ShouldNot(BeNil())
+
+			ds = GetDaemonSet(daemonSetName)
 
 			//  check TLS volumes
 			th.AssertVolumeExists(CABundleSecretName, ds.Spec.Template.Spec.Volumes)
