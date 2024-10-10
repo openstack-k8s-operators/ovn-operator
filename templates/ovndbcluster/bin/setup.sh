@@ -123,6 +123,8 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
 
 {{- if .TLS }}
     ${CTLCMD} set-ssl {{.OVNDB_KEY_PATH}} {{.OVNDB_CERT_PATH}} {{.OVNDB_CACERT_PATH}}
+{{- else }}
+    ${CTLCMD} del-ssl
 {{- end }}
     ${CTLCMD} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
 
