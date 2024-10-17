@@ -1,0 +1,14 @@
+#
+# Check for:
+#
+# - LivenessProbe in ovn-controller should be restart it once
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    service: ovn-controller
+status:
+  containerStatuses:
+    - name: ovn-controller
+      restartCount: 1

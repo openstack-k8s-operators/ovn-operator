@@ -1,0 +1,14 @@
+#
+# Check for:
+#
+# - ovn-controller status not ready
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    service: ovn-controller
+status:
+  containerStatuses:
+    - name: ovn-controller
+      ready: false
