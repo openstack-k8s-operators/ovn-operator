@@ -54,6 +54,13 @@ func StatefulSet(
 		PeriodSeconds:       5,
 		InitialDelaySeconds: 5,
 	}
+	startupProbe := &corev1.Probe{
+		// TODO might need tuning
+		TimeoutSeconds:      5,
+		PeriodSeconds:       3,
+		FailureThreshold:    20,
+		InitialDelaySeconds: 3,
+	}
 
 	var preStopCmd []string
 	cmd := []string{"/usr/bin/dumb-init"}
@@ -67,6 +74,7 @@ func StatefulSet(
 		},
 	}
 	readinessProbe.Exec = livenessProbe.Exec
+	startupProbe.Exec = livenessProbe.Exec
 
 	preStopCmd = []string{
 		"/usr/local/bin/container-scripts/cleanup.sh",
@@ -159,6 +167,7 @@ func StatefulSet(
 							Resources:                instance.Spec.Resources,
 							ReadinessProbe:           readinessProbe,
 							LivenessProbe:            livenessProbe,
+							StartupProbe:             startupProbe,
 							Lifecycle:                lifecycle,
 							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 						},

@@ -1,14 +1,15 @@
 #!/bin/bash
 
-# arguments: db-type: {nb, sb}, num-pods
+# arguments: db-type: {nb, sb}, num-pods, ssl/tcp
 # Check arguments
 if [ $# -lt 2 ]; then
-    echo "Usage: $0 <db-type> <num-pods>"
+    echo "Usage: $0 <db-type> <num-pods> [ssl]"
     exit 1
 fi
 
 DB_TYPE="$1"
 NUM_PODS="$2"
+PROTOCOL="${3:-tcp}"
 POD_PREFIX="ovsdbserver-${DB_TYPE}"
 CTL_FILE="ovn${DB_TYPE}_db.ctl"
 if [ "$DB_TYPE" == "nb" ]; then
@@ -46,7 +47,7 @@ for pod in "${pods[@]}"; do
     # check if the pod is connected with all other pods
     for server in "${pods[@]}"; do
     echo "Checking if $server is mentioned in the output"
-    if ! echo "$output" | grep -q "$server"; then
+    if ! echo "$output" | grep -q "$PROTOCOL:$server"; then
         exit 1
     fi
     done

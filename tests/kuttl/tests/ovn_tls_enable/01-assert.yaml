@@ -1,0 +1,39 @@
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  name: ovndbcluster-nb-sample
+spec:
+  replicas: 3
+status:
+  readyCount: 3
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  name: ovndbcluster-sb-sample
+spec:
+  replicas: 3
+status:
+  readyCount: 3
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+commands:
+  # check the DB uri scheme is tcp
+  - script: |
+      template='{{.status.internalDbAddress}}{{"\n"}}'
+      regex="tcp:.*"
+      dbUri=$(oc get -n $NAMESPACE OVNDBCluster ovndbcluster-sb-sample -o go-template="$template")
+      matches=$(echo "$dbUri" | sed -e "s?$regex??")
+      if [[ -n "$matches" ]]; then
+        exit 1
+      fi
+  # Check ovn connect is ptcp
+  - script: |
+      sb_pod=$(oc get pod -n $NAMESPACE -l service=ovsdbserver-sb -o name|head -1)
+      oc rsh -n $NAMESPACE ${sb_pod} ovn-sbctl --no-leader-only  get-connection | grep -q ptcp
+  # Check we have 3 servers using tcp
+  - script: |
+      $OVN_KUTTL_DIR/../common/scripts/check_cluster_status.sh nb 3
+  - script: |
+      $OVN_KUTTL_DIR/../common/scripts/check_cluster_status.sh sb 3

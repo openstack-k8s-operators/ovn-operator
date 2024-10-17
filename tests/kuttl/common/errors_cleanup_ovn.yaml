@@ -65,14 +65,12 @@ kind: Pod
 metadata:
   labels:
     service: ovsdbserver-nb
-  name: ovsdbserver-nb-0
 ---
 apiVersion: v1
 kind: Pod
 metadata:
   labels:
     service: ovsdbserver-sb
-  name: ovsdbserver-sb-0
 ---
 apiVersion: v1
 kind: Pod
@@ -97,27 +95,9 @@ kind: Service
 metadata:
   labels:
     service: ovsdbserver-nb
-  name: ovsdbserver-nb
----
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    service: ovsdbserver-nb
-    statefulset.kubernetes.io/pod-name: ovsdbserver-nb-0
-  name: ovsdbserver-nb-0
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
     service: ovsdbserver-sb
-  name: ovsdbserver-sb
----
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    service: ovsdbserver-sb
-    statefulset.kubernetes.io/pod-name: ovsdbserver-sb-0
-  name: ovsdbserver-sb-0

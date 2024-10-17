@@ -87,6 +87,26 @@ if ! [ -s $DB_FILE ]; then
     cleanup_db_file
 fi
 
+# Must remove a cluster member to change protocol, replicas 1/2 will have
+# left the cluster when terminating the pod, but cannot remove final member from
+# a cluster (replica 0).
+# Convert db to standalone mode on this member instead.
+# Cluster then gets recreated by ovnctl run_*b_ovsdb using the new local address.
+if [ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]; then
+    DB_LOCAL_ADDR={{ if .TLS }}ssl{{ else }}tcp{{ end }}:$(hostname).{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local:${RAFT_PORT}
+    if [ -e ${DB_FILE} ] && \
+       ovsdb-tool db-is-clustered ${DB_FILE} && \
+       ACTUAL_DB_LOCAL_ADDR="$(ovsdb-tool db-local-address ${DB_FILE})" && \
+       [ "${ACTUAL_DB_LOCAL_ADDR}" != "${DB_LOCAL_ADDR}" ] \
+       ; \
+    then
+        rm -f "${DB_FILE%.db}_standalone.db"
+        if ovsdb-tool cluster-to-standalone "${DB_FILE%.db}_standalone.db" "${DB_FILE}"; then
+            mv -f "${DB_FILE%.db}_standalone.db" "${DB_FILE}"
+        fi
+    fi
+fi
+
 # Wait until the ovsdb-tool finishes.
 trap wait_for_ovsdb_tool EXIT
 
@@ -106,8 +126,10 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
 
 {{- if .TLS }}
     ${CTLCMD} set-ssl {{.OVNDB_KEY_PATH}} {{.OVNDB_CERT_PATH}} {{.OVNDB_CACERT_PATH}}
-    ${CTLCMD} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
+{{- else }}
+    ${CTLCMD} del-ssl
 {{- end }}
+    ${CTLCMD} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
 
     # OVN does not support setting inactivity-probe through --remote cli arg so
     # we have to set it after database is up.
