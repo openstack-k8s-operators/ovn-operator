@@ -1,1 +1,47 @@
-02-assert.yaml
+#
+# Check for:
+#
+# - 1 OVNDBCluster CR
+# - 3 Pods for OVNDBCluster nb CR
+#
+
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  finalizers:
+  - openstack.org/ovndbcluster
+  name: ovndbcluster-nb-sample
+spec:
+  replicas: 3
+status:
+  readyCount: 3
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ovsdbserver-nb
+spec:
+  replicas: 3
+status:
+  availableReplicas: 3
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  finalizers:
+  - openstack.org/ovndbcluster
+  name: ovndbcluster-sb-sample
+spec:
+  replicas: 3
+status:
+  readyCount: 3
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ovsdbserver-sb
+spec:
+  replicas: 3
+status:
+  availableReplicas: 3
+---
