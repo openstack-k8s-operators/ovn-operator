@@ -1,0 +1,6 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      cp ../../../../config/samples/ovn_* enable_tls/
+      oc kustomize enable_tls | oc apply -n $NAMESPACE -f -
