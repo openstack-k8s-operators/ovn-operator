@@ -1,0 +1,11 @@
+#
+# Step for:
+#
+# - Configure ovn-remote to invalid address
+#
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+    - script: |
+        controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller -o name|head -1)
+        oc rsh -n $NAMESPACE ${controller_pod} ovs-vsctl set open . external_ids:ovn-remote=tcp:1.2.3.4:6642
