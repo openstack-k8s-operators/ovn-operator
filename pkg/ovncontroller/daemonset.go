@@ -75,7 +75,7 @@ func CreateOVNDaemonSet(
 			Lifecycle: &corev1.Lifecycle{
 				PreStop: &corev1.LifecycleHandler{
 					Exec: &corev1.ExecAction{
-						Command: []string{"/usr/share/ovn/scripts/ovn-ctl", "stop_controller"},
+						Command: []string{"/usr/local/bin/container-scripts/stop-ovn-controller.sh"},
 					},
 				},
 			},

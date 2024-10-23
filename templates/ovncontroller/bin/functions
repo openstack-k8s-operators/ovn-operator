@@ -27,6 +27,14 @@ ovs_dir=/var/lib/openvswitch
 FLOWS_RESTORE_SCRIPT=$ovs_dir/flows-script
 FLOWS_RESTORE_DIR=$ovs_dir/saved-flows
 SAFE_TO_STOP_OVSDB_SERVER_SEMAPHORE=$ovs_dir/is_safe_to_stop_ovsdb_server
+OVN_CONTROLLER_CLEANUP_CHASSIS_FLAG=$ovs_dir/cleanup_chassis
+
+function ovn_controller_is_restarting() {
+    if [ ! -f $OVN_CONTROLLER_CLEANUP_CHASSIS_FLAG ]; then
+        return 0
+    fi
+    return 1
+}
 
 function cleanup_ovsdb_server_semaphore() {
     rm -f $SAFE_TO_STOP_OVSDB_SERVER_SEMAPHORE 2>&1 > /dev/null
@@ -54,6 +62,7 @@ function configure_external_ids {
     ovs-vsctl set open . external-ids:ovn-bridge=${OVNBridge}
     ovs-vsctl set open . external-ids:ovn-remote=${OVNRemote}
     ovs-vsctl set open . external-ids:ovn-encap-type=${OVNEncapType}
+    ovs-vsctl set open . external-ids:ovn-ofctrl-wait-before-clear="8000"
     if [ -n "$OVNHostName" ]; then
         ovs-vsctl set open . external-ids:hostname=${OVNHostName}
     fi
