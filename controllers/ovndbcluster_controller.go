@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -356,10 +357,11 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 
 	// network to attach to
 	networkAttachments := []string{}
+	nadList := []netattdefv1.NetworkAttachmentDefinition{}
 	if instance.Spec.NetworkAttachment != "" {
 		networkAttachments = append(networkAttachments, instance.Spec.NetworkAttachment)
 
-		_, err := nad.GetNADWithName(ctx, helper, instance.Spec.NetworkAttachment, instance.Namespace)
+		nad, err := nad.GetNADWithName(ctx, helper, instance.Spec.NetworkAttachment, instance.Namespace)
 		if err != nil {
 			if k8s_errors.IsNotFound(err) {
 				Log.Info(fmt.Sprintf("network-attachment-definition %s not found", instance.Spec.NetworkAttachment))
@@ -379,6 +381,10 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 				err.Error()))
 			return ctrl.Result{}, err
 		}
+
+		if nad != nil {
+			nadList = append(nadList, *nad)
+		}
 	} else if instance.Spec.DBType == ovnv1.SBDBType {
 		// This config map was created by the SB and it only needs to be deleted once
 		// since this reconcile loop can be done by the SB and the NB, filtering so only
@@ -390,7 +396,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		}
 	}
 
-	serviceAnnotations, err := nad.CreateNetworksAnnotation(instance.Namespace, networkAttachments)
+	serviceAnnotations, err := nad.EnsureNetworksAnnotation(nadList)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed create network annotation from %s: %w",
 			instance.Spec.NetworkAttachment, err)
