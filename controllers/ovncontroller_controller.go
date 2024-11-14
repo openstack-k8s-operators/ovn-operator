@@ -468,8 +468,9 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 	sort.Strings(networkAttachments)
 
+	nadList := []netattdefv1.NetworkAttachmentDefinition{}
 	for _, netAtt := range networkAttachments {
-		_, err = nad.GetNADWithName(ctx, helper, netAtt, instance.Namespace)
+		nad, err := nad.GetNADWithName(ctx, helper, netAtt, instance.Namespace)
 		if err != nil {
 			if k8s_errors.IsNotFound(err) {
 				Log.Info(fmt.Sprintf("network-attachment-definition %s not found", netAtt))
@@ -489,9 +490,13 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 				err.Error()))
 			return ctrl.Result{}, err
 		}
+
+		if nad != nil {
+			nadList = append(nadList, *nad)
+		}
 	}
 
-	serviceAnnotations, err := nad.CreateNetworksAnnotation(instance.Namespace, networkAttachments)
+	serviceAnnotations, err := nad.EnsureNetworksAnnotation(nadList)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to create network annotation from %s: %w",
 			networkAttachments, err)
