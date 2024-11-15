@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/service"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 
 	corev1 "k8s.io/api/core/v1"
@@ -122,6 +123,16 @@ type OVNDBClusterSpecCore struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// TLS - Parameters related to TLS
 	TLS tls.SimpleService `json:"tls,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// Override, provides the ability to override the generated manifest of several child resources.
+	Override OVNDBClusterOverrideSpec `json:"override,omitempty"`
+}
+
+// OVNDBClusterOverrideSpec to override the generated manifest of several child resources.
+type OVNDBClusterOverrideSpec struct {
+	// Override configuration for the Service created to serve traffic to the cluster.
+	Service *service.OverrideSpec `json:"service,omitempty"`
 }
 
 // OVNDBClusterStatus defines the observed state of OVNDBCluster
@@ -208,7 +219,7 @@ func (instance OVNDBCluster) GetInternalEndpoint() (string, error) {
 
 // GetExternalEndpoint - return the DNS that openstack dnsmasq can resolve
 func (instance OVNDBCluster) GetExternalEndpoint() (string, error) {
-	if instance.Spec.NetworkAttachment != "" && instance.Status.DBAddress == "" {
+	if (instance.Spec.NetworkAttachment != "" || instance.Spec.Override.Service != nil) && instance.Status.DBAddress == "" {
 		return "", fmt.Errorf("external DBEndpoint not ready yet for %s", instance.Spec.DBType)
 	}
 	return instance.Status.DBAddress, nil

@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"    //revive:disable:dot-imports
 
 	//revive:disable-next-line:dot-imports
+	"github.com/openstack-k8s-operators/lib-common/modules/common/service"
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
 
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
@@ -32,6 +33,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 var _ = Describe("OVNDBCluster controller", func() {
@@ -623,6 +625,308 @@ var _ = Describe("OVNDBCluster controller", func() {
 				condition.ReadyCondition,
 				corev1.ConditionTrue,
 			)
+		})
+
+		When("OVNDBCluster gets migrated to use service override", func() {
+			BeforeEach(func() {
+				internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
+				nad := th.CreateNetworkAttachmentDefinition(internalAPINADName)
+				DeferCleanup(th.DeleteInstance, nad)
+
+				statefulSetName := types.NamespacedName{
+					Namespace: namespace,
+					Name:      "ovsdbserver-sb",
+				}
+				th.SimulateStatefulSetReplicaReadyWithPods(
+					statefulSetName,
+					map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+				)
+
+				th.ExpectCondition(
+					OVNDBClusterName,
+					ConditionGetterFunc(OVNDBClusterConditionGetter),
+					condition.NetworkAttachmentsReadyCondition,
+					corev1.ConditionTrue,
+				)
+
+				Eventually(func(g Gomega) {
+					OVNDBCluster := GetOVNDBCluster(OVNDBClusterName)
+					g.Expect(OVNDBCluster.Status.NetworkAttachments).To(
+						Equal(map[string][]string{namespace + "/internalapi": {"10.0.0.1"}}))
+
+				}, timeout, interval).Should(Succeed())
+
+				th.ExpectCondition(
+					OVNDBClusterName,
+					ConditionGetterFunc(OVNDBClusterConditionGetter),
+					condition.ReadyCondition,
+					corev1.ConditionTrue,
+				)
+			})
+
+			It("creates a loadbalancer service for accessing the SB DB", func() {
+				ovnDB := GetOVNDBCluster(OVNDBClusterName)
+				Expect(ovnDB).ToNot(BeNil())
+
+				_, err := controllerutil.CreateOrPatch(
+					th.Ctx, th.K8sClient, ovnDB, func() error {
+						ovnDB.Spec.Override.Service = &service.OverrideSpec{
+							EmbeddedLabelsAnnotations: &service.EmbeddedLabelsAnnotations{
+								Annotations: map[string]string{
+									"metallb.universe.tf/address-pool":    "osp-internalapi",
+									"metallb.universe.tf/allow-shared-ip": "osp-internalapi",
+									"metallb.universe.tf/loadBalancerIPs": "internal-lb-ip-1,internal-lb-ip-2",
+								},
+							},
+							Spec: &service.OverrideServiceSpec{
+								Type: corev1.ServiceTypeLoadBalancer,
+							},
+						}
+						ovnDB.Spec.NetworkAttachment = ""
+						return nil
+					})
+				Expect(err).ToNot(HaveOccurred())
+				th.SimulateLoadBalancerServiceIP(types.NamespacedName{Namespace: namespace, Name: "ovsdbserver-sb"})
+
+				// Cluster is created with 1 replica, serviceListWithoutTypeLabel should be 2:
+				// - ovsdbserver-sb   (loadbalancer type)
+				// - ovsdbserver-sb-0 (cluster type)
+				Eventually(func(g Gomega) {
+					serviceListWithoutTypeLabel := GetServicesListWithLabel(namespace)
+					g.Expect(serviceListWithoutTypeLabel.Items).To(HaveLen(2))
+				}).Should(Succeed())
+
+				Eventually(func(g Gomega) {
+					serviceListWithClusterType := GetServicesListWithLabel(namespace, map[string]string{"type": "cluster"})
+					g.Expect(serviceListWithClusterType.Items).To(HaveLen(1))
+					g.Expect(serviceListWithClusterType.Items[0].Name).To(Equal("ovsdbserver-sb-0"))
+				}).Should(Succeed())
+
+				Eventually(func(g Gomega) {
+					serviceListWithLoadBalancerType := GetServicesListWithLabel(namespace, map[string]string{"type": "loadbalancer"})
+					g.Expect(serviceListWithLoadBalancerType.Items).To(HaveLen(1))
+					g.Expect(serviceListWithLoadBalancerType.Items[0].Name).To(Equal("ovsdbserver-sb"))
+					g.Expect(serviceListWithLoadBalancerType.Items[0].Spec.Type).To(Equal(corev1.ServiceTypeLoadBalancer))
+				}).Should(Succeed())
+			})
+		})
+	})
+
+	When("OVNDBCluster is created with a service override", func() {
+		var OVNDBClusterName types.NamespacedName
+		BeforeEach(func() {
+			spec := GetDefaultOVNDBClusterSpec()
+			spec.Override.Service = &service.OverrideSpec{
+				EmbeddedLabelsAnnotations: &service.EmbeddedLabelsAnnotations{
+					Annotations: map[string]string{
+						"metallb.universe.tf/address-pool":    "osp-internalapi",
+						"metallb.universe.tf/allow-shared-ip": "osp-internalapi",
+						"metallb.universe.tf/loadBalancerIPs": "internal-lb-ip-1,internal-lb-ip-2",
+					},
+				},
+				Spec: &service.OverrideServiceSpec{
+					Type: corev1.ServiceTypeLoadBalancer,
+				},
+			}
+
+			spec.DBType = ovnv1.SBDBType
+			instance := CreateOVNDBCluster(namespace, spec)
+			OVNDBClusterName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+			DeferCleanup(th.DeleteInstance, instance)
+		})
+
+		It("should create services", func() {
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(
+				statefulSetName,
+				map[string][]string{},
+			)
+			th.SimulateLoadBalancerServiceIP(types.NamespacedName{Namespace: namespace, Name: "ovsdbserver-sb"})
+			// Cluster is created with 1 replica, serviceListWithoutTypeLabel should be 2:
+			// - ovsdbserver-sb   (loadbalancer type)
+			// - ovsdbserver-sb-0 (cluster type)
+			Eventually(func(g Gomega) {
+				serviceListWithoutTypeLabel := GetServicesListWithLabel(namespace)
+				g.Expect(serviceListWithoutTypeLabel.Items).To(HaveLen(2))
+			}).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				serviceListWithClusterType := GetServicesListWithLabel(namespace, map[string]string{"type": "cluster"})
+				g.Expect(serviceListWithClusterType.Items).To(HaveLen(1))
+				g.Expect(serviceListWithClusterType.Items[0].Name).To(Equal("ovsdbserver-sb-0"))
+			}).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				serviceListWithLoadBalancerType := GetServicesListWithLabel(namespace, map[string]string{"type": "loadbalancer"})
+				g.Expect(serviceListWithLoadBalancerType.Items).To(HaveLen(1))
+				g.Expect(serviceListWithLoadBalancerType.Items[0].Name).To(Equal("ovsdbserver-sb"))
+			}).Should(Succeed())
+		})
+
+		It("should create an external ConfigMap with expected key-value pairs and OwnerReferences set", func() {
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(
+				statefulSetName,
+				map[string][]string{},
+			)
+			th.SimulateLoadBalancerServiceIP(types.NamespacedName{Namespace: namespace, Name: "ovsdbserver-sb"})
+
+			externalCM := types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      "ovncontroller-config",
+			}
+
+			ExpectedExternalSBEndpoint := "tcp:ovsdbserver-sb." + namespace + ".svc:6642"
+
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(externalCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			// Check OwnerReferences set correctly for the Config Map
+			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Name).To(Equal(OVNDBClusterName.Name))
+			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Kind).To(Equal("OVNDBCluster"))
+
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-remote: %s", ExpectedExternalSBEndpoint))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("should create an external ConfigMap with ovn-encap-type if OVNController is configured", func() {
+			ExpectedEncapType := "vxlan"
+			// Spawn OVNController with vxlan as ExternalIDs.OvnEncapType
+			ovncontrollerSpec := GetDefaultOVNControllerSpec()
+			ovncontrollerSpec.ExternalIDS.OvnEncapType = ExpectedEncapType
+			ovnController := CreateOVNController(namespace, ovncontrollerSpec)
+			DeferCleanup(th.DeleteInstance, ovnController)
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(
+				statefulSetName,
+				map[string][]string{},
+			)
+			th.SimulateLoadBalancerServiceIP(types.NamespacedName{Namespace: namespace, Name: "ovsdbserver-sb"})
+
+			externalCM := types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      "ovncontroller-config",
+			}
+
+			ExpectedExternalSBEndpoint := "tcp:ovsdbserver-sb." + namespace + ".svc:6642"
+
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(externalCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			// Check OwnerReferences set correctly for the Config Map
+			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Name).To(Equal(OVNDBClusterName.Name))
+			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Kind).To(Equal("OVNDBCluster"))
+
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-remote: %s", ExpectedExternalSBEndpoint))
+			}, timeout, interval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-encap-type: %s", ExpectedEncapType))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("should remove ovnEncapType if OVNController gets deleted", func() {
+			ExpectedEncapType := "vxlan"
+			// Spawn OVNController with vxlan as ExternalIDs.OvnEncapType
+			ovncontrollerSpec := GetDefaultOVNControllerSpec()
+			ovncontrollerSpec.ExternalIDS.OvnEncapType = ExpectedEncapType
+			ovnController := CreateOVNController(namespace, ovncontrollerSpec)
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(
+				statefulSetName,
+				map[string][]string{},
+			)
+			th.SimulateLoadBalancerServiceIP(types.NamespacedName{Namespace: namespace, Name: "ovsdbserver-sb"})
+
+			externalCM := types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      "ovncontroller-config",
+			}
+
+			ExpectedExternalSBEndpoint := "tcp:ovsdbserver-sb." + namespace + ".svc:6642"
+
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(externalCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			// Check OwnerReferences set correctly for the Config Map
+			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Name).To(Equal(OVNDBClusterName.Name))
+			Expect(th.GetConfigMap(externalCM).ObjectMeta.OwnerReferences[0].Kind).To(Equal("OVNDBCluster"))
+
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-remote: %s", ExpectedExternalSBEndpoint))
+			}, timeout, interval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-encap-type: %s", ExpectedEncapType))
+			}, timeout, interval).Should(Succeed())
+
+			// This should trigger an OVNDBCluster reconcile and update config map
+			// without ovn-encap-type
+			DeleteOVNController(types.NamespacedName{Name: ovnController.GetName(), Namespace: namespace})
+
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(externalCM)
+			}, timeout, interval).ShouldNot(BeNil())
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-remote: %s", ExpectedExternalSBEndpoint))
+			}, timeout, interval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).ShouldNot(
+					ContainSubstring("ovn-encap-type: %s", ExpectedEncapType))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("should delete an external ConfigMap once SB DBCluster service override is removed", func() {
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(
+				statefulSetName,
+				map[string][]string{},
+			)
+			th.SimulateLoadBalancerServiceIP(types.NamespacedName{Namespace: namespace, Name: "ovsdbserver-sb"})
+
+			externalCM := types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      "ovncontroller-config",
+			}
+
+			// Should exist externalCM
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(externalCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			// Detach SBCluster from NAD
+			Eventually(func(g Gomega) {
+				ovndbcluster := GetOVNDBCluster(OVNDBClusterName)
+				ovndbcluster.Spec.Override.Service = nil
+				g.Expect(k8sClient.Update(ctx, ovndbcluster)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+			th.AssertConfigMapDoesNotExist(externalCM)
 		})
 	})
 

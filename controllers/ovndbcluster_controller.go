@@ -385,7 +385,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		if nad != nil {
 			nadList = append(nadList, *nad)
 		}
-	} else if instance.Spec.DBType == ovnv1.SBDBType {
+	} else if instance.Spec.DBType == ovnv1.SBDBType && instance.Spec.Override.Service == nil {
 		// This config map was created by the SB and it only needs to be deleted once
 		// since this reconcile loop can be done by the SB and the NB, filtering so only
 		// one deletes it.
@@ -619,10 +619,11 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		for _, svc := range svcList.Items {
 			svcPort = svc.Spec.Ports[0].Port
 
-			// Filter out headless services
-			if svc.Spec.ClusterIP != "None" {
-				internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, ovnv1.DNSSuffix, svcPort))
+			// Filter out headless and loadbalancer services
+			if svc.Spec.ClusterIP == "None" || svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
+				continue
 			}
+			internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, ovnv1.DNSSuffix, svcPort))
 		}
 
 		// Note setting this to the singular headless service address (e.g ssl:ovsdbserver-sb...) "works" but will not
@@ -632,7 +633,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 
 		// Set DB Address
 		instance.Status.InternalDBAddress = strings.Join(internalDbAddress, ",")
-		if instance.Spec.DBType == ovnv1.SBDBType && instance.Spec.NetworkAttachment != "" {
+		if instance.Spec.DBType == ovnv1.SBDBType && (instance.Spec.NetworkAttachment != "" || instance.Spec.Override.Service != nil) {
 			// This config map will populate the sb db address to edpm, can't use the nb
 			// If there's no networkAttachments the configMap is not needed
 			configMapVars := make(map[string]env.Setter)
@@ -676,21 +677,76 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 
 	Log.Info("Reconciling OVN DB Cluster Service")
 
-	//
-	// Ensure the ovndbcluster headless service Exists
-	//
-	headlessServiceLabels := util.MergeMaps(serviceLabels, map[string]string{"type": ovnv1.ServiceHeadlessType})
-
-	headlesssvc, err := service.NewService(
-		ovndbcluster.HeadlessService(serviceName, instance, headlessServiceLabels, serviceLabels),
-		time.Duration(5)*time.Second,
-		nil,
-	)
-	if err != nil {
-		return ctrl.Result{}, err
+	var ssvc *service.Service
+	var err error
+	svcOverride := instance.Spec.Override.Service
+	if svcOverride != nil {
+		if svcOverride.EmbeddedLabelsAnnotations == nil {
+			svcOverride.EmbeddedLabelsAnnotations = &service.EmbeddedLabelsAnnotations{}
+		}
+		if svcOverride.Spec == nil {
+			svcOverride.Spec = &service.OverrideServiceSpec{}
+		}
 	}
 
-	ctrlResult, err := headlesssvc.CreateOrPatch(ctx, helper)
+	//
+	// Ensure the ovndbcluster service Exists, if no override is provided, a headless service gets created
+	//
+	if svcOverride != nil && svcOverride.Spec.Type == corev1.ServiceTypeLoadBalancer {
+		// When switch from headless service to a LoadBalancer type, we delete it and get it re-created
+		// because ClusterIP can not be None
+		svc, err := service.GetServiceWithName(ctx, helper, serviceName, instance.Namespace)
+		if err != nil && !k8s_errors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
+		if svc != nil && svc.Spec.ClusterIP == "None" {
+			err = helper.GetClient().Delete(ctx, svc)
+			if err != nil && !k8s_errors.IsNotFound(err) {
+				return ctrl.Result{}, fmt.Errorf("error deleting service for transition to use serviceOerrides %s: %w", serviceName, err)
+			}
+		}
+
+		svcLabels := util.MergeMaps(serviceLabels, map[string]string{"type": strings.ToLower(string(svcOverride.Spec.Type))})
+		ssvc, err = service.NewService(
+			ovndbcluster.Service(serviceName, instance, svcLabels, serviceLabels),
+			time.Duration(5)*time.Second,
+			svcOverride,
+		)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		// add annotation to register service name in dnsmasq
+		if ssvc.GetServiceType() == corev1.ServiceTypeLoadBalancer {
+			ssvc.AddAnnotation(map[string]string{
+				service.AnnotationHostnameKey: ssvc.GetServiceHostname(),
+			})
+		}
+	} else {
+		// When switch from LoadBalancer to a headless service, we delete it and get it re-created
+		svc, err := service.GetServiceWithName(ctx, helper, serviceName, instance.Namespace)
+		if err != nil && !k8s_errors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
+		if svc != nil && svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
+			err = helper.GetClient().Delete(ctx, svc)
+			if err != nil && !k8s_errors.IsNotFound(err) {
+				return ctrl.Result{}, fmt.Errorf("error deleting service for transition to use headless service %s: %w", serviceName, err)
+			}
+		}
+
+		svcLabels := util.MergeMaps(serviceLabels, map[string]string{"type": ovnv1.ServiceHeadlessType})
+		ssvc, err = service.NewService(
+			ovndbcluster.HeadlessService(serviceName, instance, svcLabels, serviceLabels),
+			time.Duration(5)*time.Second,
+			nil,
+		)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	ctrlResult, err := ssvc.CreateOrPatch(ctx, helper)
 	if err != nil {
 		return ctrl.Result{}, err
 	} else if (ctrlResult != ctrl.Result{}) {
@@ -760,7 +816,9 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 
 	// When the cluster is attached to an external network, create DNS record for every
 	// cluster member so it can be resolved from outside cluster (edpm nodes)
-	if instance.Spec.NetworkAttachment != "" {
+	// This is not required for LoadBalancerType because we set the annotation there to
+	// get it automatically registered in DNS.
+	if instance.Spec.NetworkAttachment != "" && ssvc.GetServiceType() != corev1.ServiceTypeLoadBalancer {
 		var dnsIPsList []string
 		// TODO(averdagu): use built in Min once go1.21 is used
 		minLen := ovn_common.Min(len(podList.Items), int(*(instance.Spec.Replicas)))
@@ -780,7 +838,6 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-
 		}
 		// DNSData info is called every reconcile loop to ensure that even if a pod gets
 		// restarted and it's IP has changed, the DNSData CR will have the correct info.
@@ -804,13 +861,31 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 			Log.Info(fmt.Sprintf("not all pods are yet created, number of expected pods: %v, current pods: %v", *(instance.Spec.Replicas), len(podList.Items)))
 			return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 		}
+	} else {
+		// cleanup dnsData either if there are no NAD, or LB k8s service
+		dnsdata := &infranetworkv1.DNSData{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      serviceName,
+				Namespace: instance.Namespace,
+			},
+		}
+
+		err = helper.GetClient().Delete(ctx, dnsdata)
+		if err != nil && !k8s_errors.IsNotFound(err) {
+			return ctrl.Result{}, fmt.Errorf("error deleting dnsdata %s: %w", serviceName, err)
+		}
 	}
+
 	// dbAddress will contain ovsdbserver-(nb|sb).openstack.svc or empty
 	scheme := "tcp"
 	if instance.Spec.TLS.Enabled() {
 		scheme = "ssl"
 	}
-	instance.Status.DBAddress = ovndbcluster.GetDBAddress(svc, serviceName, instance.Namespace, scheme)
+	if ssvc.GetServiceType() == corev1.ServiceTypeLoadBalancer {
+		instance.Status.DBAddress = ovndbcluster.GetDBAddress(ssvc.GetSpec(), serviceName, instance.Namespace, scheme)
+	} else if svc != nil {
+		instance.Status.DBAddress = ovndbcluster.GetDBAddress(&svc.Spec, serviceName, instance.Namespace, scheme)
+	}
 
 	Log.Info("Reconciled OVN DB Cluster Service successfully")
 	return ctrl.Result{}, nil
