@@ -1,0 +1,12 @@
+#
+# Step for:
+#
+# - Force one of the liveness checks to return fail in order to restart
+# ovn-controller
+#
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller -o name|head -1)
+      oc rsh -n $NAMESPACE ${controller_pod} ovn-appctl -t ovn-controller debug/pause

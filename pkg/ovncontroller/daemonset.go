@@ -62,6 +62,32 @@ func CreateOVNDaemonSet(
 		}...)
 	}
 
+	ovnControllerLivenessProbe := &corev1.Probe{
+		// TODO might need tuning
+		TimeoutSeconds:      5,
+		PeriodSeconds:       5,
+		InitialDelaySeconds: 30,
+	}
+
+	ovnControllerReadinessProbe := &corev1.Probe{
+		// TODO might need tuning
+		TimeoutSeconds:      5,
+		PeriodSeconds:       5,
+		InitialDelaySeconds: 30,
+	}
+
+	ovnControllerLivenessProbe.Exec = &corev1.ExecAction{
+		Command: []string{
+			"/usr/local/bin/container-scripts/ovn_controller_liveness.sh",
+		},
+	}
+
+	ovnControllerReadinessProbe.Exec = &corev1.ExecAction{
+		Command: []string{
+			"/usr/local/bin/container-scripts/ovn_controller_readiness.sh",
+		},
+	}
+
 	runAsUser := int64(0)
 	privileged := true
 
@@ -88,8 +114,10 @@ func CreateOVNDaemonSet(
 				RunAsUser:  &runAsUser,
 				Privileged: &privileged,
 			},
-			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts: mounts,
+			Env:            env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			VolumeMounts:   mounts,
+			ReadinessProbe: ovnControllerReadinessProbe,
+			LivenessProbe:  ovnControllerLivenessProbe,
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
@@ -148,16 +176,39 @@ func CreateOVSDaemonSet(
 		InitialDelaySeconds: 3,
 	}
 
+	ovsDbReadinessProbe := &corev1.Probe{
+		// TODO might need tuning
+		TimeoutSeconds:      5,
+		PeriodSeconds:       3,
+		InitialDelaySeconds: 3,
+	}
+
+	ovsVswitchdReadinessProbe := &corev1.Probe{
+		// TODO might need tuning
+		TimeoutSeconds:      5,
+		PeriodSeconds:       3,
+		InitialDelaySeconds: 3,
+	}
+
 	ovsDbLivenessProbe.Exec = &corev1.ExecAction{
 		Command: []string{
-			"/usr/bin/ovs-vsctl",
-			"show",
+			"/usr/local/bin/container-scripts/ovsdb_server_liveness.sh",
 		},
 	}
 	ovsVswitchdLivenessProbe.Exec = &corev1.ExecAction{
 		Command: []string{
-			"/usr/bin/ovs-appctl",
-			"bond/show",
+			"/usr/local/bin/container-scripts/vswitchd_liveness.sh",
+		},
+	}
+
+	ovsDbReadinessProbe.Exec = &corev1.ExecAction{
+		Command: []string{
+			"/usr/local/bin/container-scripts/ovsdb_server_readiness.sh",
+		},
+	}
+	ovsVswitchdReadinessProbe.Exec = &corev1.ExecAction{
+		Command: []string{
+			"/usr/local/bin/container-scripts/vswitchd_readiness.sh",
 		},
 	}
 
@@ -211,6 +262,7 @@ func CreateOVSDaemonSet(
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			LivenessProbe:            ovsDbLivenessProbe,
+			ReadinessProbe:           ovsDbReadinessProbe,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		},
 		{
@@ -237,6 +289,7 @@ func CreateOVSDaemonSet(
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			LivenessProbe:            ovsVswitchdLivenessProbe,
+			ReadinessProbe:           ovsVswitchdReadinessProbe,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		},
 	}
