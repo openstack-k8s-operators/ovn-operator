@@ -218,6 +218,9 @@ metadata:
   generateName: ovn-controller-
 status:
   phase: Running
+  containerStatuses:
+    - name: ovn-controller
+      ready: true
 ---
 apiVersion: v1
 kind: Pod
@@ -229,6 +232,11 @@ metadata:
   generateName: ovn-controller-ovs-
 status:
   phase: Running
+  containerStatuses:
+    - name: ovs-vswitchd
+      ready: true
+    - name: ovsdb-server
+      ready: true
 ---
 apiVersion: v1
 kind: Service
