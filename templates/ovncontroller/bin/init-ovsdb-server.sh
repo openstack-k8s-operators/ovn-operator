@@ -15,8 +15,18 @@
 # under the License.
 
 set -ex
+source $(dirname $0)/functions
+trap wait_for_db_creation EXIT
 
+# If db file is empty, remove it; otherwise service won't start.
+# See https://issues.redhat.com/browse/FDP-689 for more details.
+if ! [ -s ${DB_FILE} ]; then
+    rm -f ${DB_FILE}
+fi
 # Initialize or upgrade database if needed
 CTL_ARGS="--system-id=random --no-ovs-vswitchd"
 /usr/share/openvswitch/scripts/ovs-ctl start $CTL_ARGS
 /usr/share/openvswitch/scripts/ovs-ctl stop $CTL_ARGS
+
+wait_for_db_creation
+trap - EXIT
