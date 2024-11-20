@@ -74,7 +74,7 @@ type OVNControllerSpecCore struct {
 
 	// +kubebuilder:validation:Optional
 	// NodeSelector to target subset of worker nodes running this service
-	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	NodeSelector *map[string]string `json:"nodeSelector,omitempty"`
 
 	// +kubebuilder:validation:Optional
 	// NetworkAttachment is a NetworkAttachment resource name to expose the service to the given network.

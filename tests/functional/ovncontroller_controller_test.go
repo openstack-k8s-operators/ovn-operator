@@ -925,4 +925,104 @@ var _ = Describe("OVNController controller", func() {
 			}, timeout, interval).Should(Succeed())
 		})
 	})
+
+	When("OVNController is created with nodeSelector", func() {
+		var ovnControllerName types.NamespacedName
+		var daemonSetName types.NamespacedName
+		var daemonSetNameOVS types.NamespacedName
+
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+
+			spec := GetDefaultOVNControllerSpec()
+			nodeSelector := map[string]string{
+				"foo": "bar",
+			}
+			spec.NodeSelector = &nodeSelector
+			instance := CreateOVNController(namespace, spec)
+			DeferCleanup(th.DeleteInstance, instance)
+
+			ovnControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+
+			daemonSetName = types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+
+			SimulateDaemonsetNumberReady(daemonSetName)
+
+			daemonSetNameOVS = types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+
+			SimulateDaemonsetNumberReady(daemonSetNameOVS)
+		})
+
+		It("sets nodeSelector in resource specs", func() {
+			Eventually(func(g Gomega) {
+				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("updates nodeSelector in resource specs when changed", func() {
+			Eventually(func(g Gomega) {
+				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				ovnController := GetOVNController(ovnControllerName)
+				newNodeSelector := map[string]string{
+					"foo2": "bar2",
+				}
+				ovnController.Spec.NodeSelector = &newNodeSelector
+				g.Expect(k8sClient.Update(ctx, ovnController)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo2": "bar2"}))
+				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo2": "bar2"}))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("removes nodeSelector from resource specs when cleared", func() {
+			Eventually(func(g Gomega) {
+				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				ovnController := GetOVNController(ovnControllerName)
+				emptyNodeSelector := map[string]string{}
+				ovnController.Spec.NodeSelector = &emptyNodeSelector
+				g.Expect(k8sClient.Update(ctx, ovnController)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.NodeSelector).To(BeNil())
+				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.NodeSelector).To(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("removes nodeSelector from resource specs when nilled", func() {
+			Eventually(func(g Gomega) {
+				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				ovnController := GetOVNController(ovnControllerName)
+				ovnController.Spec.NodeSelector = nil
+				g.Expect(k8sClient.Update(ctx, ovnController)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.NodeSelector).To(BeNil())
+				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.NodeSelector).To(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
+	})
 })
