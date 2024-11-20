@@ -146,8 +146,8 @@ func CreateOVNDaemonSet(
 		},
 	}
 
-	if instance.Spec.NodeSelector != nil && len(instance.Spec.NodeSelector) > 0 {
-		daemonset.Spec.Template.Spec.NodeSelector = instance.Spec.NodeSelector
+	if instance.Spec.NodeSelector != nil {
+		daemonset.Spec.Template.Spec.NodeSelector = *instance.Spec.NodeSelector
 	}
 
 	return daemonset
@@ -317,8 +317,8 @@ func CreateOVSDaemonSet(
 		},
 	}
 
-	if instance.Spec.NodeSelector != nil && len(instance.Spec.NodeSelector) > 0 {
-		daemonset.Spec.Template.Spec.NodeSelector = instance.Spec.NodeSelector
+	if instance.Spec.NodeSelector != nil {
+		daemonset.Spec.Template.Spec.NodeSelector = *instance.Spec.NodeSelector
 	}
 
 	if len(annotations) > 0 {

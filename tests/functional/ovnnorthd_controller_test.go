@@ -129,6 +129,86 @@ var _ = Describe("OVNNorthd controller", func() {
 		})
 	})
 
+	When("OVNNorthd is created with nodeSelector", func() {
+		var ovnNorthdName types.NamespacedName
+		var deploymentName types.NamespacedName
+
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			spec := GetDefaultOVNNorthdSpec()
+			nodeSelector := map[string]string{
+				"foo": "bar",
+			}
+			spec.NodeSelector = &nodeSelector
+			ovnNorthdName = ovn.CreateOVNNorthd(namespace, spec)
+			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
+			deploymentName = types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-northd",
+			}
+			th.SimulateDeploymentReplicaReady(deploymentName)
+		})
+
+		It("sets nodeSelector in resource specs", func() {
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("updates nodeSelector in resource specs when changed", func() {
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				northd := ovn.GetOVNNorthd(ovnNorthdName)
+				newNodeSelector := map[string]string{
+					"foo2": "bar2",
+				}
+				northd.Spec.NodeSelector = &newNodeSelector
+				g.Expect(k8sClient.Update(ctx, northd)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo2": "bar2"}))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("removes nodeSelector from resource specs when cleared", func() {
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				northd := ovn.GetOVNNorthd(ovnNorthdName)
+				emptyNodeSelector := map[string]string{}
+				northd.Spec.NodeSelector = &emptyNodeSelector
+				g.Expect(k8sClient.Update(ctx, northd)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("removes nodeSelector from resource specs when nilled", func() {
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				northd := ovn.GetOVNNorthd(ovnNorthdName)
+				northd.Spec.NodeSelector = nil
+				g.Expect(k8sClient.Update(ctx, northd)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
+	})
+
 	When("OVNNorthd is created with TLS", func() {
 		var ovnNorthdName types.NamespacedName
 
