@@ -21,7 +21,7 @@ source $(dirname $0)/functions
 cleanup_ovsdb_server_semaphore
 
 # Start the service
-ovsdb-server /etc/openvswitch/conf.db \
+ovsdb-server ${DB_FILE} \
     --pidfile \
     --remote=punix:/var/run/openvswitch/db.sock \
     --private-key=db:Open_vSwitch,SSL,private_key \

@@ -22,6 +22,7 @@ OVNAvailabilityZones=${OVNAvailabilityZones:-""}
 EnableChassisAsGateway=${EnableChassisAsGateway:-true}
 PhysicalNetworks=${PhysicalNetworks:-""}
 OVNHostName=${OVNHostName:-""}
+DB_FILE=/etc/openvswitch/conf.db
 
 ovs_dir=/var/lib/openvswitch
 FLOWS_RESTORE_SCRIPT=$ovs_dir/flows-script
@@ -143,4 +144,11 @@ function configure_physical_networks {
         ovs-vsctl --if-exists remove open . external_ids ovn-bridge-mappings
     fi
 
+}
+
+function wait_for_db_creation {
+    while [ ! -s ${DB_FILE} ]; do
+        echo "${DB_FILE} does not exist yet or is empty. Waiting..."
+        sleep 1
+    done
 }
