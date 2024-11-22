@@ -220,6 +220,86 @@ var _ = Describe("OVNDBCluster controller", func() {
 		})
 	})
 
+	When("A OVNDBCluster instance is created with nodeSelector", func() {
+		var OVNDBClusterName types.NamespacedName
+		var statefulSetName types.NamespacedName
+
+		BeforeEach(func() {
+			spec := GetDefaultOVNDBClusterSpec()
+			nodeSelector := map[string]string{
+				"foo": "bar",
+			}
+			spec.NodeSelector = &nodeSelector
+			instance := CreateOVNDBCluster(namespace, spec)
+			OVNDBClusterName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+			DeferCleanup(th.DeleteInstance, instance)
+
+			statefulSetName = types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-nb",
+			}
+			th.SimulateStatefulSetReplicaReady(statefulSetName)
+		})
+
+		It("sets nodeSelector in resource specs", func() {
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("updates nodeSelector in resource specs when changed", func() {
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				dbCluster := GetOVNDBCluster(OVNDBClusterName)
+				newNodeSelector := map[string]string{
+					"foo2": "bar2",
+				}
+				dbCluster.Spec.NodeSelector = &newNodeSelector
+				g.Expect(k8sClient.Update(ctx, dbCluster)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo2": "bar2"}))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("removes nodeSelector from resource specs when cleared", func() {
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				dbCluster := GetOVNDBCluster(OVNDBClusterName)
+				emptyNodeSelector := map[string]string{}
+				dbCluster.Spec.NodeSelector = &emptyNodeSelector
+				g.Expect(k8sClient.Update(ctx, dbCluster)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.NodeSelector).To(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("removes nodeSelector from resource specs when nilled", func() {
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				dbCluster := GetOVNDBCluster(OVNDBClusterName)
+				dbCluster.Spec.NodeSelector = nil
+				g.Expect(k8sClient.Update(ctx, dbCluster)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.NodeSelector).To(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
+	})
+
 	When("OVNDBClusters are created with networkAttachments", func() {
 		It("does not break if pods are not created yet", func() {
 			// Create OVNDBCluster with 1 replica

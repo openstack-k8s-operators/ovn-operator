@@ -99,6 +99,7 @@ func ConfigJob(
 							},
 							Volumes:  GetOVNControllerVolumes(instance.Name, instance.Namespace),
 							NodeName: ovnPod.Spec.NodeName,
+							// ^ NodeSelector not required
 						},
 					},
 				},
