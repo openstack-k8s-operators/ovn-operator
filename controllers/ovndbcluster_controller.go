@@ -40,6 +40,7 @@ import (
 
 	infranetworkv1 "github.com/openstack-k8s-operators/infra-operator/apis/network/v1beta1"
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/clusterdns"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/configmap"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
@@ -623,7 +624,9 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 			if svc.Spec.ClusterIP == "None" || svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
 				continue
 			}
-			internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, ovnv1.DNSSuffix, svcPort))
+			// TODO: Watch operator.openshift.io resource once cluster domain is customizable
+			clusterDomain := clusterdns.GetDNSClusterDomain()
+			internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, clusterDomain, svcPort))
 		}
 
 		// Note setting this to the singular headless service address (e.g ssl:ovsdbserver-sb...) "works" but will not
