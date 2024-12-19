@@ -40,10 +40,6 @@ const (
 	// ServiceClusterType - Constant to identify Cluster services
 	ServiceClusterType = "cluster"
 
-	// DNSSuffix : hardcoded value on how DNSCore domain is configured
-	DNSSuffix = "cluster.local"
-	// TODO: retrieve it from environment
-
 	// Container image fall-back defaults
 
 	// OVNNBContainerImage is the fall-back container image for OVNDBCluster NB
