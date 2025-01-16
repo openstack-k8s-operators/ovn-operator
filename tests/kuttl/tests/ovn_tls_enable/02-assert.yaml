@@ -34,6 +34,6 @@ commands:
       oc rsh -n $NAMESPACE ${sb_pod} ovn-sbctl --no-leader-only  get-connection | grep -q pssl
   # Check we have 3 servers using ssl
   - script: |
-      $OVN_KUTTL_DIR/../common/scripts/check_cluster_status.sh nb 3 ssl
+      ../../common/scripts/check_cluster_status.sh nb 3 ssl
   - script: |
-      $OVN_KUTTL_DIR/../common/scripts/check_cluster_status.sh sb 3 ssl
+      ../../common/scripts/check_cluster_status.sh sb 3 ssl

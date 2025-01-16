@@ -34,6 +34,6 @@ commands:
       oc rsh -n $NAMESPACE ${sb_pod} ovn-sbctl --no-leader-only  get-connection | grep -q ptcp
   # Check we have 3 servers using tcp
   - script: |
-      $OVN_KUTTL_DIR/../common/scripts/check_cluster_status.sh nb 3
+      ../../common/scripts/check_cluster_status.sh nb 3
   - script: |
-      $OVN_KUTTL_DIR/../common/scripts/check_cluster_status.sh sb 3
+      ../../common/scripts/check_cluster_status.sh sb 3
