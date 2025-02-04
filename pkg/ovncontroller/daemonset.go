@@ -165,29 +165,29 @@ func CreateOVSDaemonSet(
 	ovsDbLivenessProbe := &corev1.Probe{
 		// TODO might need tuning
 		TimeoutSeconds:      5,
-		PeriodSeconds:       3,
-		InitialDelaySeconds: 3,
+		PeriodSeconds:       5,
+		InitialDelaySeconds: 30,
 	}
 
 	ovsVswitchdLivenessProbe := &corev1.Probe{
 		// TODO might need tuning
 		TimeoutSeconds:      5,
-		PeriodSeconds:       3,
-		InitialDelaySeconds: 3,
+		PeriodSeconds:       5,
+		InitialDelaySeconds: 30,
 	}
 
 	ovsDbReadinessProbe := &corev1.Probe{
 		// TODO might need tuning
 		TimeoutSeconds:      5,
-		PeriodSeconds:       3,
-		InitialDelaySeconds: 3,
+		PeriodSeconds:       5,
+		InitialDelaySeconds: 30,
 	}
 
 	ovsVswitchdReadinessProbe := &corev1.Probe{
 		// TODO might need tuning
 		TimeoutSeconds:      5,
-		PeriodSeconds:       3,
-		InitialDelaySeconds: 3,
+		PeriodSeconds:       5,
+		InitialDelaySeconds: 30,
 	}
 
 	ovsDbLivenessProbe.Exec = &corev1.ExecAction{
