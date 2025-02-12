@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"    //revive:disable:dot-imports
 
 	//revive:disable-next-line:dot-imports
+	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
 
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
@@ -35,7 +36,7 @@ var _ = Describe("OVNNorthd controller", func() {
 	When("A OVNNorthd instance is created", func() {
 		var ovnNorthdName types.NamespacedName
 		BeforeEach(func() {
-			ovnNorthdName = ovn.CreateOVNNorthd(namespace, GetDefaultOVNNorthdSpec())
+			ovnNorthdName = ovn.CreateOVNNorthd(nil, namespace, GetDefaultOVNNorthdSpec())
 			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
 		})
 
@@ -98,7 +99,7 @@ var _ = Describe("OVNNorthd controller", func() {
 			spec := GetDefaultOVNNorthdSpec()
 			replicas := int32(0)
 			spec.Replicas = &replicas
-			ovnNorthdName = ovn.CreateOVNNorthd(namespace, spec)
+			ovnNorthdName = ovn.CreateOVNNorthd(nil, namespace, spec)
 			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
 		})
 
@@ -141,7 +142,7 @@ var _ = Describe("OVNNorthd controller", func() {
 				"foo": "bar",
 			}
 			spec.NodeSelector = &nodeSelector
-			ovnNorthdName = ovn.CreateOVNNorthd(namespace, spec)
+			ovnNorthdName = ovn.CreateOVNNorthd(nil, namespace, spec)
 			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
 			deploymentName = types.NamespacedName{
 				Namespace: namespace,
@@ -216,7 +217,7 @@ var _ = Describe("OVNNorthd controller", func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
 			spec := GetTLSOVNNorthdSpec()
-			ovnNorthdName = ovn.CreateOVNNorthd(namespace, spec)
+			ovnNorthdName = ovn.CreateOVNNorthd(nil, namespace, spec)
 			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
 		})
 
@@ -397,5 +398,89 @@ var _ = Describe("OVNNorthd controller", func() {
 				g.Expect(newHash).NotTo(Equal(originalHash))
 			}, timeout, interval).Should(Succeed())
 		})
+	})
+	When("OVNNorthd is created with topologyref", func() {
+		var ovnNorthdName types.NamespacedName
+		var deploymentName types.NamespacedName
+		var ovnTopologies []types.NamespacedName
+		BeforeEach(func() {
+			ovnNorthdName = types.NamespacedName{
+				Name:      "ovn-northd-0",
+				Namespace: namespace,
+			}
+			ovnTopologies = []types.NamespacedName{
+				{
+					Namespace: namespace,
+					Name:      "ovn-topology",
+				},
+				{
+					Namespace: namespace,
+					Name:      "ovn-topology-alt",
+				},
+			}
+			// Build the topology Spec
+			topologySpec := GetSampleTopologySpec(ovnNorthdName.Name)
+			// Create Test Topology
+			for _, t := range ovnTopologies {
+				CreateTopology(t, topologySpec)
+			}
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			spec := GetDefaultOVNNorthdSpec()
+			spec.TopologyRef = &topologyv1.TopoRef{
+				Name:      ovnTopologies[0].Name,
+				Namespace: ovnTopologies[0].Namespace,
+			}
+			ovn.CreateOVNNorthd(&ovnNorthdName.Name, namespace, spec)
+
+			deploymentName = types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-northd",
+			}
+			th.SimulateDeploymentReplicaReady(deploymentName)
+		})
+		It("sets topologyref in both .Status CR and resources", func() {
+			Eventually(func(g Gomega) {
+				northd := ovn.GetOVNNorthd(ovnNorthdName)
+				g.Expect(northd.Status.LastAppliedTopology).To(Equal(ovnTopologies[0].Name))
+				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.TopologySpreadConstraints).ToNot(BeNil())
+				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.Affinity).To(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("updates topology when the reference changes", func() {
+			Eventually(func(g Gomega) {
+				northd := ovn.GetOVNNorthd(ovnNorthdName)
+				northd.Spec.TopologyRef.Name = ovnTopologies[1].Name
+				g.Expect(k8sClient.Update(ctx, northd)).To(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				northd := ovn.GetOVNNorthd(ovnNorthdName)
+				g.Expect(northd.Status.LastAppliedTopology).To(Equal(ovnTopologies[1].Name))
+				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.TopologySpreadConstraints).ToNot(BeNil())
+				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.Affinity).To(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
+		It("removes topologyRef from the spec", func() {
+			Eventually(func(g Gomega) {
+				northd := ovn.GetOVNNorthd(ovnNorthdName)
+				// Remove the TopologyRef from the existing .Spec
+				northd.Spec.TopologyRef = nil
+				g.Expect(k8sClient.Update(ctx, northd)).To(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				northd := ovn.GetOVNNorthd(ovnNorthdName)
+				g.Expect(northd.Status.LastAppliedTopology).Should(BeEmpty())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				// Both Affinity and TopologySpreadConstraints are not set
+				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.TopologySpreadConstraints).To(BeNil())
+				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.Affinity).ToNot(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
+
 	})
 })

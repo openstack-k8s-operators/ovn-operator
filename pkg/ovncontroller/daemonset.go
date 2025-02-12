@@ -15,6 +15,7 @@ package ovncontroller
 import (
 	"fmt"
 
+	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
@@ -30,6 +31,7 @@ func CreateOVNDaemonSet(
 	instance *ovnv1.OVNController,
 	configHash string,
 	labels map[string]string,
+	topology *topologyv1.Topology,
 ) *appsv1.DaemonSet {
 	volumes := GetOVNControllerVolumes(instance.Name, instance.Namespace)
 	mounts := GetOVNControllerVolumeMounts()
@@ -149,6 +151,21 @@ func CreateOVNDaemonSet(
 	if instance.Spec.NodeSelector != nil {
 		daemonset.Spec.Template.Spec.NodeSelector = *instance.Spec.NodeSelector
 	}
+	// DaemonSet automatically place one Pod per node that matches the
+	// node selector, but topology spread constraints and PodAffinity/PodAntiaffinity
+	// rules are ignored. However, NodeAffinity, part of the Topology interface,
+	// might be used to influence Pod scheduling.
+	// More details about DaemonSetSpec Pod scheduling in:
+	// https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/daemon/daemon_controller.go#L1018
+	// https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/daemon/util/daemonset_util.go#L226
+	if topology != nil {
+		// Get the Topology .Spec
+		ts := topology.Spec
+		// Process Affinity if defined in the referenced Topology
+		if ts.Affinity != nil {
+			daemonset.Spec.Template.Spec.Affinity = ts.Affinity
+		}
+	}
 
 	return daemonset
 }
@@ -158,6 +175,7 @@ func CreateOVSDaemonSet(
 	configHash string,
 	labels map[string]string,
 	annotations map[string]string,
+	topology *topologyv1.Topology,
 ) *appsv1.DaemonSet {
 	//
 	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
@@ -319,6 +337,21 @@ func CreateOVSDaemonSet(
 
 	if instance.Spec.NodeSelector != nil {
 		daemonset.Spec.Template.Spec.NodeSelector = *instance.Spec.NodeSelector
+	}
+	// DaemonSet automatically place one Pod per node that matches the
+	// node selector, but topology spread constraints and PodAffinity/PodAntiaffinity
+	// rules are ignored. However, NodeAffinity, part of the Topology interface,
+	// might be used to influence Pod scheduling.
+	// More details about DaemonSetSpec Pod scheduling in:
+	// https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/daemon/daemon_controller.go#L1018
+	// https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/daemon/util/daemonset_util.go#L226
+	if topology != nil {
+		// Get the Topology .Spec
+		ts := topology.Spec
+		// Process Affinity if defined in the referenced Topology
+		if ts.Affinity != nil {
+			daemonset.Spec.Template.Spec.Affinity = ts.Affinity
+		}
 	}
 
 	if len(annotations) > 0 {

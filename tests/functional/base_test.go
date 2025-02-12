@@ -94,7 +94,7 @@ func GetTLSOVNDBClusterSpec() ovnv1.OVNDBClusterSpec {
 }
 
 func CreateOVNDBCluster(namespace string, spec ovnv1.OVNDBClusterSpec) client.Object {
-	name := ovn.CreateOVNDBCluster(namespace, spec)
+	name := ovn.CreateOVNDBCluster(nil, namespace, spec)
 	return ovn.GetOVNDBCluster(name)
 }
 
@@ -231,7 +231,7 @@ func GetTLSOVNControllerSpec() ovnv1.OVNControllerSpec {
 
 func CreateOVNController(namespace string, spec ovnv1.OVNControllerSpec) client.Object {
 
-	name := ovn.CreateOVNController(namespace, spec)
+	name := ovn.CreateOVNController(nil, namespace, spec)
 	return ovn.GetOVNController(name)
 }
 
@@ -380,4 +380,69 @@ func GetServicesListWithLabel(namespace string, labelSelectorMap ...map[string]s
 	}).Should(Succeed())
 
 	return serviceList
+}
+
+// Topology functions
+
+// GetSampleDaemonSetTopologySpec - A sample (and opinionated) Topology Spec used to
+// test OVN components
+func GetSampleDaemonSetTopologySpec(selector string) map[string]interface{} {
+	// Build the topology Spec
+	topologySpec := map[string]interface{}{
+		"affinity": map[string]interface{}{
+			"nodeAffinity": map[string]interface{}{
+				"requiredDuringSchedulingIgnoredDuringExecution": map[string]interface{}{
+					"nodeSelectorTerms": []map[string]interface{}{
+						{
+							"matchExpressions": []map[string]interface{}{
+								{
+									"key":      "service",
+									"operator": "In",
+									"values": []string{
+										selector,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return topologySpec
+}
+
+// GetSampleTopologySpec - A sample (and opinionated) Topology Spec used to
+// test OVN components
+func GetSampleTopologySpec(selector string) map[string]interface{} {
+	// Build the topology Spec
+	topologySpec := map[string]interface{}{
+		"topologySpreadConstraints": []map[string]interface{}{
+			{
+				"maxSkew":           1,
+				"topologyKey":       corev1.LabelHostname,
+				"whenUnsatisfiable": "ScheduleAnyway",
+				"labelSelector": map[string]interface{}{
+					"matchLabels": map[string]interface{}{
+						"service": selector,
+					},
+				},
+			},
+		},
+	}
+	return topologySpec
+}
+
+// CreateTopology - Creates a Topology CR based on the spec passed as input
+func CreateTopology(topology types.NamespacedName, spec map[string]interface{}) client.Object {
+	raw := map[string]interface{}{
+		"apiVersion": "topology.openstack.org/v1beta1",
+		"kind":       "Topology",
+		"metadata": map[string]interface{}{
+			"name":      topology.Name,
+			"namespace": topology.Namespace,
+		},
+		"spec": spec,
+	}
+	return th.CreateUnstructured(raw)
 }

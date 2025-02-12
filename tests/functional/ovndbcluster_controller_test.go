@@ -28,6 +28,7 @@ import (
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
 
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -1220,5 +1221,89 @@ var _ = Describe("OVNDBCluster controller", func() {
 			}, timeout, interval).Should(Succeed())
 		})
 
+	})
+
+	When("OVNDB is created with topologyref", func() {
+		var OVNDBClusterName types.NamespacedName
+		var statefulSetName types.NamespacedName
+		var ovnTopologies []types.NamespacedName
+
+		BeforeEach(func() {
+			OVNDBClusterName = types.NamespacedName{
+				Name:      "ovn-db-0",
+				Namespace: namespace,
+			}
+			ovnTopologies = []types.NamespacedName{
+				{
+					Namespace: namespace,
+					Name:      "ovn-topology",
+				},
+				{
+					Namespace: namespace,
+					Name:      "ovn-topology-alt",
+				},
+			}
+			// Build the topology Spec
+			topologySpec := GetSampleTopologySpec(OVNDBClusterName.Name)
+			// Create Test Topology
+			for _, t := range ovnTopologies {
+				CreateTopology(t, topologySpec)
+			}
+
+			spec := GetDefaultOVNDBClusterSpec()
+			spec.TopologyRef = &topologyv1.TopoRef{
+				Name:      ovnTopologies[0].Name,
+				Namespace: ovnTopologies[0].Namespace,
+			}
+			ovn.CreateOVNDBCluster(&OVNDBClusterName.Name, OVNDBClusterName.Namespace, spec)
+
+			statefulSetName = types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-nb",
+			}
+			th.SimulateStatefulSetReplicaReady(statefulSetName)
+		})
+
+		It("sets topologyref in both .Status CR and resources", func() {
+			Eventually(func(g Gomega) {
+				ovndb := GetOVNDBCluster(OVNDBClusterName)
+				g.Expect(ovndb.Status.LastAppliedTopology).To(Equal(ovnTopologies[0].Name))
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).ToNot(BeNil())
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Affinity).To(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("updates topology when the reference changes", func() {
+			Eventually(func(g Gomega) {
+				ovndb := GetOVNDBCluster(OVNDBClusterName)
+				ovndb.Spec.TopologyRef.Name = ovnTopologies[1].Name
+				g.Expect(k8sClient.Update(ctx, ovndb)).To(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				ovndb := GetOVNDBCluster(OVNDBClusterName)
+				g.Expect(ovndb.Status.LastAppliedTopology).To(Equal(ovnTopologies[1].Name))
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).ToNot(BeNil())
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Affinity).To(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
+		It("removes topologyRef from the spec", func() {
+			Eventually(func(g Gomega) {
+				ovndb := GetOVNDBCluster(OVNDBClusterName)
+				// Remove the TopologyRef from the existing .Spec
+				ovndb.Spec.TopologyRef = nil
+				g.Expect(k8sClient.Update(ctx, ovndb)).To(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				ovndb := GetOVNDBCluster(OVNDBClusterName)
+				g.Expect(ovndb.Status.LastAppliedTopology).Should(BeEmpty())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).To(BeNil())
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Affinity).ToNot(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
 	})
 })
