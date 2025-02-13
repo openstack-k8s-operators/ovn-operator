@@ -155,11 +155,6 @@ func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}()
 
-	// If we're not deleting this and the service object doesn't have our finalizer, add it.
-	if instance.DeletionTimestamp.IsZero() && controllerutil.AddFinalizer(instance, helper.GetFinalizer()) || isNewInstance {
-		return ctrl.Result{}, nil
-	}
-
 	// initialize conditions used later as Status=Unknown
 	cl := condition.CreateList(
 		condition.UnknownCondition(condition.InputReadyCondition, condition.InitReason, condition.InputReadyInitMessage),
@@ -174,6 +169,11 @@ func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	instance.Status.Conditions.Init(&cl)
 	instance.Status.ObservedGeneration = instance.Generation
+
+	// If we're not deleting this and the service object doesn't have our finalizer, add it.
+	if instance.DeletionTimestamp.IsZero() && controllerutil.AddFinalizer(instance, helper.GetFinalizer()) || isNewInstance {
+		return ctrl.Result{}, nil
+	}
 
 	if instance.Status.Hash == nil {
 		instance.Status.Hash = map[string]string{}
