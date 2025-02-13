@@ -28,6 +28,10 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // OVNNorthdDefaults -
@@ -86,7 +90,21 @@ var _ webhook.Validator = &OVNNorthd{}
 func (r *OVNNorthd) ValidateCreate() (admission.Warnings, error) {
 	ovnnorthdlog.Info("validate create", "name", r.Name)
 
-	// TODO(user): fill in your validation logic upon object creation.
+	errors := field.ErrorList{}
+	basePath := field.NewPath("spec")
+
+	// When a TopologyRef CR is referenced, fail if a different Namespace is
+	// referenced because is not supported
+	if r.Spec.TopologyRef != nil {
+		if err := topologyv1.ValidateTopologyNamespace(r.Spec.TopologyRef.Namespace, *basePath, r.Namespace); err != nil {
+			errors = append(errors, err)
+		}
+	}
+	if len(errors) != 0 {
+		return nil, apierrors.NewInvalid(
+			schema.GroupKind{Group: "manila.openstack.org", Kind: "Manila"},
+			r.Name, errors)
+	}
 	return nil, nil
 }
 
@@ -94,7 +112,21 @@ func (r *OVNNorthd) ValidateCreate() (admission.Warnings, error) {
 func (r *OVNNorthd) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	ovnnorthdlog.Info("validate update", "name", r.Name)
 
-	// TODO(user): fill in your validation logic upon object update.
+	errors := field.ErrorList{}
+	basePath := field.NewPath("spec")
+
+	// When a TopologyRef CR is referenced, fail if a different Namespace is
+	// referenced because is not supported
+	if r.Spec.TopologyRef != nil {
+		if err := topologyv1.ValidateTopologyNamespace(r.Spec.TopologyRef.Namespace, *basePath, r.Namespace); err != nil {
+			errors = append(errors, err)
+		}
+	}
+	if len(errors) != 0 {
+		return nil, apierrors.NewInvalid(
+			schema.GroupKind{Group: "manila.openstack.org", Kind: "Manila"},
+			r.Name, errors)
+	}
 	return nil, nil
 }
 

@@ -17,11 +17,15 @@ limitations under the License.
 package v1beta1
 
 import (
+	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // OVNControllerDefaults -
@@ -82,6 +86,22 @@ var _ webhook.Validator = &OVNController{}
 func (r *OVNController) ValidateCreate() (admission.Warnings, error) {
 	ovncontrollerlog.Info("validate create", "name", r.Name)
 
+	errors := field.ErrorList{}
+	basePath := field.NewPath("spec")
+
+	// When a TopologyRef CR is referenced, fail if a different Namespace is
+	// referenced because is not supported
+	if r.Spec.TopologyRef != nil {
+		if err := topologyv1.ValidateTopologyNamespace(r.Spec.TopologyRef.Namespace, *basePath, r.Namespace); err != nil {
+			errors = append(errors, err)
+		}
+	}
+	if len(errors) != 0 {
+		return nil, apierrors.NewInvalid(
+			schema.GroupKind{Group: "manila.openstack.org", Kind: "Manila"},
+			r.Name, errors)
+	}
+
 	return nil, nil
 }
 
@@ -89,6 +109,21 @@ func (r *OVNController) ValidateCreate() (admission.Warnings, error) {
 func (r *OVNController) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	ovncontrollerlog.Info("validate update", "name", r.Name)
 
+	errors := field.ErrorList{}
+	basePath := field.NewPath("spec")
+
+	// When a TopologyRef CR is referenced, fail if a different Namespace is
+	// referenced because is not supported
+	if r.Spec.TopologyRef != nil {
+		if err := topologyv1.ValidateTopologyNamespace(r.Spec.TopologyRef.Namespace, *basePath, r.Namespace); err != nil {
+			errors = append(errors, err)
+		}
+	}
+	if len(errors) != 0 {
+		return nil, apierrors.NewInvalid(
+			schema.GroupKind{Group: "manila.openstack.org", Kind: "Manila"},
+			r.Name, errors)
+	}
 	return nil, nil
 }
 

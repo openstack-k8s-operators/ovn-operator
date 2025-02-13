@@ -27,6 +27,7 @@ import (
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
 
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
@@ -1182,6 +1183,108 @@ var _ = Describe("OVNController controller", func() {
 			Eventually(func(g Gomega) {
 				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.NodeSelector).To(BeNil())
 				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.NodeSelector).To(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
+	})
+
+	When("OVNController is created with topologyref", func() {
+		var ovnControllerName types.NamespacedName
+		var daemonSetName types.NamespacedName
+		var daemonSetNameOVS types.NamespacedName
+		var ovnTopologies []types.NamespacedName
+
+		BeforeEach(func() {
+			ovnControllerName = types.NamespacedName{
+				Name:      "ovn-controller-0",
+				Namespace: namespace,
+			}
+
+			ovnTopologies = []types.NamespacedName{
+				{
+					Namespace: namespace,
+					Name:      "ovn-topology",
+				},
+				{
+					Namespace: namespace,
+					Name:      "ovn-topology-alt",
+				},
+			}
+			// Build the topology Spec
+			topologySpec := GetSampleDaemonSetTopologySpec(ovnControllerName.Name)
+			// Create Test Topology
+			for _, t := range ovnTopologies {
+				CreateTopology(t, topologySpec)
+			}
+
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+
+			spec := GetDefaultOVNControllerSpec()
+
+			spec.TopologyRef = &topologyv1.TopoRef{
+				Name:      ovnTopologies[0].Name,
+				Namespace: ovnTopologies[0].Namespace,
+			}
+
+			//ovn.CreateOVNControllerWithName("ovn-controller-0", namespace, spec)
+			ovn.CreateOVNController(&ovnControllerName.Name, namespace, spec)
+
+			daemonSetName = types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+
+			SimulateDaemonsetNumberReady(daemonSetName)
+
+			daemonSetNameOVS = types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+
+			SimulateDaemonsetNumberReady(daemonSetNameOVS)
+		})
+
+		It("sets topologyref in both .Status CR and resources", func() {
+			Eventually(func(g Gomega) {
+				ovn := GetOVNController(ovnControllerName)
+				g.Expect(ovn.Status.LastAppliedTopology).To(Equal(ovnTopologies[0].Name))
+				// we explicitly ignore TopologySpreadConstraints
+				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.TopologySpreadConstraints).To(BeNil())
+				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.Affinity).ToNot(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("updates topology when the reference changes", func() {
+			Eventually(func(g Gomega) {
+				ovn := GetOVNController(ovnControllerName)
+				ovn.Spec.TopologyRef.Name = ovnTopologies[1].Name
+				g.Expect(k8sClient.Update(ctx, ovn)).To(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				ovn := GetOVNController(ovnControllerName)
+				g.Expect(ovn.Status.LastAppliedTopology).To(Equal(ovnTopologies[1].Name))
+				// we explicitly ignore TopologySpreadConstraints
+				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.TopologySpreadConstraints).To(BeNil())
+				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.Affinity).ToNot(BeNil())
+			}, timeout, interval).Should(Succeed())
+		})
+		It("removes topologyRef from the spec", func() {
+			Eventually(func(g Gomega) {
+				ovn := GetOVNController(ovnControllerName)
+				// Remove the TopologyRef from the existing .Spec
+				ovn.Spec.TopologyRef = nil
+				g.Expect(k8sClient.Update(ctx, ovn)).To(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				ovn := GetOVNController(ovnControllerName)
+				g.Expect(ovn.Status.LastAppliedTopology).Should(BeEmpty())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.TopologySpreadConstraints).To(BeNil())
+				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.Affinity).To(BeNil())
 			}, timeout, interval).Should(Succeed())
 		})
 	})
