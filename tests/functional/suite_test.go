@@ -53,6 +53,7 @@ import (
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/controllers"
 
+	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	common_test "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
 	//+kubebuilder:scaffold:imports
 )
@@ -98,6 +99,10 @@ var _ = BeforeSuite(func() {
 		"github.com/openstack-k8s-operators/infra-operator/apis", "../../go.mod", "bases/network.openstack.org_dnsdata.yaml")
 	Expect(err).ShouldNot(HaveOccurred())
 
+	infratopologyv1CRD, err := test.GetCRDDirFromModule(
+		"github.com/openstack-k8s-operators/infra-operator/apis", "../../go.mod", "bases/topology.openstack.org_topologies.yaml")
+	Expect(err).ShouldNot(HaveOccurred())
+
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
@@ -108,6 +113,7 @@ var _ = BeforeSuite(func() {
 			Paths: []string{
 				networkv1CRD,
 				infranetworkv1CRD,
+				infratopologyv1CRD,
 			},
 		},
 		ErrorIfCRDPathMissing: true,
@@ -136,6 +142,8 @@ var _ = BeforeSuite(func() {
 	err = networkv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = infranetworkv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = topologyv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	//+kubebuilder:scaffold:scheme
 
