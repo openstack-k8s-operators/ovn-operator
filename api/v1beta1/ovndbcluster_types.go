@@ -161,7 +161,7 @@ type OVNDBClusterStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
 	// LastAppliedTopology - the last applied Topology
-	LastAppliedTopology string `json:"lastAppliedTopology,omitempty"`
+	LastAppliedTopology *topologyv1.TopoRef `json:"lastAppliedTopology,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -228,4 +228,9 @@ func (instance OVNDBCluster) GetExternalEndpoint() (string, error) {
 		return "", fmt.Errorf("external DBEndpoint not ready yet for %s", instance.Spec.DBType)
 	}
 	return instance.Status.DBAddress, nil
+}
+
+// GetLastAppliedTopology - Returns the LastAppliedTopology Set in the Status
+func (instance OVNDBCluster) GetLastAppliedTopology() *topologyv1.TopoRef {
+	return instance.Status.LastAppliedTopology
 }

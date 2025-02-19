@@ -301,10 +301,7 @@ func (r *OVNControllerReconciler) reconcileDelete(ctx context.Context, instance 
 	if ctrlResult, err := topologyv1.EnsureDeletedTopologyRef(
 		ctx,
 		helper,
-		&topologyv1.TopoRef{
-			Name:      instance.Status.LastAppliedTopology,
-			Namespace: instance.Namespace,
-		},
+		instance.Status.LastAppliedTopology,
 		instance.Name,
 	); err != nil {
 		return ctrlResult, err
@@ -564,17 +561,13 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	//
 	// Handle Topology
 	//
-	lastTopologyRef := topologyv1.TopoRef{
-		Name:      instance.Status.LastAppliedTopology,
-		Namespace: instance.Namespace,
-	}
-	topology, err := ensureOVNTopology(
+	topology, err := topologyv1.EnsureServiceTopology(
 		ctx,
 		helper,
 		instance.Spec.TopologyRef,
-		&lastTopologyRef,
+		GetLastAppliedTopologyRef(instance, instance.Namespace),
 		instance.Name,
-		ovnv1.ServiceNameOVNController,
+		labels.GetAppLabelSelector(ovnv1.ServiceNameOVNController),
 	)
 	if err != nil {
 		instance.Status.Conditions.Set(condition.FalseCondition(
@@ -591,12 +584,12 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	// and mark the condition as true
 	if instance.Spec.TopologyRef != nil {
 		// update the Status with the last retrieved Topology name
-		instance.Status.LastAppliedTopology = instance.Spec.TopologyRef.Name
+		instance.Status.LastAppliedTopology = instance.Spec.TopologyRef
 		// update the TopologyRef associated condition
 		instance.Status.Conditions.MarkTrue(condition.TopologyReadyCondition, condition.TopologyReadyMessage)
 	} else {
 		// remove LastAppliedTopology from the .Status
-		instance.Status.LastAppliedTopology = ""
+		instance.Status.LastAppliedTopology = nil
 	}
 
 	// Define a new DaemonSet object for OVNController
