@@ -1210,7 +1210,7 @@ var _ = Describe("OVNController controller", func() {
 				},
 			}
 			// Build the topology Spec
-			topologySpec := GetSampleDaemonSetTopologySpec(ovnControllerName.Name)
+			topologySpec := GetSampleTopologySpec(ovnControllerName.Name)
 			// Create Test Topology
 			for _, t := range ovnTopologies {
 				CreateTopology(t, topologySpec)
@@ -1247,10 +1247,17 @@ var _ = Describe("OVNController controller", func() {
 		It("sets topologyref in both .Status CR and resources", func() {
 			Eventually(func(g Gomega) {
 				ovn := GetOVNController(ovnControllerName)
-				g.Expect(ovn.Status.LastAppliedTopology).To(Equal(ovnTopologies[0].Name))
-				// we explicitly ignore TopologySpreadConstraints
+				g.Expect(ovn.Status.LastAppliedTopology.Name).ToNot(BeNil())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				ovn := GetOVNController(ovnControllerName)
+				g.Expect(ovn.Status.LastAppliedTopology.Name).To(Equal(ovnTopologies[0].Name))
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
 				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.TopologySpreadConstraints).To(BeNil())
-				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.Affinity).ToNot(BeNil())
+				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.Affinity).To(BeNil())
 			}, timeout, interval).Should(Succeed())
 		})
 
@@ -1263,10 +1270,9 @@ var _ = Describe("OVNController controller", func() {
 
 			Eventually(func(g Gomega) {
 				ovn := GetOVNController(ovnControllerName)
-				g.Expect(ovn.Status.LastAppliedTopology).To(Equal(ovnTopologies[1].Name))
-				// we explicitly ignore TopologySpreadConstraints
+				g.Expect(ovn.Status.LastAppliedTopology.Name).To(Equal(ovnTopologies[1].Name))
 				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.TopologySpreadConstraints).To(BeNil())
-				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.Affinity).ToNot(BeNil())
+				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.Affinity).To(BeNil())
 			}, timeout, interval).Should(Succeed())
 		})
 		It("removes topologyRef from the spec", func() {
@@ -1279,7 +1285,7 @@ var _ = Describe("OVNController controller", func() {
 
 			Eventually(func(g Gomega) {
 				ovn := GetOVNController(ovnControllerName)
-				g.Expect(ovn.Status.LastAppliedTopology).Should(BeEmpty())
+				g.Expect(ovn.Status.LastAppliedTopology).Should(BeNil())
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {

@@ -107,7 +107,7 @@ func (r *OVNDBCluster) ValidateCreate() (admission.Warnings, error) {
 	}
 	if len(errors) != 0 {
 		return nil, apierrors.NewInvalid(
-			schema.GroupKind{Group: "manila.openstack.org", Kind: "Manila"},
+			schema.GroupKind{Group: "ovn.openstack.org", Kind: "OVNDBCluster"},
 			r.Name, errors)
 	}
 	return nil, nil
@@ -129,7 +129,7 @@ func (r *OVNDBCluster) ValidateUpdate(old runtime.Object) (admission.Warnings, e
 	}
 	if len(errors) != 0 {
 		return nil, apierrors.NewInvalid(
-			schema.GroupKind{Group: "manila.openstack.org", Kind: "Manila"},
+			schema.GroupKind{Group: "ovn.openstack.org", Kind: "OVNDBCluster"},
 			r.Name, errors)
 	}
 	return nil, nil
