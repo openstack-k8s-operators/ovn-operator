@@ -41,6 +41,7 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/deployment"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
@@ -286,10 +287,7 @@ func (r *OVNNorthdReconciler) reconcileDelete(ctx context.Context, instance *ovn
 	if ctrlResult, err := topologyv1.EnsureDeletedTopologyRef(
 		ctx,
 		helper,
-		&topologyv1.TopoRef{
-			Name:      instance.Status.LastAppliedTopology,
-			Namespace: instance.Namespace,
-		},
+		instance.Status.LastAppliedTopology,
 		instance.Name,
 	); err != nil {
 		return ctrlResult, err
@@ -445,17 +443,13 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	//
 	// Handle Topology
 	//
-	lastTopologyRef := topologyv1.TopoRef{
-		Name:      instance.Status.LastAppliedTopology,
-		Namespace: instance.Namespace,
-	}
-	topology, err := ensureOVNTopology(
+	topology, err := topologyv1.EnsureServiceTopology(
 		ctx,
 		helper,
 		instance.Spec.TopologyRef,
-		&lastTopologyRef,
+		GetLastAppliedTopologyRef(instance, instance.Namespace),
 		instance.Name,
-		ovnv1.ServiceNameOVNNorthd,
+		labels.GetAppLabelSelector(ovnv1.ServiceNameOVNNorthd),
 	)
 	if err != nil {
 		instance.Status.Conditions.Set(condition.FalseCondition(
@@ -472,12 +466,12 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	// and mark the condition as true
 	if instance.Spec.TopologyRef != nil {
 		// update the Status with the last retrieved Topology name
-		instance.Status.LastAppliedTopology = instance.Spec.TopologyRef.Name
+		instance.Status.LastAppliedTopology = instance.Spec.TopologyRef
 		// update the TopologyRef associated condition
 		instance.Status.Conditions.MarkTrue(condition.TopologyReadyCondition, condition.TopologyReadyMessage)
 	} else {
 		// remove LastAppliedTopology from the .Status
-		instance.Status.LastAppliedTopology = ""
+		instance.Status.LastAppliedTopology = nil
 	}
 	// Define a new Deployment object
 	depl := deployment.NewDeployment(

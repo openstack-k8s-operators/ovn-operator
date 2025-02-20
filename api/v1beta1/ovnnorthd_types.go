@@ -97,7 +97,7 @@ type OVNNorthdStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
 	// LastAppliedTopology - the last applied Topology
-	LastAppliedTopology string `json:"lastAppliedTopology,omitempty"`
+	LastAppliedTopology *topologyv1.TopoRef `json:"lastAppliedTopology,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -147,4 +147,9 @@ func (instance OVNNorthd) RbacNamespace() string {
 // RbacResourceName - return the name to be used for rbac objects (serviceaccount, role, rolebinding)
 func (instance OVNNorthd) RbacResourceName() string {
 	return "ovnnorthd-" + instance.Name
+}
+
+// GetLastAppliedTopology - Returns the LastAppliedTopology Set in the Status
+func (instance OVNNorthd) GetLastAppliedTopology() *topologyv1.TopoRef {
+	return instance.Status.LastAppliedTopology
 }

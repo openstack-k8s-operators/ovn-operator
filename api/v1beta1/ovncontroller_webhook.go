@@ -85,24 +85,33 @@ var _ webhook.Validator = &OVNController{}
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *OVNController) ValidateCreate() (admission.Warnings, error) {
 	ovncontrollerlog.Info("validate create", "name", r.Name)
-
 	errors := field.ErrorList{}
-	basePath := field.NewPath("spec")
+
+	errors = r.Spec.ValidateCreate(field.NewPath("spec"), r.Namespace)
+	if len(errors) != 0 {
+		ovncontrollerlog.Info("validation failed", "name", r.Name)
+		return nil, apierrors.NewInvalid(
+			schema.GroupKind{Group: "ovn.openstack.org", Kind: "OVNController"},
+			r.Name, errors)
+	}
+	return nil, nil
+}
+
+func (r OVNControllerSpec) ValidateCreate(basePath *field.Path, namespace string) field.ErrorList {
+	return r.OVNControllerSpecCore.ValidateCreate(basePath, namespace)
+}
+
+func (r *OVNControllerSpecCore) ValidateCreate(basePath *field.Path, namespace string) field.ErrorList {
+	errors := field.ErrorList{}
 
 	// When a TopologyRef CR is referenced, fail if a different Namespace is
 	// referenced because is not supported
-	if r.Spec.TopologyRef != nil {
-		if err := topologyv1.ValidateTopologyNamespace(r.Spec.TopologyRef.Namespace, *basePath, r.Namespace); err != nil {
+	if r.TopologyRef != nil {
+		if err := topologyv1.ValidateTopologyNamespace(r.TopologyRef.Namespace, *basePath, namespace); err != nil {
 			errors = append(errors, err)
 		}
 	}
-	if len(errors) != 0 {
-		return nil, apierrors.NewInvalid(
-			schema.GroupKind{Group: "manila.openstack.org", Kind: "Manila"},
-			r.Name, errors)
-	}
-
-	return nil, nil
+	return errors
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
@@ -121,10 +130,27 @@ func (r *OVNController) ValidateUpdate(old runtime.Object) (admission.Warnings, 
 	}
 	if len(errors) != 0 {
 		return nil, apierrors.NewInvalid(
-			schema.GroupKind{Group: "manila.openstack.org", Kind: "Manila"},
+			schema.GroupKind{Group: "ovn.openstack.org", Kind: "OVNController"},
 			r.Name, errors)
 	}
 	return nil, nil
+}
+
+func (r OVNControllerSpec) ValidateUpdate(old OVNControllerSpec, basePath *field.Path, namespace string) field.ErrorList {
+	return r.OVNControllerSpecCore.ValidateCreate(basePath, namespace)
+}
+
+func (r *OVNControllerSpecCore) ValidateUpdate(old OVNControllerSpec, basePath *field.Path, namespace string) field.ErrorList {
+	errors := field.ErrorList{}
+
+	// When a TopologyRef CR is referenced, fail if a different Namespace is
+	// referenced because is not supported
+	if r.TopologyRef != nil {
+		if err := topologyv1.ValidateTopologyNamespace(r.TopologyRef.Namespace, *basePath, namespace); err != nil {
+			errors = append(errors, err)
+		}
+	}
+	return errors
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type

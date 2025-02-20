@@ -346,12 +346,7 @@ func CreateOVSDaemonSet(
 	// https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/daemon/daemon_controller.go#L1018
 	// https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/daemon/util/daemonset_util.go#L226
 	if topology != nil {
-		// Get the Topology .Spec
-		ts := topology.Spec
-		// Process Affinity if defined in the referenced Topology
-		if ts.Affinity != nil {
-			daemonset.Spec.Template.Spec.Affinity = ts.Affinity
-		}
+		topology.ApplyTo(&daemonset.Spec.Template)
 	}
 
 	if len(annotations) > 0 {
