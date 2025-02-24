@@ -1267,7 +1267,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 		It("sets topologyref in both .Status CR and resources", func() {
 			Eventually(func(g Gomega) {
 				ovndb := GetOVNDBCluster(OVNDBClusterName)
-				g.Expect(ovndb.Status.LastAppliedTopology).To(Equal(ovnTopologies[0].Name))
+				g.Expect(ovndb.Status.LastAppliedTopology.Name).To(Equal(ovnTopologies[0].Name))
 				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).ToNot(BeNil())
 				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Affinity).To(BeNil())
 			}, timeout, interval).Should(Succeed())
@@ -1282,7 +1282,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 
 			Eventually(func(g Gomega) {
 				ovndb := GetOVNDBCluster(OVNDBClusterName)
-				g.Expect(ovndb.Status.LastAppliedTopology).To(Equal(ovnTopologies[1].Name))
+				g.Expect(ovndb.Status.LastAppliedTopology.Name).To(Equal(ovnTopologies[1].Name))
 				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).ToNot(BeNil())
 				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Affinity).To(BeNil())
 			}, timeout, interval).Should(Succeed())
@@ -1297,7 +1297,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 
 			Eventually(func(g Gomega) {
 				ovndb := GetOVNDBCluster(OVNDBClusterName)
-				g.Expect(ovndb.Status.LastAppliedTopology).Should(BeEmpty())
+				g.Expect(ovndb.Status.LastAppliedTopology).Should(BeNil())
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
