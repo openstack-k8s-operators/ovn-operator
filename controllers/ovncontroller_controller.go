@@ -567,7 +567,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		instance,      // topologyHandler
 		instance.Name, // finalizer
 		&instance.Status.Conditions,
-		labels.GetAppLabelSelector(ovnv1.ServiceNameOVNController),
+		labels.GetLabelSelector(ovnServiceLabels),
 	)
 	if err != nil {
 		instance.Status.Conditions.Set(condition.FalseCondition(
