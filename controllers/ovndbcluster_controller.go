@@ -578,12 +578,13 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		return ctrl.Result{}, fmt.Errorf("waiting for Topology requirements: %w", err)
 	}
 
+	stsSpec, err := ovndbcluster.StatefulSet(instance, inputHash,
+		serviceLabels, serviceAnnotations, topology)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	// Define a new Statefulset object
-	sfset := statefulset.NewStatefulSet(
-		ovndbcluster.StatefulSet(instance, inputHash, serviceLabels, serviceAnnotations, topology),
-		time.Duration(5)*time.Second,
-	)
-
+	sfset := statefulset.NewStatefulSet(stsSpec, time.Duration(5)*time.Second)
 	ctrlResult, err = sfset.CreateOrPatch(ctx, helper)
 	if err != nil {
 		instance.Status.Conditions.Set(condition.FalseCondition(

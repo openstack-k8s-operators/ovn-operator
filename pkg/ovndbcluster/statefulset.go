@@ -43,7 +43,7 @@ func StatefulSet(
 	labels map[string]string,
 	annotations map[string]string,
 	topology *topologyv1.Topology,
-) *appsv1.StatefulSet {
+) (*appsv1.StatefulSet, error) {
 	livenessProbe := &corev1.Probe{
 		// TODO might need tuning
 		TimeoutSeconds:      5,
@@ -67,6 +67,11 @@ func StatefulSet(
 	var preStopCmd []string
 	cmd := []string{"/usr/bin/dumb-init"}
 	args := []string{ServiceCommand}
+	// Parse the storageRequest defined in the CR
+	storageRequest, err := resource.ParseQuantity(instance.Spec.StorageRequest)
+	if err != nil {
+		return nil, err
+	}
 	//
 	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 	//
@@ -204,7 +209,7 @@ func StatefulSet(
 				StorageClassName: &instance.Spec.StorageClass,
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{
-						corev1.ResourceStorage: resource.MustParse(instance.Spec.StorageRequest),
+						corev1.ResourceStorage: storageRequest,
 					},
 				},
 			},
@@ -229,5 +234,5 @@ func StatefulSet(
 		)
 	}
 
-	return statefulset
+	return statefulset, nil
 }
