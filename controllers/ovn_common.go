@@ -28,7 +28,7 @@ import (
 // fields to index to reconcile when changed
 const (
 	tlsField                = ".spec.tls.secretName"
-	caBundleSecretNameField = ".spec.tls.caBundleSecretName"
+	caBundleSecretNameField = ".spec.tls.caBundleSecretName" // #nosec
 	topologyField           = ".spec.topologyRef.Name"
 )
 

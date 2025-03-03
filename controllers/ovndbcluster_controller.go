@@ -614,7 +614,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	if networkReady {
 		instance.Status.Conditions.MarkTrue(condition.NetworkAttachmentsReadyCondition, condition.NetworkAttachmentsReadyMessage)
 	} else {
-		err := fmt.Errorf("not all pods have interfaces with ips as configured in NetworkAttachments: %s", instance.Spec.NetworkAttachment)
+		err := fmt.Errorf("%w with ips as configured in NetworkAttachments: %s", util.ErrPodsInterfaces, instance.Spec.NetworkAttachment)
 		instance.Status.Conditions.Set(condition.FalseCondition(
 			condition.NetworkAttachmentsReadyCondition,
 			condition.ErrorReason,
@@ -718,7 +718,7 @@ func getPodIPInNetwork(ovnPod corev1.Pod, namespace string, networkAttachment st
 		}
 	}
 	// If this is reached it means that no IP was found, construct error and return
-	err = fmt.Errorf("error while getting IP address from pod %s in network %s, IP is empty", ovnPod.Name, networkAttachment)
+	err = fmt.Errorf("%w IP address from pod %s in network %s, IP is empty", util.ErrInvalidStatus, ovnPod.Name, networkAttachment)
 	return "", err
 }
 
