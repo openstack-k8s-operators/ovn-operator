@@ -640,7 +640,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 
 	instance.Status.NetworkAttachments = networkAttachmentStatus
 	if !networkReady {
-		err := fmt.Errorf("not all pods have interfaces with ips as configured in NetworkAttachments: %s", instance.Spec.NetworkAttachment)
+		err := fmt.Errorf("%w with ips as configured in NetworkAttachments: %s", util.ErrPodsInterfaces, instance.Spec.NetworkAttachment)
 		instance.Status.Conditions.Set(condition.FalseCondition(
 			condition.NetworkAttachmentsReadyCondition,
 			condition.ErrorReason,
