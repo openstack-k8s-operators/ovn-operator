@@ -726,6 +726,68 @@ var _ = Describe("OVNController controller", func() {
 		})
 	})
 
+	When("OVNController is created with invalid nic mappings", func() {
+		var OVNControllerName types.NamespacedName
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			spec := GetDefaultOVNControllerSpec()
+			spec.NicMappings = map[string]string{
+				"<invalid>": "<nic>",
+			}
+			instance := CreateOVNController(namespace, spec)
+			OVNControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+			DeferCleanup(th.DeleteInstance, instance)
+		})
+
+		It("reports error for invalid nicMappings", func() {
+			Eventually(func(g Gomega) {
+				getter := ConditionGetterFunc(OVNControllerConditionGetter)
+				conditions := getter.GetConditions(OVNControllerName)
+				g.Expect(conditions).NotTo(
+					BeNil(), "Status.Conditions in nil")
+				netCondition := conditions.Get(condition.NetworkAttachmentsReadyCondition)
+				g.Expect(netCondition.Message).Should(
+					ContainSubstring("a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.'"))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("reports success when nicMappings updated to valid value", func() {
+			// Update Interface in NicMappings
+			Eventually(func(g Gomega) {
+				ovnController := GetOVNController(OVNControllerName)
+				ovnController.Spec.NicMappings = map[string]string{
+					"validnet": "enp3s0.100",
+				}
+				g.Expect(k8sClient.Update(ctx, ovnController)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			nad := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      "validnet",
+			}
+
+			// Ensure OwnerReferences set correctly for the updated Network Attachment
+			Eventually(func(g Gomega) {
+				g.Expect(GetNAD(nad).ObjectMeta.OwnerReferences[0].Name).To(Equal(
+					OVNControllerName.Name))
+			}, timeout, interval).Should(Succeed())
+
+			// Ensure NetworkCondition ready
+			th.ExpectCondition(
+				OVNControllerName,
+				ConditionGetterFunc(OVNControllerConditionGetter),
+				condition.NetworkAttachmentsReadyCondition,
+				corev1.ConditionTrue,
+			)
+			// Ensure Interface updated in the Network Attachment
+			Eventually(func(g Gomega) {
+				g.Expect(GetNAD(nad).Spec.Config).Should(
+					ContainSubstring("enp3s0.100"))
+			}, timeout, interval).Should(Succeed())
+		})
+	})
+
 	When("OVNController is created with networkAttachment and nic configs", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
