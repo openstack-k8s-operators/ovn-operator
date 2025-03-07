@@ -1247,11 +1247,12 @@ var _ = Describe("OVNController controller", func() {
 		It("sets topologyref in both .Status CR and resources", func() {
 			Eventually(func(g Gomega) {
 				ovn := GetOVNController(ovnControllerName)
-				g.Expect(ovn.Status.LastAppliedTopology.Name).ToNot(BeNil())
+				g.Expect(ovn.Status.LastAppliedTopology).NotTo(BeNil())
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
 				ovn := GetOVNController(ovnControllerName)
+				g.Expect(ovn.Status.LastAppliedTopology).NotTo(BeNil())
 				g.Expect(ovn.Status.LastAppliedTopology.Name).To(Equal(ovnTopologies[0].Name))
 			}, timeout, interval).Should(Succeed())
 
@@ -1270,6 +1271,7 @@ var _ = Describe("OVNController controller", func() {
 
 			Eventually(func(g Gomega) {
 				ovn := GetOVNController(ovnControllerName)
+				g.Expect(ovn.Status.LastAppliedTopology).NotTo(BeNil())
 				g.Expect(ovn.Status.LastAppliedTopology.Name).To(Equal(ovnTopologies[1].Name))
 				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.TopologySpreadConstraints).To(BeNil())
 				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.Affinity).To(BeNil())
