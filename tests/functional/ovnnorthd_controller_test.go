@@ -442,6 +442,7 @@ var _ = Describe("OVNNorthd controller", func() {
 		It("sets topologyref in both .Status CR and resources", func() {
 			Eventually(func(g Gomega) {
 				northd := ovn.GetOVNNorthd(ovnNorthdName)
+				g.Expect(northd.Status.LastAppliedTopology).NotTo(BeNil())
 				g.Expect(northd.Status.LastAppliedTopology.Name).To(Equal(ovnTopologies[0].Name))
 				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.TopologySpreadConstraints).ToNot(BeNil())
 				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.Affinity).To(BeNil())
@@ -457,6 +458,7 @@ var _ = Describe("OVNNorthd controller", func() {
 
 			Eventually(func(g Gomega) {
 				northd := ovn.GetOVNNorthd(ovnNorthdName)
+				g.Expect(northd.Status.LastAppliedTopology).NotTo(BeNil())
 				g.Expect(northd.Status.LastAppliedTopology.Name).To(Equal(ovnTopologies[1].Name))
 				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.TopologySpreadConstraints).ToNot(BeNil())
 				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.Affinity).To(BeNil())
