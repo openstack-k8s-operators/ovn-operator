@@ -28,7 +28,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -100,11 +99,8 @@ func (r *OVNDBCluster) ValidateCreate() (admission.Warnings, error) {
 
 	// When a TopologyRef CR is referenced, fail if a different Namespace is
 	// referenced because is not supported
-	if r.Spec.TopologyRef != nil {
-		if err := topologyv1.ValidateTopologyNamespace(r.Spec.TopologyRef.Namespace, *basePath, r.Namespace); err != nil {
-			errors = append(errors, err)
-		}
-	}
+	errors = append(errors, r.Spec.ValidateTopology(basePath, r.Namespace)...)
+
 	if len(errors) != 0 {
 		return nil, apierrors.NewInvalid(
 			schema.GroupKind{Group: "ovn.openstack.org", Kind: "OVNDBCluster"},
@@ -122,11 +118,8 @@ func (r *OVNDBCluster) ValidateUpdate(old runtime.Object) (admission.Warnings, e
 
 	// When a TopologyRef CR is referenced, fail if a different Namespace is
 	// referenced because is not supported
-	if r.Spec.TopologyRef != nil {
-		if err := topologyv1.ValidateTopologyNamespace(r.Spec.TopologyRef.Namespace, *basePath, r.Namespace); err != nil {
-			errors = append(errors, err)
-		}
-	}
+	errors = append(errors, r.Spec.ValidateTopology(basePath, r.Namespace)...)
+
 	if len(errors) != 0 {
 		return nil, apierrors.NewInvalid(
 			schema.GroupKind{Group: "ovn.openstack.org", Kind: "OVNDBCluster"},
