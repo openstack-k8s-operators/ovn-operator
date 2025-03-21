@@ -28,7 +28,9 @@ import (
 
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 var _ = Describe("OVNNorthd controller", func() {
@@ -483,6 +485,30 @@ var _ = Describe("OVNNorthd controller", func() {
 				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.Affinity).ToNot(BeNil())
 			}, timeout, interval).Should(Succeed())
 		})
-
+	})
+	It("rejects a wrong topologyRef on a different namespace", func() {
+		spec := map[string]interface{}{}
+		// Inject a topologyRef that points to a different namespace
+		spec["topologyRef"] = map[string]interface{}{
+			"name":      "foo",
+			"namespace": "bar",
+		}
+		raw := map[string]interface{}{
+			"apiVersion": "ovn.openstack.org/v1beta1",
+			"kind":       "OVNNorthd",
+			"metadata": map[string]interface{}{
+				"name":      "ovnnorthd-sample",
+				"namespace": namespace,
+			},
+			"spec": spec,
+		}
+		unstructuredObj := &unstructured.Unstructured{Object: raw}
+		_, err := controllerutil.CreateOrPatch(
+			th.Ctx, th.K8sClient, unstructuredObj, func() error { return nil })
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(
+			ContainSubstring(
+				"spec.topologyRef.namespace: Invalid value: \"namespace\": Customizing namespace field is not supported"),
+		)
 	})
 })
