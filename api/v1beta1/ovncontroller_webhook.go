@@ -17,7 +17,6 @@ limitations under the License.
 package v1beta1
 
 import (
-	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -106,11 +105,8 @@ func (r *OVNControllerSpecCore) ValidateCreate(basePath *field.Path, namespace s
 
 	// When a TopologyRef CR is referenced, fail if a different Namespace is
 	// referenced because is not supported
-	if r.TopologyRef != nil {
-		if err := topologyv1.ValidateTopologyNamespace(r.TopologyRef.Namespace, *basePath, namespace); err != nil {
-			errors = append(errors, err)
-		}
-	}
+	errors = append(errors, r.ValidateTopology(basePath, namespace)...)
+
 	return errors
 }
 
@@ -123,11 +119,8 @@ func (r *OVNController) ValidateUpdate(old runtime.Object) (admission.Warnings, 
 
 	// When a TopologyRef CR is referenced, fail if a different Namespace is
 	// referenced because is not supported
-	if r.Spec.TopologyRef != nil {
-		if err := topologyv1.ValidateTopologyNamespace(r.Spec.TopologyRef.Namespace, *basePath, r.Namespace); err != nil {
-			errors = append(errors, err)
-		}
-	}
+	errors = append(errors, r.Spec.ValidateTopology(basePath, r.Namespace)...)
+
 	if len(errors) != 0 {
 		return nil, apierrors.NewInvalid(
 			schema.GroupKind{Group: "ovn.openstack.org", Kind: "OVNController"},
@@ -141,16 +134,13 @@ func (r OVNControllerSpec) ValidateUpdate(old OVNControllerSpec, basePath *field
 }
 
 func (r *OVNControllerSpecCore) ValidateUpdate(old OVNControllerSpec, basePath *field.Path, namespace string) field.ErrorList {
-	errors := field.ErrorList{}
+	allErrs := field.ErrorList{}
 
 	// When a TopologyRef CR is referenced, fail if a different Namespace is
 	// referenced because is not supported
-	if r.TopologyRef != nil {
-		if err := topologyv1.ValidateTopologyNamespace(r.TopologyRef.Namespace, *basePath, namespace); err != nil {
-			errors = append(errors, err)
-		}
-	}
-	return errors
+	allErrs = append(allErrs, r.ValidateTopology(basePath, namespace)...)
+
+	return allErrs
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
