@@ -34,8 +34,10 @@ function cleanup_ovsdb_server_semaphore() {
 }
 
 function cleanup_flows_backup() {
+    rc_code=$?
     rm -f $FLOWS_RESTORE_SCRIPT 2>&1 > /dev/null
     rm -rf $FLOWS_RESTORE_DIR 2>&1 > /dev/null
+    echo "Exited with rc $rc_code"
 }
 
 function wait_for_ovsdb_server {
