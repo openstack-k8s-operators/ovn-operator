@@ -28,27 +28,10 @@ ovs-vsctl --no-wait set open . external-ids:ovn-encap-ip=${OVNEncapIP}
 # Before starting vswitchd, block it from flushing existing datapath flows.
 ovs-vsctl --no-wait set open_vswitch . other_config:flow-restore-wait=true
 
+# Execute flow restoring is on a separate script to allow for ovs-vswitchd to
+# log on pod console.
+$START_VSWITCHD_EXTRAS_SCRIPT &> $EXTRAS_LOG &
+
 # It's safe to start vswitchd now. Do it.
-# --detach to allow the execution to continue to restoring the flows.
-/usr/sbin/ovs-vswitchd --pidfile --mlockall --detach
+/usr/sbin/ovs-vswitchd --pidfile --mlockall
 
-# Restore saved flows.
-if [ -f $FLOWS_RESTORE_SCRIPT ]; then
-    # It's unsafe to leave these files in place if they fail once. Make sure we
-    # remove them if the eval fails.
-    trap cleanup_flows_backup EXIT
-    eval "$(cat $FLOWS_RESTORE_SCRIPT)"
-    trap - EXIT
-fi
-
-# It's also unsafe to leave these files after flow-restore-wait flag is removed
-# because the backup will become stale and if a container later crashes, it may
-# mistakenly try to restore from this old backup.
-cleanup_flows_backup
-
-# Now, inform vswitchd that we are done.
-ovs-vsctl remove open_vswitch . other_config flow-restore-wait
-
-# This is container command script. Block it from exiting, otherwise k8s will
-# restart the container again.
-sleep infinity
