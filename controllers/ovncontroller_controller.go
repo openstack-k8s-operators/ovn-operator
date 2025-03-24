@@ -489,6 +489,12 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	networkAttachments, err := ovncontroller.CreateOrUpdateAdditionalNetworks(ctx, helper, instance, ovsServiceLabels)
 	if err != nil {
 		Log.Info(fmt.Sprintf("Failed to create additional networks: %s", err))
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.NetworkAttachmentsReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.NetworkAttachmentsReadyErrorMessage,
+			err.Error()))
 		return ctrl.Result{}, err
 	}
 
