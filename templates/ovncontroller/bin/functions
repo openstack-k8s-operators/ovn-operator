@@ -23,11 +23,13 @@ EnableChassisAsGateway=${EnableChassisAsGateway:-true}
 PhysicalNetworks=${PhysicalNetworks:-""}
 OVNHostName=${OVNHostName:-""}
 DB_FILE=/etc/openvswitch/conf.db
+START_VSWITCHD_EXTRAS_SCRIPT=/usr/local/bin/container-scripts/start-vswitchd-extras.sh
 
 ovs_dir=/var/lib/openvswitch
 FLOWS_RESTORE_SCRIPT=$ovs_dir/flows-script
 FLOWS_RESTORE_DIR=$ovs_dir/saved-flows
 SAFE_TO_STOP_OVSDB_SERVER_SEMAPHORE=$ovs_dir/is_safe_to_stop_ovsdb_server
+EXTRAS_LOG=$ovs_dir/start_vswitchd_extras.log
 
 function cleanup_ovsdb_server_semaphore() {
     rm -f $SAFE_TO_STOP_OVSDB_SERVER_SEMAPHORE 2>&1 > /dev/null
