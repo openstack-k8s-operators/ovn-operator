@@ -69,3 +69,5 @@ require (
 )
 
 replace github.com/openshift/api => github.com/openshift/api v0.0.0-20240830023148-b7d0481c9094 //allow-merging
+
+replace github.com/openstack-k8s-operators/lib-common/modules/common => github.com/averdagu/lib-common/modules/common v0.0.0-20250318112303-0e4fcdf116e1 //allow-merging
