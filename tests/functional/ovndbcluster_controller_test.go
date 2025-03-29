@@ -1228,6 +1228,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 		var OVNDBClusterName types.NamespacedName
 		var statefulSetName types.NamespacedName
 		var ovnTopologies []types.NamespacedName
+		var topologyRef, topologyRefAlt *topologyv1.TopoRef
 
 		BeforeEach(func() {
 			OVNDBClusterName = types.NamespacedName{
@@ -1244,18 +1245,25 @@ var _ = Describe("OVNDBCluster controller", func() {
 					Name:      "ovn-topology-alt",
 				},
 			}
-			// Build the topology Spec
-			topologySpec := GetSampleTopologySpec(OVNDBClusterName.Name)
+			// Define the two topology references used in this test
+			topologyRef = &topologyv1.TopoRef{
+				Name:      ovnTopologies[0].Name,
+				Namespace: ovnTopologies[0].Namespace,
+			}
+			topologyRefAlt = &topologyv1.TopoRef{
+				Name:      ovnTopologies[1].Name,
+				Namespace: ovnTopologies[1].Namespace,
+			}
+
 			// Create Test Topology
 			for _, t := range ovnTopologies {
+				// Build the topology Spec
+				topologySpec, _ := GetSampleTopologySpec(OVNDBClusterName.Name)
 				CreateTopology(t, topologySpec)
 			}
 
 			spec := GetDefaultOVNDBClusterSpec()
-			spec.TopologyRef = &topologyv1.TopoRef{
-				Name:      ovnTopologies[0].Name,
-				Namespace: ovnTopologies[0].Namespace,
-			}
+			spec.TopologyRef = topologyRef
 			ovn.CreateOVNDBCluster(&OVNDBClusterName.Name, OVNDBClusterName.Namespace, spec)
 
 			statefulSetName = types.NamespacedName{
@@ -1267,10 +1275,22 @@ var _ = Describe("OVNDBCluster controller", func() {
 
 		It("sets topologyref in both .Status CR and resources", func() {
 			Eventually(func(g Gomega) {
+				tp := GetTopology(types.NamespacedName{
+					Name:      topologyRef.Name,
+					Namespace: topologyRef.Namespace,
+				})
+				finalizers := tp.GetFinalizers()
+				g.Expect(finalizers).To(HaveLen(1))
 				ovndb := GetOVNDBCluster(OVNDBClusterName)
 				g.Expect(ovndb.Status.LastAppliedTopology).NotTo(BeNil())
-				g.Expect(ovndb.Status.LastAppliedTopology.Name).To(Equal(ovnTopologies[0].Name))
+				g.Expect(ovndb.Status.LastAppliedTopology).To(Equal(topologyRef))
+				g.Expect(finalizers).To(ContainElement(
+					fmt.Sprintf("openstack.org/ovndbcluster-%s", OVNDBClusterName.Name)))
+			}, timeout, interval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				_, topologySpecObj := GetSampleTopologySpec(OVNDBClusterName.Name)
 				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).ToNot(BeNil())
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).To(Equal(topologySpecObj))
 				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Affinity).To(BeNil())
 			}, timeout, interval).Should(Succeed())
 		})
@@ -1283,11 +1303,34 @@ var _ = Describe("OVNDBCluster controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
+				tp := GetTopology(types.NamespacedName{
+					Name:      topologyRefAlt.Name,
+					Namespace: topologyRefAlt.Namespace,
+				})
+				finalizers := tp.GetFinalizers()
+				g.Expect(finalizers).To(HaveLen(1))
 				ovndb := GetOVNDBCluster(OVNDBClusterName)
 				g.Expect(ovndb.Status.LastAppliedTopology).NotTo(BeNil())
-				g.Expect(ovndb.Status.LastAppliedTopology.Name).To(Equal(ovnTopologies[1].Name))
+				g.Expect(ovndb.Status.LastAppliedTopology).To(Equal(topologyRefAlt))
+				g.Expect(finalizers).To(ContainElement(
+					fmt.Sprintf("openstack.org/ovndbcluster-%s", OVNDBClusterName.Name)))
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				_, topologySpecObj := GetSampleTopologySpec(OVNDBClusterName.Name)
 				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).ToNot(BeNil())
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).To(Equal(topologySpecObj))
 				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Affinity).To(BeNil())
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				// Verify the previous referenced topology has no finalizers
+				tp := GetTopology(types.NamespacedName{
+					Name:      topologyRef.Name,
+					Namespace: topologyRef.Namespace,
+				})
+				finalizers := tp.GetFinalizers()
+				g.Expect(finalizers).To(BeEmpty())
 			}, timeout, interval).Should(Succeed())
 		})
 		It("removes topologyRef from the spec", func() {
@@ -1306,6 +1349,18 @@ var _ = Describe("OVNDBCluster controller", func() {
 			Eventually(func(g Gomega) {
 				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).To(BeNil())
 				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Affinity).ToNot(BeNil())
+			}, timeout, interval).Should(Succeed())
+
+			// Verify the existing topologies have no finalizer anymore
+			Eventually(func(g Gomega) {
+				for _, topology := range ovnTopologies {
+					tp := GetTopology(types.NamespacedName{
+						Name:      topology.Name,
+						Namespace: topology.Namespace,
+					})
+					finalizers := tp.GetFinalizers()
+					g.Expect(finalizers).To(BeEmpty())
+				}
 			}, timeout, interval).Should(Succeed())
 		})
 
