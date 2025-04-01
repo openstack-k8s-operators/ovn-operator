@@ -1256,6 +1256,7 @@ var _ = Describe("OVNController controller", func() {
 		var daemonSetName types.NamespacedName
 		var daemonSetNameOVS types.NamespacedName
 		var ovnTopologies []types.NamespacedName
+		var topologyRef, topologyRefAlt *topologyv1.TopoRef
 
 		BeforeEach(func() {
 			ovnControllerName = types.NamespacedName{
@@ -1273,10 +1274,20 @@ var _ = Describe("OVNController controller", func() {
 					Name:      "ovn-topology-alt",
 				},
 			}
-			// Build the topology Spec
-			topologySpec := GetSampleTopologySpec(ovnControllerName.Name)
+			// Define the two topology references used in this test
+			topologyRef = &topologyv1.TopoRef{
+				Name:      ovnTopologies[0].Name,
+				Namespace: ovnTopologies[0].Namespace,
+			}
+			topologyRefAlt = &topologyv1.TopoRef{
+				Name:      ovnTopologies[1].Name,
+				Namespace: ovnTopologies[1].Namespace,
+			}
+
 			// Create Test Topology
 			for _, t := range ovnTopologies {
+				// Build the topology Spec
+				topologySpec, _ := GetSampleTopologySpec(ovnControllerName.Name)
 				CreateTopology(t, topologySpec)
 			}
 
@@ -1284,11 +1295,7 @@ var _ = Describe("OVNController controller", func() {
 			DeferCleanup(DeleteOVNDBClusters, dbs)
 
 			spec := GetDefaultOVNControllerSpec()
-
-			spec.TopologyRef = &topologyv1.TopoRef{
-				Name:      ovnTopologies[0].Name,
-				Namespace: ovnTopologies[0].Namespace,
-			}
+			spec.TopologyRef = topologyRef
 
 			//ovn.CreateOVNControllerWithName("ovn-controller-0", namespace, spec)
 			ovn.CreateOVNController(&ovnControllerName.Name, namespace, spec)
@@ -1310,14 +1317,17 @@ var _ = Describe("OVNController controller", func() {
 
 		It("sets topologyref in both .Status CR and resources", func() {
 			Eventually(func(g Gomega) {
+				tp := GetTopology(types.NamespacedName{
+					Name:      topologyRef.Name,
+					Namespace: topologyRef.Namespace,
+				})
+				finalizers := tp.GetFinalizers()
+				g.Expect(finalizers).To(HaveLen(1))
 				ovn := GetOVNController(ovnControllerName)
 				g.Expect(ovn.Status.LastAppliedTopology).NotTo(BeNil())
-			}, timeout, interval).Should(Succeed())
-
-			Eventually(func(g Gomega) {
-				ovn := GetOVNController(ovnControllerName)
-				g.Expect(ovn.Status.LastAppliedTopology).NotTo(BeNil())
-				g.Expect(ovn.Status.LastAppliedTopology.Name).To(Equal(ovnTopologies[0].Name))
+				g.Expect(ovn.Status.LastAppliedTopology).To(Equal(topologyRef))
+				g.Expect(finalizers).To(ContainElement(
+					fmt.Sprintf("openstack.org/ovncontroller-%s", ovnControllerName.Name)))
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
@@ -1334,11 +1344,27 @@ var _ = Describe("OVNController controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
+				tp := GetTopology(types.NamespacedName{
+					Name:      topologyRefAlt.Name,
+					Namespace: topologyRefAlt.Namespace,
+				})
+				finalizers := tp.GetFinalizers()
+				g.Expect(finalizers).To(HaveLen(1))
 				ovn := GetOVNController(ovnControllerName)
 				g.Expect(ovn.Status.LastAppliedTopology).NotTo(BeNil())
-				g.Expect(ovn.Status.LastAppliedTopology.Name).To(Equal(ovnTopologies[1].Name))
+				g.Expect(ovn.Status.LastAppliedTopology).To(Equal(topologyRefAlt))
+				g.Expect(finalizers).To(ContainElement(
+					fmt.Sprintf("openstack.org/ovncontroller-%s", ovnControllerName.Name)))
 				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.TopologySpreadConstraints).To(BeNil())
 				g.Expect(GetDaemonSet(daemonSetNameOVS).Spec.Template.Spec.Affinity).To(BeNil())
+
+				// Verify the previous referenced topology has no finalizers
+				tp = GetTopology(types.NamespacedName{
+					Name:      topologyRef.Name,
+					Namespace: topologyRef.Namespace,
+				})
+				finalizers = tp.GetFinalizers()
+				g.Expect(finalizers).To(BeEmpty())
 			}, timeout, interval).Should(Succeed())
 		})
 		It("removes topologyRef from the spec", func() {
@@ -1357,6 +1383,18 @@ var _ = Describe("OVNController controller", func() {
 			Eventually(func(g Gomega) {
 				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.TopologySpreadConstraints).To(BeNil())
 				g.Expect(GetDaemonSet(daemonSetName).Spec.Template.Spec.Affinity).To(BeNil())
+			}, timeout, interval).Should(Succeed())
+
+			// Verify the existing topologies have no finalizer anymore
+			Eventually(func(g Gomega) {
+				for _, topology := range ovnTopologies {
+					tp := GetTopology(types.NamespacedName{
+						Name:      topology.Name,
+						Namespace: topology.Namespace,
+					})
+					finalizers := tp.GetFinalizers()
+					g.Expect(finalizers).To(BeEmpty())
+				}
 			}, timeout, interval).Should(Succeed())
 		})
 	})
