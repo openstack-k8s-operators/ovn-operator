@@ -28,9 +28,16 @@ ovs-vsctl --no-wait set open . external-ids:ovn-encap-ip=${OVNEncapIP}
 # Before starting vswitchd, block it from flushing existing datapath flows.
 ovs-vsctl --no-wait set open_vswitch . other_config:flow-restore-wait=true
 
-# It's safe to start vswitchd now. Do it.
-# --detach to allow the execution to continue to restoring the flows.
-/usr/sbin/ovs-vswitchd --pidfile --mlockall --detach
+# It's safe to start vswitchd now. The stderr and stdout are redirected since
+# the command needs to be in the background for the script to keep on running.
+/usr/sbin/ovs-vswitchd --pidfile --mlockall > /dev/stdout 2>&1 &
+ovs_pid=$!
+
+# This should never end up being stale since we have ovsVswitchdReadinessProbe
+# and ovsVswitchdLivenessProbe
+if [ ! -f /var/run/openvswitch/ovs-vswitchd.pid ]; then
+    sleep 1
+fi
 
 # Restore saved flows.
 if [ -f $FLOWS_RESTORE_SCRIPT ]; then
@@ -49,6 +56,7 @@ cleanup_flows_backup
 # Now, inform vswitchd that we are done.
 ovs-vsctl remove open_vswitch . other_config flow-restore-wait
 
-# This is container command script. Block it from exiting, otherwise k8s will
-# restart the container again.
-sleep infinity
+# Block script from exiting unless ovs process ends, otherwise k8s will
+# restart the container again in loop.
+trap "exit_rc=$?; echo ovs-vswitchd exited with rc $exit_rc; exit $exit_rc" EXIT
+wait $ovs_pid
