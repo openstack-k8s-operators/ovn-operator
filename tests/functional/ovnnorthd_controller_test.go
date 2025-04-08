@@ -132,6 +132,90 @@ var _ = Describe("OVNNorthd controller", func() {
 		})
 	})
 
+	When("A OVNNorthd Deployment rollout is progressing", func() {
+		var ovnNorthdName types.NamespacedName
+		var deploymentName types.NamespacedName
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			spec := GetDefaultOVNNorthdSpec()
+			ovnNorthdName = ovn.CreateOVNNorthd(nil, namespace, spec)
+			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
+			deploymentName = types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-northd",
+			}
+			th.SimulateDeploymentProgressing(deploymentName)
+		})
+
+		It("shows the deployment progressing in DeploymentReadyCondition", func() {
+			th.ExpectConditionWithDetails(
+				ovnNorthdName,
+				ConditionGetterFunc(OVNNorthdConditionGetter),
+				condition.DeploymentReadyCondition,
+				corev1.ConditionFalse,
+				condition.RequestedReason,
+				condition.DeploymentReadyRunningMessage,
+			)
+			th.ExpectCondition(
+				ovnNorthdName,
+				ConditionGetterFunc(OVNNorthdConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionFalse,
+			)
+		})
+
+		It("still shows the deployment progressing in DeploymentReadyCondition when rollout hits ProgressDeadlineExceeded", func() {
+			th.SimulateDeploymentProgressDeadlineExceeded(deploymentName)
+			th.ExpectConditionWithDetails(
+				ovnNorthdName,
+				ConditionGetterFunc(OVNNorthdConditionGetter),
+				condition.DeploymentReadyCondition,
+				corev1.ConditionFalse,
+				condition.RequestedReason,
+				condition.DeploymentReadyRunningMessage,
+			)
+			th.ExpectCondition(
+				ovnNorthdName,
+				ConditionGetterFunc(OVNNorthdConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionFalse,
+			)
+		})
+
+		It("reaches Ready when deployment rollout finished", func() {
+			th.ExpectConditionWithDetails(
+				ovnNorthdName,
+				ConditionGetterFunc(OVNNorthdConditionGetter),
+				condition.DeploymentReadyCondition,
+				corev1.ConditionFalse,
+				condition.RequestedReason,
+				condition.DeploymentReadyRunningMessage,
+			)
+			th.ExpectCondition(
+				ovnNorthdName,
+				ConditionGetterFunc(OVNNorthdConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionFalse,
+			)
+
+			th.SimulateDeploymentReplicaReady(deploymentName)
+			th.ExpectCondition(
+				ovnNorthdName,
+				ConditionGetterFunc(OVNNorthdConditionGetter),
+				condition.DeploymentReadyCondition,
+				corev1.ConditionTrue,
+			)
+
+			th.ExpectCondition(
+				ovnNorthdName,
+				ConditionGetterFunc(OVNNorthdConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionTrue,
+			)
+		})
+	})
+
 	When("OVNNorthd is created with nodeSelector", func() {
 		var ovnNorthdName types.NamespacedName
 		var deploymentName types.NamespacedName
