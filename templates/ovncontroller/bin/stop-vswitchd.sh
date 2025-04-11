@@ -14,6 +14,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+if [ -f /var/lib/openvswitch/skip_stop_vswitchd ]; then
+    echo "Skipping stop script"
+    rm /var/lib/openvswitch/skip_stop_vswitchd
+    exit 0
+fi
 set -ex
 source $(dirname $0)/functions
 
@@ -31,6 +36,17 @@ TMPDIR=$FLOWS_RESTORE_DIR /usr/share/openvswitch/scripts/ovs-save save-flows $br
 # Once save-flows logic is complete it no longer needs ovsdb-server, this file
 # unlocks the db preStop script, working as a semaphore
 touch $SAFE_TO_STOP_OVSDB_SERVER_SEMAPHORE
+
+# If it's comming from an update, it means that the
+# new pod, hence we're still missing the signal from the openshift. To avoid
+# running this script twice, create file to skip the following SIGTERM signal
+if [ -f /var/lib/openvswitch/already_executed ]; then
+    if [ $(cat /var/lib/openvswitch/already_executed) == "UPDATE" ]; then
+        touch /var/lib/openvswitch/skip_stop_vswitchd
+    fi
+fi
+# Update state to "RESTART_VSWITCHD"
+echo "RESTART_VSWITCHD" > /var/lib/openvswitch/already_executed
 
 # Finally, stop vswitchd.
 /usr/share/openvswitch/scripts/ovs-ctl stop --no-ovsdb-server

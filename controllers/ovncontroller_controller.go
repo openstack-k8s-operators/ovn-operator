@@ -612,7 +612,6 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	instance.Status.DesiredNumberScheduled = dset.GetDaemonSet().Status.DesiredNumberScheduled
 	instance.Status.NumberReady = dset.GetDaemonSet().Status.NumberReady
 
-	// Define a new DaemonSet object for OVS (ovsdb-server + ovs-vswitchd)
 	ovsdset := daemonset.NewDaemonSet(
 		ovncontroller.CreateOVSDaemonSet(instance, inputHash, ovsServiceLabels, serviceAnnotations, topology),
 		time.Duration(5)*time.Second,
@@ -743,6 +742,11 @@ func (r *OVNControllerReconciler) generateServiceConfigMaps(
 		templateParameters["OVNEncapNIC"] = nad.GetNetworkIFName(instance.Spec.NetworkAttachment)
 	} else {
 		templateParameters["OVNEncapNIC"] = "eth0"
+	}
+	if instance.Spec.TLS.Enabled() {
+		templateParameters["TLS"] = "Enabled"
+	} else {
+		templateParameters["TLS"] = "Disabled"
 	}
 	cms := []util.Template{
 		// ScriptsConfigMap
