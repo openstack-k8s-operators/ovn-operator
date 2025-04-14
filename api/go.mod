@@ -6,7 +6,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/google/uuid v1.6.0
 	github.com/onsi/gomega v1.34.1
-	github.com/openstack-k8s-operators/infra-operator/apis v0.6.1-0.20250403063905-eb287d52f38d
+	github.com/openstack-k8s-operators/infra-operator/apis v0.6.1-0.20250411133346-82683c873656
 	github.com/openstack-k8s-operators/lib-common/modules/common v0.6.1-0.20250408123225-0d9e9b82c41b
 	k8s.io/api v0.29.15
 	k8s.io/apimachinery v0.29.15
