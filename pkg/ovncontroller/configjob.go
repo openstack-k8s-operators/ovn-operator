@@ -10,6 +10,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package ovncontroller provides functionality for managing OVN controller components
 package ovncontroller
 
 import (

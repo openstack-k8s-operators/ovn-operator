@@ -55,7 +55,7 @@ func DNSData(
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("Error creating DNSData %s: %w", dnsData.Name, err)
+		return fmt.Errorf("error creating DNSData %s: %w", dnsData.Name, err)
 	}
 	return nil
 }

@@ -256,9 +256,9 @@ func SimulateDaemonsetNumberReadyWithPods(name types.NamespacedName, networkIPs 
 			ObjectMeta: ds.Spec.Template.ObjectMeta,
 			Spec:       ds.Spec.Template.Spec,
 		}
-		pod.ObjectMeta.Namespace = name.Namespace
-		pod.ObjectMeta.Name = name.Name
-		pod.ObjectMeta.Labels = map[string]string{
+		pod.Namespace = name.Namespace
+		pod.Name = name.Name
+		pod.Labels = map[string]string{
 			"service": name.Name,
 		}
 

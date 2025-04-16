@@ -121,7 +121,7 @@ func StatefulSet(
 	// add OVN dbs cert and CA
 	if instance.Spec.TLS.Enabled() {
 		svc := tls.Service{
-			SecretName: *instance.Spec.TLS.GenericService.SecretName,
+			SecretName: *instance.Spec.TLS.SecretName,
 			CertMount:  ptr.To(ovn_common.OVNDbCertPath),
 			KeyMount:   ptr.To(ovn_common.OVNDbKeyPath),
 			CaMount:    ptr.To(ovn_common.OVNDbCaCertPath),
