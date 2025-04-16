@@ -11,12 +11,3 @@ limitations under the License.
 */
 
 package common
-
-// Helper function while can't use buildin min
-// TOOD(averdagu) remove when using go1.21.0
-func Min(x, y int) int {
-	if x < y {
-		return x
-	}
-	return y
-}
