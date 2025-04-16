@@ -76,8 +76,8 @@ var (
 )
 
 const (
-	CABundleSecretName  = "combined-ca-bundle"
-	OvnDbCertSecretName = "ovndb-tls-cert"
+	CABundleSecretName  = "combined-ca-bundle" //nolint:gosec // G101: Not actual credentials, just secret name constants
+	OvnDbCertSecretName = "ovndb-tls-cert"     //nolint:gosec // G101: Not actual credentials, just secret name constants
 )
 
 func TestAPIs(t *testing.T) {
@@ -224,11 +224,11 @@ var _ = BeforeSuite(func() {
 	dialer := &net.Dialer{Timeout: time.Duration(10) * time.Second}
 	addrPort := fmt.Sprintf("%s:%d", webhookInstallOptions.LocalServingHost, webhookInstallOptions.LocalServingPort)
 	Eventually(func() error {
-		conn, err := tls.DialWithDialer(dialer, "tcp", addrPort, &tls.Config{InsecureSkipVerify: true})
+		conn, err := tls.DialWithDialer(dialer, "tcp", addrPort, &tls.Config{InsecureSkipVerify: true}) //nolint:gosec // G402: InsecureSkipVerify is acceptable in test environment
 		if err != nil {
 			return err
 		}
-		conn.Close()
+		_ = conn.Close() // Ignore close error in tests
 		return nil
 	}).Should(Succeed())
 })
