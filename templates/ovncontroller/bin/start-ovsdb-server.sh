@@ -20,6 +20,40 @@ source $(dirname $0)/functions
 # Remove the obsolete semaphore file in case it still exists.
 cleanup_ovsdb_server_semaphore
 
+# Check if we're on the update path
+if [ -f $update_semaphore_file ]; then
+echo "In the middle of an upgrade"
+    # Need to stop vsitchd
+    echo "Stopping vswitchd"
+    bash $stop_vswitchd_script_file
+    # with this script the current lflows should be already stored in a file
+    # and vswitchd should be stopped.
+    # Need to wait until vswitchd is stoped in order to stop also the ovsdb-server
+    while true; do
+        if [ ! -f $ovs_vswitchd_pid_file ]; then
+            break
+        fi
+        sleep 0.1
+    done
+    # Ovs-vswtichd was already restarted, need to skip the preStop from the openshift
+    # lifecicle when the old pod gets deleted
+    echo "Creating flag file to skip ovs-vswitchd stop"
+    touch $skip_vswitchd_stop_file
+    # Run stop-ovsdbserver script to ensure lflows semaphor is cleaned correctly
+    bash $stop_ovsdb_server_script_file
+    # Need to create a flag-file to skip ovsdb-server stop
+    # to avoid triggering it again when openshift triggers the preStop script.
+    echo "Creating flag file to skip ovsdb-server stop"
+    touch $skip_ovsdb_server_stop_file
+    # Ensure that ovsdb-server is stopped
+    while true; do
+        if [ ! -f $ovsdb_server_pid_file ]; then
+            break
+        fi
+        sleep 0.1
+    done
+fi
+
 # Start the service
 ovsdb-server ${DB_FILE} \
     --pidfile \
