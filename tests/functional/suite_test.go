@@ -53,6 +53,7 @@ import (
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/controllers"
 
+	infra_test "github.com/openstack-k8s-operators/infra-operator/apis/test/helpers"
 	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	common_test "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
 	//+kubebuilder:scaffold:imports
@@ -70,6 +71,7 @@ var (
 	logger    logr.Logger
 	th        *common_test.TestHelper
 	ovn       *ovn_test.TestHelper
+	infra     *infra_test.TestHelper
 	namespace string
 )
 
@@ -156,6 +158,8 @@ var _ = BeforeSuite(func() {
 	Expect(th).NotTo(BeNil())
 	ovn = ovn_test.NewTestHelper(ctx, k8sClient, timeout, interval, logger)
 	Expect(ovn).NotTo(BeNil())
+	infra = infra_test.NewTestHelper(ctx, k8sClient, timeout, interval, logger)
+	Expect(infra).NotTo(BeNil())
 
 	// Start the controller-manager if goroutine
 	webhookInstallOptions := &testEnv.WebhookInstallOptions

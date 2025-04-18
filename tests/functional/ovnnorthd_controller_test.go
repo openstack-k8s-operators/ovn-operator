@@ -520,7 +520,7 @@ var _ = Describe("OVNNorthd controller", func() {
 			for _, t := range ovnTopologies {
 				// Build the topology Spec
 				topologySpec, _ := GetSampleTopologySpec(ovnNorthdName.Name)
-				CreateTopology(t, topologySpec)
+				infra.CreateTopology(t, topologySpec)
 			}
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
@@ -537,7 +537,7 @@ var _ = Describe("OVNNorthd controller", func() {
 		})
 		It("sets topologyref in both .Status CR and resources", func() {
 			Eventually(func(g Gomega) {
-				tp := GetTopology(types.NamespacedName{
+				tp := infra.GetTopology(types.NamespacedName{
 					Name:      topologyRef.Name,
 					Namespace: topologyRef.Namespace,
 				})
@@ -566,7 +566,7 @@ var _ = Describe("OVNNorthd controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
-				tp := GetTopology(types.NamespacedName{
+				tp := infra.GetTopology(types.NamespacedName{
 					Name:      topologyRefAlt.Name,
 					Namespace: topologyRefAlt.Namespace,
 				})
@@ -588,7 +588,7 @@ var _ = Describe("OVNNorthd controller", func() {
 
 			Eventually(func(g Gomega) {
 				// Verify the previous referenced topology has no finalizers
-				tp := GetTopology(types.NamespacedName{
+				tp := infra.GetTopology(types.NamespacedName{
 					Name:      topologyRef.Name,
 					Namespace: topologyRef.Namespace,
 				})
@@ -618,7 +618,7 @@ var _ = Describe("OVNNorthd controller", func() {
 			// Verify the existing topologies have no finalizer anymore
 			Eventually(func(g Gomega) {
 				for _, topology := range ovnTopologies {
-					tp := GetTopology(types.NamespacedName{
+					tp := infra.GetTopology(types.NamespacedName{
 						Name:      topology.Name,
 						Namespace: topology.Namespace,
 					})
