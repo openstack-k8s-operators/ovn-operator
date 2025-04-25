@@ -35,9 +35,10 @@ ovs_pid=$!
 
 # This should never end up being stale since we have ovsVswitchdReadinessProbe
 # and ovsVswitchdLivenessProbe
-if [ ! -f /var/run/openvswitch/ovs-vswitchd.pid ]; then
-    sleep 1
-fi
+until [ -f /var/run/openvswitch/ovs-vswitchd.pid ] && $(ip a | grep -q 'br-int'); do
+    sleep 0.2
+    echo "Waiting for ovs pid and br-int configuration"
+done
 
 # Restore saved flows.
 if [ -f $FLOWS_RESTORE_SCRIPT ]; then
@@ -54,7 +55,7 @@ fi
 cleanup_flows_backup
 
 # Now, inform vswitchd that we are done.
-ovs-vsctl remove open_vswitch . other_config flow-restore-wait
+ovs-vsctl --no-wait set open_vswitch . other_config:flow-restore-wait=false
 
 # Block script from exiting unless ovs process ends, otherwise k8s will
 # restart the container again in loop.

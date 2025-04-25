@@ -52,6 +52,22 @@ function wait_for_ovsdb_server {
     done
 }
 
+# Needed because of https://issues.redhat.com/browse/FDP-1292
+function wait_for_vswitchd {
+    while true; do
+        if [ "$(ovs-vsctl --no-wait get open_vswitch . other_config:flow-restore-wait)" == "\"false\"" ]; then
+            echo "Flow restoration finished. Connecting ovn-controller to ovs..."
+            break
+        elif [ "$(ovs-vsctl --no-wait get open_vswitch . other_config:flow-restore-wait)" == "\"true\"" ]; then
+            echo "Waiting for vswitchd to finish restoring flows..."
+            sleep 0.5
+        else
+            echo "vswitchd seems not to be ready yet. Waiting..."
+            sleep 0.5
+        fi
+    done
+}
+
 # configure external-ids in OVS
 function configure_external_ids {
     ovs-vsctl set open . external-ids:ovn-bridge=${OVNBridge}
