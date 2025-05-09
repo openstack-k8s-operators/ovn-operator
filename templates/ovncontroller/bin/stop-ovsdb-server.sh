@@ -14,6 +14,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+if [ -f /var/lib/openvswitch/skip_stop_ovsdbserver ]; then
+    echo "Skipping stop script"
+    rm /var/lib/openvswitch/skip_stop_ovsdbserver
+    exit 0
+fi
+
 set -ex
 source $(dirname $0)/functions
 
@@ -26,5 +32,13 @@ while [ ! -f $SAFE_TO_STOP_OVSDB_SERVER_SEMAPHORE ]; do
 done
 cleanup_ovsdb_server_semaphore
 
+while [ $(cat /var/log/openvswitch/already_executed) != "RESTART_VSWITCHD" ]; do
+    # Wait to vswitchd container to finish it's stop process
+    sleep 0.1
+done
+
 # Now it's safe to stop db server. Do it.
 /usr/share/openvswitch/scripts/ovs-ctl stop --no-ovs-vswitchd
+
+# Update state to "RESTART_DBSERVER"
+echo "RESTART_DBSERVER" > /var/lib/openvswitch/already_executed
