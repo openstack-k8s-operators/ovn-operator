@@ -17,6 +17,12 @@
 set -ex
 source $(dirname $0)/functions
 
+# If file is present, skip stop script
+if [ -f $skip_ovsdb_server_stop_file ]; then
+    rm $skip_ovsdb_server_stop_file
+    exit 0
+fi
+
 # The ovs_vswitchd container has to terminate before ovsdb-server because it
 # needs access to db in its preStop script. The preStop script backs up flows
 # for restoration during the next startup. This semaphore ensures the vswitchd
