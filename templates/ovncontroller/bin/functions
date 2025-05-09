@@ -34,8 +34,10 @@ function cleanup_ovsdb_server_semaphore() {
 }
 
 function cleanup_flows_backup() {
+    rc_code=$?
     rm -f $FLOWS_RESTORE_SCRIPT 2>&1 > /dev/null
     rm -rf $FLOWS_RESTORE_DIR 2>&1 > /dev/null
+    echo "Exited with rc $rc_code"
 }
 
 function wait_for_ovsdb_server {
@@ -46,6 +48,22 @@ function wait_for_ovsdb_server {
         else
             echo "ovsdb-server seems not be ready yet. Waiting..."
             sleep 1
+        fi
+    done
+}
+
+# Needed because of https://issues.redhat.com/browse/FDP-1292
+function wait_for_vswitchd {
+    while true; do
+        if [ "$(ovs-vsctl --no-wait get open_vswitch . other_config:flow-restore-wait)" == "\"false\"" ]; then
+            echo "Flow restoration finished. Connecting ovn-controller to ovs..."
+            break
+        elif [ "$(ovs-vsctl --no-wait get open_vswitch . other_config:flow-restore-wait)" == "\"true\"" ]; then
+            echo "Waiting for vswitchd to finish restoring flows..."
+            sleep 0.5
+        else
+            echo "vswitchd seems not to be ready yet. Waiting..."
+            sleep 0.5
         fi
     done
 }

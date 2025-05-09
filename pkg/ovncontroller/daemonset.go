@@ -37,6 +37,7 @@ func CreateOVNDaemonSet(
 	mounts := GetOVNControllerVolumeMounts()
 
 	cmd := []string{
+		"/usr/local/bin/container-scripts/start-ovn-controller.sh",
 		"ovn-controller", "--pidfile", "unix:/run/openvswitch/db.sock",
 	}
 
