@@ -29,6 +29,15 @@ FLOWS_RESTORE_SCRIPT=$ovs_dir/flows-script
 FLOWS_RESTORE_DIR=$ovs_dir/saved-flows
 SAFE_TO_STOP_OVSDB_SERVER_SEMAPHORE=$ovs_dir/is_safe_to_stop_ovsdb_server
 
+# Variables declaration used by start-up optimization
+ovs_vswitchd_pid_file=/var/run/openvswitch/ovs-vswitchd.pid
+ovsdb_server_pid_file=/var/run/openvswitch/ovsdb-server.pid
+update_semaphore_file=/var/lib/openvswitch/update
+stop_vswitchd_script_file=/usr/local/bin/container-scripts/stop-vswitchd.sh
+stop_ovsdb_server_script_file=/usr/local/bin/container-scripts/stop-ovsdb-server.sh
+skip_ovsdb_server_stop_file=/var/lib/openvswitch/skip_stop_ovsdbserver
+skip_vswitchd_stop_file=/var/lib/openvswitch/skip_stop_vswitchd
+
 function cleanup_ovsdb_server_semaphore() {
     rm -f $SAFE_TO_STOP_OVSDB_SERVER_SEMAPHORE 2>&1 > /dev/null
 }

@@ -17,6 +17,12 @@
 set -ex
 source $(dirname $0)/functions
 
+# If file is present, skip stop script
+if [ -f $skip_vswitchd_stop_file ]; then
+    rm $skip_vswitchd_stop_file
+    exit 0
+fi
+
 # Clean up any previously created flow backups to avoid conflict with newly
 # generated backup.
 cleanup_flows_backup
