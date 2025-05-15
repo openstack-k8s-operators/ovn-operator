@@ -1,7 +1,17 @@
 ---
+- pragma:
+    implied-branch-matchers: True
+    implied-branches:
+      - main
+      - 18.0-fr2
+
 - project:
     name: openstack-k8s-operators/ovn-operator
     github-check:
+      debug: true
       jobs:
-        - openstack-k8s-operators-content-provider
-        - ovn-operator-tempest-multinode
+        - openstack-k8s-operators-content-provider: &rp
+            required-projects:
+              - name: github.com/openstack-k8s-operators/ci-framework
+                override-checkout: main
+        - ovn-operator-tempest-multinode: *rp
