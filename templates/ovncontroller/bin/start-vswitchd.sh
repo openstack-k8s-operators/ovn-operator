@@ -30,7 +30,10 @@ ovs-vsctl --no-wait set open_vswitch . other_config:flow-restore-wait=true
 
 # It's safe to start vswitchd now. Do it.
 # --detach to allow the execution to continue to restoring the flows.
-/usr/sbin/ovs-vswitchd --pidfile --mlockall --detach
+# We need to use --log-file since --detach disables all logging explicitly.
+# Once https://issues.redhat.com/browse/FDP-1292 is fixed we will be able to
+# use system logs only.
+/usr/sbin/ovs-vswitchd --pidfile --mlockall --detach --log-file
 
 # Restore saved flows.
 if [ -f $FLOWS_RESTORE_SCRIPT ]; then
@@ -51,4 +54,4 @@ ovs-vsctl remove open_vswitch . other_config flow-restore-wait
 
 # This is container command script. Block it from exiting, otherwise k8s will
 # restart the container again.
-sleep infinity
+tail -f /var/log/openvswitch/ovs-vswitchd.log
