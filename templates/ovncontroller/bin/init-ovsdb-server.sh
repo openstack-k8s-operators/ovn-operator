@@ -23,10 +23,25 @@ trap wait_for_db_creation EXIT
 if ! [ -s ${DB_FILE} ]; then
     rm -f ${DB_FILE}
 fi
-# Initialize or upgrade database if needed
-CTL_ARGS="--system-id=random --no-ovs-vswitchd"
-/usr/share/openvswitch/scripts/ovs-ctl start $CTL_ARGS
-/usr/share/openvswitch/scripts/ovs-ctl stop $CTL_ARGS
 
-wait_for_db_creation
-trap - EXIT
+# Check if it's a normal start or an update
+# Normal start: ovsdb-server & ovs-vswitchd are not running, start normal
+# Update: ovsdb-server & ovs-vswitchd still running, need different approach
+if [ -f $ovs_vswitchd_pid_file ] || [ -f $ovsdb_server_pid_file ]; then
+    # Some process it's running, it's an update. Create semaphore
+    echo "UPDATE" > $update_semaphore_file
+    # No need to initializice ovs-vswitchd in this path, as this has done before
+    # TODO: check what happens if during the update an update to the ovs db is needed
+else
+    # In case something went wrong last run, ensure that semaphor_file is not present in this path
+    if [ -f $update_semaphore_file ]; then
+        rm $update_semaphore_file
+    fi
+    # Initialize or upgrade database if needed
+    CTL_ARGS="--system-id=random --no-ovs-vswitchd"
+    /usr/share/openvswitch/scripts/ovs-ctl start $CTL_ARGS
+    /usr/share/openvswitch/scripts/ovs-ctl stop $CTL_ARGS
+
+    wait_for_db_creation
+    trap - EXIT
+fi

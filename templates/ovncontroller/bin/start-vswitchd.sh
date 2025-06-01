@@ -15,6 +15,18 @@
 # under the License.
 
 source $(dirname $0)/functions
+
+# If we're on an update wait until past vswitchd process is stopped correctly
+if [ -f $update_semaphore_file ]; then
+    # In the middle of an update, wait until vswitchd is already stopped
+    while true; do
+        if [ ! -f $ovs_vswitchd_pid_file ]; then
+            break
+        fi
+        sleep 0.1
+    done
+fi
+
 wait_for_ovsdb_server
 
 # The order - first wait for db server, then set -ex - is important. Otherwise,
@@ -51,6 +63,10 @@ cleanup_flows_backup
 
 # Now, inform vswitchd that we are done.
 ovs-vsctl remove open_vswitch . other_config flow-restore-wait
+
+# At this point, ovsdb-server and vswitchd are already running, update (if it was the case)
+# is already done. Delete update file
+rm $update_semaphore_file || true
 
 # This is container command script. Block it from exiting, otherwise k8s will
 # restart the container again.
