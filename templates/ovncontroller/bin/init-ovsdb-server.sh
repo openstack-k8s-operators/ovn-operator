@@ -23,6 +23,12 @@ trap wait_for_db_creation EXIT
 if ! [ -s ${DB_FILE} ]; then
     rm -f ${DB_FILE}
 fi
+
+# Compact the Database file if it exists
+if [ -f ${DB_FILE} ]; then
+    ovsdb-tool compact ${DB_FILE}
+fi
+
 # Initialize or upgrade database if needed
 CTL_ARGS="--system-id=random --no-ovs-vswitchd"
 /usr/share/openvswitch/scripts/ovs-ctl start $CTL_ARGS
