@@ -17,13 +17,13 @@ limitations under the License.
 package v1beta1
 
 import (
-	"k8s.io/apimachinery/pkg/util/validation/field"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 
+	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 )
 
 const (
@@ -174,10 +174,6 @@ type OVSExternalIDs struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default={}
 	OvnAvailabilityZones []string `json:"availability-zones,omitempty"`
-
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=true
-	EnableChassisAsGateway *bool `json:"enable-chassis-as-gateway"`
 }
 
 // RbacConditionsSet - set the conditions for the rbac object

@@ -19,7 +19,6 @@ OVNBridge=${OVNBridge:-"br-int"}
 OVNRemote=${OVNRemote:-"tcp:localhost:6642"}
 OVNEncapType=${OVNEncapType:-"geneve"}
 OVNAvailabilityZones=${OVNAvailabilityZones:-""}
-EnableChassisAsGateway=${EnableChassisAsGateway:-true}
 PhysicalNetworks=${PhysicalNetworks:-""}
 OVNHostName=${OVNHostName:-""}
 DB_FILE=/etc/openvswitch/conf.db
@@ -59,11 +58,8 @@ function configure_external_ids {
         ovs-vsctl set open . external-ids:hostname=${OVNHostName}
     fi
     local cms_options=""
-    if [ "$EnableChassisAsGateway" == "true" ]; then
-        cms_options="enable-chassis-as-gw"
-    fi
     if [ -n "$OVNAvailabilityZones" ]; then
-        cms_options+=",availability-zones="$OVNAvailabilityZones
+        cms_options=",availability-zones="$OVNAvailabilityZones
     fi
     if [ -n "${cms_options}" ]; then
         ovs-vsctl set open . external-ids:ovn-cms-options=${cms_options#,}

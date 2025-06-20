@@ -62,9 +62,6 @@ spec:
                     items:
                       type: string
                     type: array
-                  enable-chassis-as-gateway:
-                    default: true
-                    type: boolean
                   ovn-bridge:
                     default: br-int
                     type: string
