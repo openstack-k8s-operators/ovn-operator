@@ -177,6 +177,7 @@ type OVSExternalIDs struct {
 
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=true
+	// +kubebuilder:validation:Deprecated
 	EnableChassisAsGateway *bool `json:"enable-chassis-as-gateway"`
 }
 
