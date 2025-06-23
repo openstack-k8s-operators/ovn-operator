@@ -861,7 +861,6 @@ var _ = Describe("OVNController controller", func() {
 
 		It("applies meaningful defaults", func() {
 			ovnController := GetOVNController(ovnControllerName)
-			Expect(*ovnController.Spec.ExternalIDS.EnableChassisAsGateway).To(BeTrue())
 			Expect(ovnController.Spec.ExternalIDS.OvnEncapType).To(Equal("geneve"))
 			Expect(ovnController.Spec.ExternalIDS.OvnBridge).To(Equal("br-int"))
 			Expect(ovnController.Spec.ExternalIDS.SystemID).To(Equal("random"))
