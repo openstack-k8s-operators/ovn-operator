@@ -175,6 +175,8 @@ type OVSExternalIDs struct {
 	// +kubebuilder:default={}
 	OvnAvailabilityZones []string `json:"availability-zones,omitempty"`
 
+	// DEPRECATED: To be removed in the next API version
+        // Any value set to this field is ignored
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=true
 	EnableChassisAsGateway *bool `json:"enable-chassis-as-gateway"`

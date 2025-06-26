@@ -14,7 +14,6 @@ package ovncontroller
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
@@ -61,7 +60,6 @@ func ConfigJob(
 	envVars["OVNRemote"] = env.SetValue(internalEndpoint)
 	envVars["OVNEncapType"] = env.SetValue(instance.Spec.ExternalIDS.OvnEncapType)
 	envVars["OVNAvailabilityZones"] = env.SetValue(strings.Join(instance.Spec.ExternalIDS.OvnAvailabilityZones, ":"))
-	envVars["EnableChassisAsGateway"] = env.SetValue(fmt.Sprintf("%t", *instance.Spec.ExternalIDS.EnableChassisAsGateway))
 	envVars["PhysicalNetworks"] = env.SetValue(getPhysicalNetworks(instance))
 	envVars["OVNHostName"] = env.DownwardAPI("spec.nodeName")
 
