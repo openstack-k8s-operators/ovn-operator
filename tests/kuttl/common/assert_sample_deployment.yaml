@@ -138,13 +138,12 @@ spec:
         livenessProbe:
           exec:
             command:
-              - /usr/bin/pidof
-              - ovn-northd
+              - /usr/local/bin/container-scripts/status_check.sh
           failureThreshold: 3
-          initialDelaySeconds: 3
-          periodSeconds: 3
+          initialDelaySeconds: 10
+          periodSeconds: 5
           successThreshold: 1
-          timeoutSeconds: 5
+          timeoutSeconds: 1
         securityContext:
           allowPrivilegeEscalation: false
           runAsNonRoot: true
@@ -152,13 +151,12 @@ spec:
         readinessProbe:
           exec:
             command:
-              - /usr/bin/pidof
-              - ovn-northd
+              - /usr/local/bin/container-scripts/status_check.sh
           failureThreshold: 3
-          initialDelaySeconds: 5
+          initialDelaySeconds: 10
           periodSeconds: 5
           successThreshold: 1
-          timeoutSeconds: 5
+          timeoutSeconds: 1
         resources: {}
       serviceAccount: ovnnorthd-ovnnorthd-sample
       serviceAccountName: ovnnorthd-ovnnorthd-sample

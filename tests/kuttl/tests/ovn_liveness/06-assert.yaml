@@ -1,0 +1,21 @@
+#
+# Check for:
+#
+# - LivenessProbe failure in ovn-northd should restart it at least twice
+#
+
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+commands:
+  - script: |
+      # Get the restart count for the ovn-northd container
+      restart_count=$(oc get pods -n $NAMESPACE -l service=ovn-northd -o jsonpath='{.items[0].status.containerStatuses[?(@.name=="ovn-northd")].restartCount}')
+
+      # Check if restart count is at least 2
+      if [ "$restart_count" -lt 2 ]; then
+        echo "Expected at least 2 restarts, but got $restart_count"
+        exit 1
+      fi
+
+      echo "Container has restarted $restart_count times (at least 2 as expected)"
+      exit 0
