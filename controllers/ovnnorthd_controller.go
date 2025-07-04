@@ -38,12 +38,14 @@ import (
 	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/configmap"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/deployment"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovnnorthd"
 	appsv1 "k8s.io/api/apps/v1"
@@ -446,6 +448,24 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	instance.Status.Conditions.MarkTrue(condition.TLSInputReadyCondition, condition.InputReadyMessage)
 
 	//
+	// create Configmap required for the Northd service
+	// - %-config configmap holding scripts required for the Northd service
+	//
+	err = r.generateServiceConfigMaps(ctx, helper, instance, &envVars, ovnv1.ServiceNameOVNNorthd)
+	if err != nil {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.ServiceConfigReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.ServiceConfigReadyErrorMessage,
+			err.Error()))
+		return ctrl.Result{}, err
+	}
+	// Create ConfigMaps and Secrets - end
+
+	instance.Status.Conditions.MarkTrue(condition.ServiceConfigReadyCondition, condition.ServiceConfigReadyMessage)
+
+	//
 	// Handle Topology
 	//
 	topology, err := ensureTopology(
@@ -533,4 +553,30 @@ func getInternalEndpoint(
 		return "", err
 	}
 	return internalEndpoint, nil
+}
+
+func (r *OVNNorthdReconciler) generateServiceConfigMaps(
+	ctx context.Context,
+	h *helper.Helper,
+	instance *ovnv1.OVNNorthd,
+	envVars *map[string]env.Setter,
+	serviceName string,
+) error {
+
+	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(serviceName), map[string]string{})
+
+	templateParameters := make(map[string]interface{})
+
+	cms := []util.Template{
+		// ScriptsConfigMap
+		{
+			Name:          fmt.Sprintf("%s-scripts", instance.Name),
+			Namespace:     instance.Namespace,
+			Type:          util.TemplateTypeScripts,
+			InstanceType:  instance.Kind,
+			Labels:        cmLabels,
+			ConfigOptions: templateParameters,
+		},
+	}
+	return configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
 }
