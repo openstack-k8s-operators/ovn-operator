@@ -294,6 +294,20 @@ var _ = Describe("OVNNorthd controller", func() {
 				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(BeNil())
 			}, timeout, interval).Should(Succeed())
 		})
+
+		It("should create a ConfigMap for status_check.sh", func() {
+			scriptsCM := types.NamespacedName{
+				Namespace: ovnNorthdName.Namespace,
+				Name:      fmt.Sprintf("%s-%s", ovnNorthdName.Name, "scripts"),
+			}
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(scriptsCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			Expect(th.GetConfigMap(scriptsCM).ObjectMeta.OwnerReferences[0].Name).To(Equal(ovnNorthdName.Name))
+			Expect(th.GetConfigMap(scriptsCM).ObjectMeta.OwnerReferences[0].Kind).To(Equal("OVNNorthd"))
+		})
+
 	})
 
 	When("OVNNorthd is created with TLS", func() {
