@@ -1,0 +1,14 @@
+#
+# Step for:
+#
+# Scale up the ovn-northd to 2 replicas and then create the NetworkPolicy to
+# block all ingress traffic to the ovn-northd POD, that will block communication
+# between ovn-northd and ovsdbserver-sb PODs thus the liveness probe in the
+# ovn-northd should set it to the failed state.
+#
+
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      oc patch OVNNorthd -n $NAMESPACE ovnnorthd-sample --type='json' -p='[{"op": "replace", "path": "/spec/replicas", "value":2}]'

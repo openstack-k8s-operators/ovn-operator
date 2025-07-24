@@ -45,16 +45,14 @@ func Deployment(
 ) *appsv1.Deployment {
 
 	livenessProbe := &corev1.Probe{
-		// TODO might need tuning
-		TimeoutSeconds:      5,
-		PeriodSeconds:       3,
-		InitialDelaySeconds: 3,
+		TimeoutSeconds:      1,
+		PeriodSeconds:       5,
+		InitialDelaySeconds: 10,
 	}
 	readinessProbe := &corev1.Probe{
-		// TODO might need tuning
-		TimeoutSeconds:      5,
+		TimeoutSeconds:      1,
 		PeriodSeconds:       5,
-		InitialDelaySeconds: 5,
+		InitialDelaySeconds: 10,
 	}
 	cmd := []string{ServiceCommand}
 	args := []string{
@@ -66,8 +64,8 @@ func Deployment(
 	}
 
 	// create Volume and VolumeMounts
-	volumes := []corev1.Volume{}
-	volumeMounts := []corev1.VolumeMount{}
+	volumes := GetNorthdVolumes(instance.Name)
+	volumeMounts := GetNorthdVolumeMounts()
 
 	// add CA bundle if defined
 	if instance.Spec.TLS.CaBundleSecretName != "" {
@@ -98,7 +96,7 @@ func Deployment(
 	//
 	livenessProbe.Exec = &corev1.ExecAction{
 		Command: []string{
-			"/usr/bin/pidof", "ovn-northd",
+			"/usr/local/bin/container-scripts/status_check.sh",
 		},
 	}
 	readinessProbe.Exec = livenessProbe.Exec
