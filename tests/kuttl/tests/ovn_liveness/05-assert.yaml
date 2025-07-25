@@ -1,0 +1,25 @@
+#
+# Check for:
+#
+# - LivenessProbe failure in ovn-northd should restart it at least once
+#
+
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNNorthd
+metadata:
+  finalizers:
+  - openstack.org/ovnnorthd
+  name: ovnnorthd-sample
+spec:
+  replicas: 2
+status:
+  readyCount: 2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ovn-northd
+spec:
+  replicas: 2
+status:
+  availableReplicas: 2

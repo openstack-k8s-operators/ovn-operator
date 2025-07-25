@@ -1,0 +1,15 @@
+#
+# Check for:
+#
+# - LivenessProbe failure in ovn-northd should restart it at least once
+#
+
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    service: ovn-northd
+status:
+  containerStatuses:
+    - name: ovn-northd
+      restartCount: 1
