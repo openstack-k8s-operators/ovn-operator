@@ -30,14 +30,8 @@ if [[ "${DB_TYPE}" == "sb" ]]; then
     DB_NAME="OVN_Southbound"
 fi
 
-PODNAME=$(hostname -f | cut -d. -f1,2)
-PODIPV6=$(grep "${PODNAME}" /etc/hosts | grep ':' | cut -d$'\t' -f1)
-
-if [[ "" = "${PODIPV6}" ]]; then
-    DB_ADDR="0.0.0.0"
-else
-    DB_ADDR="[::]"
-fi
+# [::] Works for both IPv4 and IPv6
+DB_ADDR="[::]"
 
 # The --cluster-remote-addr / --cluster-local-addr options will have effect
 # only on bootstrap, when we assume the leadership role for the first pod.
