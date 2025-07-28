@@ -1,0 +1,18 @@
+#
+# Step for:
+#
+# Create the NetworkPolicy to block all ingress traffic to the ovn-northd POD,
+# that will block communication between ovn-northd and ovsdbserver-sb PODs thus
+# the liveness probe in the ovn-northd should set it to the failed state.
+#
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: block-northd-egress-traffic
+spec:
+  podSelector:
+    matchLabels:
+      service: ovn-northd
+  policyTypes:
+  - Egress

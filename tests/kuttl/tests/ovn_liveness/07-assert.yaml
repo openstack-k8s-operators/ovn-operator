@@ -1,0 +1,16 @@
+#
+# Check for:
+#
+# - After the NetworkPolicy is removed, the liveness probe should be successful
+#   and the ovn-northd should be back to normal state
+#
+
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    service: ovn-northd
+status:
+  containerStatuses:
+    - name: ovn-northd
+      ready: true
