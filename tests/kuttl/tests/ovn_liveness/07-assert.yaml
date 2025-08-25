@@ -12,5 +12,7 @@ metadata:
     service: ovn-northd
 status:
   containerStatuses:
+    - name: openstack-network-exporter
+      ready: true
     - name: ovn-northd
       ready: true

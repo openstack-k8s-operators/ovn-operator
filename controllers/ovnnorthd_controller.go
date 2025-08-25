@@ -39,14 +39,16 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/configmap"
-	"github.com/openstack-k8s-operators/lib-common/modules/common/deployment"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/service"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/statefulset"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 	"github.com/openstack-k8s-operators/ovn-operator/pkg/ovnnorthd"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -83,7 +85,9 @@ func (r *OVNNorthdReconciler) GetLogger(ctx context.Context) logr.Logger {
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovndbclusters/status,verbs=get;list;watch;
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete;
-//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;patch;update;delete;
+//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete;
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;patch;update;delete;
+//+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;patch;update;delete;
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
 
 // service account, role, rolebinding
@@ -236,7 +240,8 @@ func (r *OVNNorthdReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ovnv1.OVNNorthd{}).
 		Owns(&corev1.ConfigMap{}).
-		Owns(&appsv1.Deployment{}).
+		Owns(&appsv1.StatefulSet{}).
+		Owns(&corev1.Service{}).
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
@@ -486,13 +491,11 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 		return ctrl.Result{}, fmt.Errorf("waiting for Topology requirements: %w", err)
 	}
 
-	// Define a new Deployment object
-	depl := deployment.NewDeployment(
-		ovnnorthd.Deployment(instance, serviceLabels, nbEndpoint, sbEndpoint, envVars, topology),
-		time.Duration(5)*time.Second,
-	)
+	// Define a new StatefulSet object
+	stsSpec := ovnnorthd.StatefulSet(instance, serviceLabels, nbEndpoint, sbEndpoint, envVars, topology)
+	sfset := statefulset.NewStatefulSet(stsSpec, time.Duration(5)*time.Second)
 
-	ctrlResult, err = depl.CreateOrPatch(ctx, helper)
+	ctrlResult, err = sfset.CreateOrPatch(ctx, helper)
 	if err != nil {
 		instance.Status.Conditions.Set(condition.FalseCondition(
 			condition.DeploymentReadyCondition,
@@ -510,18 +513,29 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 		return ctrlResult, nil
 	}
 
-	deploy := depl.GetDeployment()
-	if deploy.Generation == deploy.Status.ObservedGeneration {
-		instance.Status.ReadyCount = deploy.Status.ReadyReplicas
+	statefulset := sfset.GetStatefulSet()
+	if statefulset.Generation == statefulset.Status.ObservedGeneration {
+		instance.Status.ReadyCount = statefulset.Status.ReadyReplicas
 	}
 
-	// Mark the Deployment as Ready only if the number of Replicas is equals
-	// to the Deployed instances (ReadyCount), and the the Status.Replicas
-	// match Status.ReadyReplicas. If a deployment update is in progress,
+	// Clean up legacy Deployment after StatefulSet is created and ready (migration to StatefulSet)
+	// Only cleanup when StatefulSet is ready to ensure zero-downtime migration
+	if statefulset.Status.ReadyReplicas > 0 {
+		err = r.cleanupLegacyDeployment(ctx, instance, Log)
+		if err != nil {
+			Log.Error(err, "Failed to cleanup legacy deployment")
+			// Don't return error here - StatefulSet is working, cleanup is just housekeeping
+			Log.Info("StatefulSet is ready, will retry cleanup on next reconcile")
+		}
+	}
+
+	// Mark the StatefulSet as Ready only if the number of Replicas is equals
+	// to the Ready instances (ReadyCount), and the the Status.Replicas
+	// match Status.ReadyReplicas. If a statefulset update is in progress,
 	// Replicas > ReadyReplicas.
 	// In addition, make sure the controller sees the last Generation
 	// by comparing it with the ObservedGeneration.
-	if deployment.IsReady(deploy) {
+	if statefulset.Status.ReadyReplicas == *instance.Spec.Replicas && statefulset.Status.Replicas == *instance.Spec.Replicas {
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
 	} else if *instance.Spec.Replicas == 0 {
 		instance.Status.Conditions.Remove(condition.DeploymentReadyCondition)
@@ -533,6 +547,21 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 			condition.DeploymentReadyRunningMessage))
 	}
 	// create Deployment - end
+
+	// Create per-pod metrics services if metrics are enabled
+	if instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled {
+		ctrlResult, err = r.reconcileMetricsServices(ctx, helper, instance, serviceLabels)
+		if err != nil {
+			Log.Error(err, "Failed to reconcile metrics services")
+			return ctrlResult, err
+		} else if (ctrlResult != ctrl.Result{}) {
+			Log.Info("Metrics services reconciliation in progress")
+			return ctrlResult, nil
+		}
+	} else {
+		// Metrics are explicitly disabled, clean up any existing metrics services
+		r.cleanupExtraServices(ctx, instance, 0, Log)
+	}
 
 	Log.Info("Reconciled Service successfully")
 	return ctrl.Result{}, nil
@@ -566,6 +595,9 @@ func (r *OVNNorthdReconciler) generateServiceConfigMaps(
 	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(serviceName), map[string]string{})
 
 	templateParameters := make(map[string]interface{})
+	templateParameters["TLS"] = instance.Spec.TLS.Enabled()
+	templateParameters["OVN_METRICS_CERT_PATH"] = ovn_common.OVNMetricsCertPath
+	templateParameters["OVN_METRICS_KEY_PATH"] = ovn_common.OVNMetricsKeyPath
 
 	cms := []util.Template{
 		// ScriptsConfigMap
@@ -577,6 +609,148 @@ func (r *OVNNorthdReconciler) generateServiceConfigMaps(
 			Labels:        cmLabels,
 			ConfigOptions: templateParameters,
 		},
+		// ConfigConfigMap for network exporter
+		{
+			Name:          fmt.Sprintf("%s-config", instance.Name),
+			Namespace:     instance.Namespace,
+			Type:          util.TemplateTypeConfig,
+			InstanceType:  instance.Kind,
+			Labels:        cmLabels,
+			ConfigOptions: templateParameters,
+		},
 	}
 	return configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
+}
+
+// reconcileMetricsServices creates static metrics services with consistent pod assignment
+func (r *OVNNorthdReconciler) reconcileMetricsServices(
+	ctx context.Context,
+	helper *helper.Helper,
+	instance *ovnv1.OVNNorthd,
+	serviceLabels map[string]string,
+) (ctrl.Result, error) {
+	Log := r.GetLogger(ctx)
+
+	// Get the desired number of replicas from the instance
+	desiredReplicas := int32(0)
+	if instance.Spec.Replicas != nil {
+		desiredReplicas = *instance.Spec.Replicas
+	}
+
+	// Create per-pod metrics services using StatefulSet naming convention
+	// This follows the same pattern as OVNDBCluster - service name matches pod name
+	for i := int32(0); i < desiredReplicas; i++ {
+		podName := fmt.Sprintf("%s-%d", ovnv1.ServiceNameOVNNorthd, i)
+		serviceName := podName
+
+		// Create StatefulSet pod-specific labels
+		metricsServiceLabels := util.MergeMaps(serviceLabels, map[string]string{
+			"type": "metrics",
+		})
+
+		// StatefulSet pods have predictable names and stable labels
+		metricsSelectorLabels := map[string]string{
+			common.AppSelector:                   ovnv1.ServiceNameOVNNorthd,
+			"statefulset.kubernetes.io/pod-name": podName,
+		}
+
+		// Create the metrics service using the reusable service utility
+		svc, err := service.NewService(
+			ovnnorthd.MetricsService(serviceName, instance, metricsServiceLabels, metricsSelectorLabels),
+			time.Duration(5)*time.Second,
+			nil,
+		)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		ctrlResult, err := svc.CreateOrPatch(ctx, helper)
+		if err != nil {
+			return ctrl.Result{}, err
+		} else if (ctrlResult != ctrl.Result{}) {
+			return ctrlResult, nil
+		}
+	}
+
+	// Clean up extra services if we scaled down
+	r.cleanupExtraServices(ctx, instance, desiredReplicas, Log)
+
+	return ctrl.Result{}, nil
+}
+
+// cleanupExtraServices removes metrics services beyond the desired replica count
+func (r *OVNNorthdReconciler) cleanupExtraServices(
+	ctx context.Context,
+	instance *ovnv1.OVNNorthd,
+	desiredReplicas int32,
+	Log logr.Logger,
+) {
+	// Look for services with indices >= desiredReplicas using StatefulSet naming
+	for i := desiredReplicas; i < 32; i++ { // Check up to max replicas (32)
+		podName := fmt.Sprintf("%s-%d", ovnv1.ServiceNameOVNNorthd, i)
+		serviceName := podName
+
+		// Try to delete service
+		svc := &corev1.Service{}
+		err := r.Client.Get(ctx, types.NamespacedName{Name: serviceName, Namespace: instance.Namespace}, svc)
+		if err == nil {
+			// Service exists, delete it
+			Log.Info(fmt.Sprintf("Deleting extra metrics service %s (scaled down)", serviceName))
+			err = r.Client.Delete(ctx, svc)
+			if err != nil && !k8s_errors.IsNotFound(err) {
+				Log.Error(err, fmt.Sprintf("Failed to delete extra service %s", serviceName))
+			}
+		}
+	}
+}
+
+// cleanupLegacyDeployment removes the old Deployment when migrating to StatefulSet
+// This is called only after the StatefulSet is ready to ensure zero-downtime migration
+func (r *OVNNorthdReconciler) cleanupLegacyDeployment(
+	ctx context.Context,
+	instance *ovnv1.OVNNorthd,
+	Log logr.Logger,
+) error {
+	deploymentName := ovnv1.ServiceNameOVNNorthd
+
+	// Check if legacy deployment exists
+	deployment := &appsv1.Deployment{}
+	err := r.Client.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: instance.Namespace}, deployment)
+	if err != nil {
+		if k8s_errors.IsNotFound(err) {
+			// Deployment doesn't exist, migration already complete
+			Log.V(1).Info("No legacy deployment found, migration already complete")
+			return nil
+		}
+		return fmt.Errorf("failed to check for legacy deployment %s: %w", deploymentName, err)
+	}
+
+	// Deployment exists, check if it's owned by this OVNNorthd instance
+	for _, ownerRef := range deployment.OwnerReferences {
+		if ownerRef.Kind == "OVNNorthd" && ownerRef.Name == instance.Name {
+			Log.Info("StatefulSet is ready, now cleaning up legacy deployment for zero-downtime migration",
+				"deployment", deploymentName, "replicas", *deployment.Spec.Replicas)
+
+			// Optional: Scale down deployment to 0 first for graceful shutdown
+			if deployment.Spec.Replicas != nil && *deployment.Spec.Replicas > 0 {
+				deployment.Spec.Replicas = &[]int32{0}[0]
+				err = r.Client.Update(ctx, deployment)
+				if err != nil {
+					Log.Error(err, "Failed to scale down legacy deployment, proceeding with deletion")
+				} else {
+					Log.Info("Scaled down legacy deployment to 0 replicas before deletion")
+				}
+			}
+
+			// Delete the deployment
+			err = r.Client.Delete(ctx, deployment)
+			if err != nil && !k8s_errors.IsNotFound(err) {
+				return fmt.Errorf("failed to delete legacy deployment %s: %w", deploymentName, err)
+			}
+			Log.Info("Successfully deleted legacy deployment, migration to StatefulSet complete", "deployment", deploymentName)
+			break
+		}
+	}
+
+	return nil
 }

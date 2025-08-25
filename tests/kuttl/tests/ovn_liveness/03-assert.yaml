@@ -11,5 +11,7 @@ metadata:
     service: ovn-northd
 status:
   containerStatuses:
+    - name: openstack-network-exporter
+      restartCount: 0
     - name: ovn-northd
       restartCount: 1

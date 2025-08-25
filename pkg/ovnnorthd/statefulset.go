@@ -34,15 +34,15 @@ const (
 	ServiceCommand = "/usr/bin/ovn-northd"
 )
 
-// Deployment func
-func Deployment(
+// StatefulSet func
+func StatefulSet(
 	instance *ovnv1.OVNNorthd,
 	labels map[string]string,
 	nbEndpoint string,
 	sbEndpoint string,
 	envVars map[string]env.Setter,
 	topology *topologyv1.Topology,
-) *appsv1.Deployment {
+) *appsv1.StatefulSet {
 
 	livenessProbe := &corev1.Probe{
 		TimeoutSeconds:      1,
@@ -104,12 +104,74 @@ func Deployment(
 	// TODO: Make confs customizable
 	envVars["OVN_RUNDIR"] = env.SetValue("/tmp")
 
-	deployment := &appsv1.Deployment{
+	// Create container list starting with the main northd container
+	containers := []corev1.Container{
+		{
+			Name:                     ovnv1.ServiceNameOVNNorthd,
+			Command:                  cmd,
+			Args:                     args,
+			Image:                    instance.Spec.ContainerImage,
+			SecurityContext:          getOVNNorthdSecurityContext(),
+			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			Resources:                instance.Spec.Resources,
+			ReadinessProbe:           readinessProbe,
+			LivenessProbe:            livenessProbe,
+			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+			VolumeMounts:             volumeMounts,
+		},
+	}
+
+	// Add metrics sidecar container if MetricsEnabled is true (default)
+	if instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled {
+		metricsVolumeMounts := []corev1.VolumeMount{
+			{
+				Name:      "ovn-rundir",
+				MountPath: "/tmp",
+			},
+			{
+				Name:      "config",
+				MountPath: "/etc/config",
+				ReadOnly:  true,
+			},
+		}
+
+		// add TLS volume mounts if TLS is enabled - use dedicated metrics certificate
+		if instance.Spec.TLS.Enabled() {
+			metricsSvc := tls.Service{
+				SecretName: "cert-ovn-metrics",
+				CertMount:  ptr.To(ovn_common.OVNMetricsCertPath),
+				KeyMount:   ptr.To(ovn_common.OVNMetricsKeyPath),
+				CaMount:    ptr.To(ovn_common.OVNDbCaCertPath), // Use the same CA for now
+			}
+			// Add the metrics certificate volume to the main volumes list
+			// Use "metrics-certs" as volume name to stay within 63 char limit
+			volumes = append(volumes, metricsSvc.CreateVolume("metrics-certs"))
+			metricsVolumeMounts = append(metricsVolumeMounts, metricsSvc.CreateVolumeMounts("metrics-certs")...)
+		}
+
+		metricsContainer := corev1.Container{
+			Name:    "openstack-network-exporter",
+			Image:   instance.Spec.ExporterImage,
+			Command: []string{"/app/openstack-network-exporter"},
+			Env: []corev1.EnvVar{
+				{
+					Name:  "OPENSTACK_NETWORK_EXPORTER_YAML",
+					Value: "/etc/config/openstack-network-exporter.yaml",
+				},
+			},
+			VolumeMounts: metricsVolumeMounts,
+		}
+		containers = append(containers, metricsContainer)
+	}
+
+	statefulSet := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ovnv1.ServiceNameOVNNorthd,
 			Namespace: instance.Namespace,
 		},
-		Spec: appsv1.DeploymentSpec{
+		Spec: appsv1.StatefulSetSpec{
+			ServiceName:         ovnv1.ServiceNameOVNNorthd,
+			PodManagementPolicy: appsv1.ParallelPodManagement,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
@@ -120,36 +182,22 @@ func Deployment(
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: instance.RbacResourceName(),
-					Containers: []corev1.Container{
-						{
-							Name:                     ovnv1.ServiceNameOVNNorthd,
-							Command:                  cmd,
-							Args:                     args,
-							Image:                    instance.Spec.ContainerImage,
-							SecurityContext:          getOVNNorthdSecurityContext(),
-							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-							Resources:                instance.Spec.Resources,
-							ReadinessProbe:           readinessProbe,
-							LivenessProbe:            livenessProbe,
-							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-							VolumeMounts:             volumeMounts,
-						},
-					},
-					Volumes: volumes,
+					Containers:         containers,
+					Volumes:            volumes,
 				},
 			},
 		},
 	}
 	if instance.Spec.NodeSelector != nil {
-		deployment.Spec.Template.Spec.NodeSelector = *instance.Spec.NodeSelector
+		statefulSet.Spec.Template.Spec.NodeSelector = *instance.Spec.NodeSelector
 	}
 	if topology != nil {
-		topology.ApplyTo(&deployment.Spec.Template)
+		topology.ApplyTo(&statefulSet.Spec.Template)
 	} else {
 		// If possible two pods of the same service should not
 		// run on the same worker node. If this is not possible
 		// the get still created on the same worker node.
-		deployment.Spec.Template.Spec.Affinity = affinity.DistributePods(
+		statefulSet.Spec.Template.Spec.Affinity = affinity.DistributePods(
 			common.AppSelector,
 			[]string{
 				ovnv1.ServiceNameOVNNorthd,
@@ -158,5 +206,5 @@ func Deployment(
 		)
 	}
 
-	return deployment
+	return statefulSet
 }

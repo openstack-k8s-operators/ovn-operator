@@ -1,0 +1,11 @@
+#
+# Check for:
+#
+# - Exported metrics
+
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 60
+commands:
+    - script: |
+        oc rsh -n $NAMESPACE statefulset/ovn-northd curl http://ovn-northd-0.${NAMESPACE}.svc:1981/metrics | grep ^ovn_northd_status

@@ -4,10 +4,10 @@
 # No OVNNorthd CR
 # No OVNDBCluster CR
 # No OVNController CR
-# No Deployment for OVNNorthd CR
+# No StatefulSet for OVNNorthd CR
 # No DaemonSet for OVNController CR
 # No DaemonSet for OVNController-OVS CR
-# No Pods in ovn Deployment
+# No Pods in ovn StatefulSet
 # No OVN Services
 #
 apiVersion: ovn.openstack.org/v1beta1
@@ -39,7 +39,7 @@ metadata:
   name: ovncontroller-sample
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: ovn-northd
 ---
