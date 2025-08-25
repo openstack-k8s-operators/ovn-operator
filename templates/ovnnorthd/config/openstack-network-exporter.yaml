@@ -1,0 +1,6 @@
+ovn-rundir: /tmp
+collectors: ['ovnnorthd']
+{{- if .TLS }}
+tls-cert: {{ .OVN_METRICS_CERT_PATH }}
+tls-key: {{ .OVN_METRICS_KEY_PATH }}
+{{- end }}

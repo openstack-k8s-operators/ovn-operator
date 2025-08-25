@@ -104,6 +104,66 @@ func Deployment(
 	// TODO: Make confs customizable
 	envVars["OVN_RUNDIR"] = env.SetValue("/tmp")
 
+	// Create container list starting with the main northd container
+	containers := []corev1.Container{
+		{
+			Name:                     ovnv1.ServiceNameOVNNorthd,
+			Command:                  cmd,
+			Args:                     args,
+			Image:                    instance.Spec.ContainerImage,
+			SecurityContext:          getOVNNorthdSecurityContext(),
+			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			Resources:                instance.Spec.Resources,
+			ReadinessProbe:           readinessProbe,
+			LivenessProbe:            livenessProbe,
+			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+			VolumeMounts:             volumeMounts,
+		},
+	}
+
+	// Add metrics sidecar container if MetricsEnabled is true (default)
+	if instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled {
+		metricsVolumeMounts := []corev1.VolumeMount{
+			{
+				Name:      "ovn-rundir",
+				MountPath: "/tmp",
+			},
+			{
+				Name:      "config",
+				MountPath: "/etc/config",
+				ReadOnly:  true,
+			},
+		}
+
+		// add TLS volume mounts if TLS is enabled - use dedicated metrics certificate
+		if instance.Spec.TLS.Enabled() {
+			metricsSvc := tls.Service{
+				SecretName: "cert-ovn-metrics",
+				CertMount:  ptr.To(ovn_common.OVNMetricsCertPath),
+				KeyMount:   ptr.To(ovn_common.OVNMetricsKeyPath),
+				CaMount:    ptr.To(ovn_common.OVNDbCaCertPath), // Use the same CA for now
+			}
+			// Add the metrics certificate volume to the main volumes list
+			// Use "metrics-certs" as volume name to stay within 63 char limit
+			volumes = append(volumes, metricsSvc.CreateVolume("metrics-certs"))
+			metricsVolumeMounts = append(metricsVolumeMounts, metricsSvc.CreateVolumeMounts("metrics-certs")...)
+		}
+
+		metricsContainer := corev1.Container{
+			Name:    "openstack-network-exporter",
+			Image:   instance.Spec.ExporterImage,
+			Command: []string{"/app/openstack-network-exporter"},
+			Env: []corev1.EnvVar{
+				{
+					Name:  "OPENSTACK_NETWORK_EXPORTER_YAML",
+					Value: "/etc/config/openstack-network-exporter.yaml",
+				},
+			},
+			VolumeMounts: metricsVolumeMounts,
+		}
+		containers = append(containers, metricsContainer)
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ovnv1.ServiceNameOVNNorthd,
@@ -120,22 +180,8 @@ func Deployment(
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: instance.RbacResourceName(),
-					Containers: []corev1.Container{
-						{
-							Name:                     ovnv1.ServiceNameOVNNorthd,
-							Command:                  cmd,
-							Args:                     args,
-							Image:                    instance.Spec.ContainerImage,
-							SecurityContext:          getOVNNorthdSecurityContext(),
-							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-							Resources:                instance.Spec.Resources,
-							ReadinessProbe:           readinessProbe,
-							LivenessProbe:            livenessProbe,
-							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-							VolumeMounts:             volumeMounts,
-						},
-					},
-					Volumes: volumes,
+					Containers:         containers,
+					Volumes:            volumes,
 				},
 			},
 		},
