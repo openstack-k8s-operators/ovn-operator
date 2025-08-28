@@ -71,7 +71,7 @@ func (r *OVNNorthdReconciler) GetScheme() *runtime.Scheme {
 	return r.Scheme
 }
 
-// getlog returns a logger object with a prefix of "conroller.name" and aditional controller context fields
+// GetLogger returns a logger object with a prefix of "controller.name" and additional controller context fields
 func (r *OVNNorthdReconciler) GetLogger(ctx context.Context) logr.Logger {
 	return log.FromContext(ctx).WithName("Controllers").WithName("OVNNorthd")
 }
@@ -101,7 +101,7 @@ func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// Fetch the OVNNorthd instance
 	instance := &ovnv1.OVNNorthd{}
-	err := r.Client.Get(ctx, req.NamespacedName, instance)
+	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if k8s_errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -263,7 +263,7 @@ func (r *OVNNorthdReconciler) findObjectsForSrc(ctx context.Context, src client.
 			FieldSelector: fields.OneTermEqualSelector(field, src.GetName()),
 			Namespace:     src.GetNamespace(),
 		}
-		err := r.Client.List(ctx, crList, listOps)
+		err := r.List(ctx, crList, listOps)
 		if err != nil {
 			Log.Error(err, fmt.Sprintf("listing %s for field: %s - %s", crList.GroupVersionKind().Kind, field, src.GetNamespace()))
 			return requests
@@ -405,7 +405,7 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 					condition.TLSInputReadyCondition,
 					condition.RequestedReason,
 					condition.SeverityInfo,
-					fmt.Sprintf(condition.TLSInputReadyWaitingMessage, instance.Spec.TLS.CaBundleSecretName)))
+					condition.TLSInputReadyWaitingMessage, instance.Spec.TLS.CaBundleSecretName))
 				return ctrl.Result{}, nil
 			}
 			instance.Status.Conditions.Set(condition.FalseCondition(
@@ -431,7 +431,7 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 					condition.TLSInputReadyCondition,
 					condition.RequestedReason,
 					condition.SeverityInfo,
-					fmt.Sprintf(condition.TLSInputReadyWaitingMessage, err.Error())))
+					condition.TLSInputReadyWaitingMessage, err.Error()))
 				return ctrl.Result{}, nil
 			}
 			instance.Status.Conditions.Set(condition.FalseCondition(
