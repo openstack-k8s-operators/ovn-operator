@@ -36,6 +36,7 @@ import (
 // OVNNorthdDefaults -
 type OVNNorthdDefaults struct {
 	ContainerImageURL string
+	ExporterImageURL  string
 }
 
 var ovnNorthdDefaults OVNNorthdDefaults
@@ -71,6 +72,9 @@ func (r *OVNNorthd) Default() {
 func (spec *OVNNorthdSpec) Default() {
 	if spec.ContainerImage == "" {
 		spec.ContainerImage = ovnNorthdDefaults.ContainerImageURL
+	}
+	if spec.ExporterImage == "" {
+		spec.ExporterImage = ovnNorthdDefaults.ExporterImageURL
 	}
 	spec.OVNNorthdSpecCore.Default()
 }

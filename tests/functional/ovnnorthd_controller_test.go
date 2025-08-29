@@ -369,6 +369,11 @@ var _ = Describe("OVNNorthd controller", func() {
 				Name:      OvnDbCertSecretName,
 				Namespace: namespace,
 			}))
+			// Create metrics certificate secret for TLS metrics
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      "cert-ovn-metrics",
+				Namespace: namespace,
+			}))
 
 			deploymentName := types.NamespacedName{
 				Namespace: namespace,
@@ -398,6 +403,24 @@ var _ = Describe("OVNNorthd controller", func() {
 				ContainElement(ContainSubstring("--certificate=")),
 				ContainElement(ContainSubstring("--ca-cert=")),
 			))
+
+			// Verify metrics container exists and has correct configuration
+			Expect(d.Spec.Template.Spec.Containers).To(HaveLen(2))
+			metricsC := d.Spec.Template.Spec.Containers[1]
+			Expect(metricsC.Name).To(Equal("openstack-network-exporter"))
+			Expect(metricsC.Command).To(Equal([]string{"/app/openstack-network-exporter"}))
+
+			// Check metrics container basic volume mounts
+			th.AssertVolumeMountExists("config", "", metricsC.VolumeMounts)
+			th.AssertVolumeMountExists("ovn-rundir", "", metricsC.VolumeMounts)
+
+			// Check metrics container TLS volume mounts
+			th.AssertVolumeMountExists("metrics-certs-tls-certs", "tls.key", metricsC.VolumeMounts)
+			th.AssertVolumeMountExists("metrics-certs-tls-certs", "tls.crt", metricsC.VolumeMounts)
+			th.AssertVolumeMountExists("metrics-certs-tls-certs", "ca.crt", metricsC.VolumeMounts)
+
+			// Check metrics TLS volume exists
+			th.AssertVolumeExists("metrics-certs-tls-certs", d.Spec.Template.Spec.Volumes)
 
 			th.ExpectCondition(
 				ovnNorthdName,
@@ -499,6 +522,80 @@ var _ = Describe("OVNNorthd controller", func() {
 			}, timeout, interval).Should(Succeed())
 		})
 	})
+
+	When("OVNNorthd is created with default metrics settings", func() {
+		var ovnNorthdName types.NamespacedName
+
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			spec := GetDefaultOVNNorthdSpec()
+			ovnNorthdName = ovn.CreateOVNNorthd(nil, namespace, spec)
+			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
+		})
+
+		It("creates a Deployment with metrics sidecar container", func() {
+			deploymentName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-northd",
+			}
+
+			d := th.GetDeployment(deploymentName)
+
+			// Verify both main and metrics containers exist
+			Expect(d.Spec.Template.Spec.Containers).To(HaveLen(2))
+
+			// Check main container
+			mainC := d.Spec.Template.Spec.Containers[0]
+			Expect(mainC.Name).To(Equal("ovn-northd"))
+
+			// Check metrics container
+			metricsC := d.Spec.Template.Spec.Containers[1]
+			Expect(metricsC.Name).To(Equal("openstack-network-exporter"))
+			Expect(metricsC.Command).To(Equal([]string{"/app/openstack-network-exporter"}))
+
+			// Check metrics container environment
+			Expect(metricsC.Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSTACK_NETWORK_EXPORTER_YAML",
+				Value: "/etc/config/openstack-network-exporter.yaml",
+			}))
+
+			// Check metrics container volume mounts (without TLS)
+			th.AssertVolumeMountExists("config", "", metricsC.VolumeMounts)
+			th.AssertVolumeMountExists("ovn-rundir", "", metricsC.VolumeMounts)
+		})
+	})
+
+	When("OVNNorthd is created with metrics disabled", func() {
+		var ovnNorthdName types.NamespacedName
+
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			spec := GetDefaultOVNNorthdSpec()
+			metricsEnabled := false
+			spec.MetricsEnabled = &metricsEnabled
+			ovnNorthdName = ovn.CreateOVNNorthd(nil, namespace, spec)
+			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
+		})
+
+		It("creates a Deployment without metrics sidecar container", func() {
+			deploymentName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-northd",
+			}
+
+			d := th.GetDeployment(deploymentName)
+
+			// Verify only main container exists (no metrics sidecar)
+			Expect(d.Spec.Template.Spec.Containers).To(HaveLen(1))
+
+			// Check main container
+			mainC := d.Spec.Template.Spec.Containers[0]
+			Expect(mainC.Name).To(Equal("ovn-northd"))
+		})
+	})
+
 	When("OVNNorthd is created with topologyref", func() {
 		var ovnNorthdName types.NamespacedName
 		var deploymentName types.NamespacedName

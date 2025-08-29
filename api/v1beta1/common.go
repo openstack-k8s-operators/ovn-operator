@@ -31,6 +31,7 @@ func SetupDefaults() {
 	// Acquire environmental defaults and initialize OVNNorthd defaults with them
 	ovnNorthdDefaults := OVNNorthdDefaults{
 		ContainerImageURL: util.GetEnvVar("RELATED_IMAGE_OVN_NORTHD_IMAGE_URL_DEFAULT", OVNNorthdContainerImage),
+		ExporterImageURL:  util.GetEnvVar("RELATED_IMAGE_OPENSTACK_NETWORK_EXPORTER_IMAGE_URL_DEFAULT", OpenstackNetworkExporterImage),
 	}
 
 	SetupOVNNorthdDefaults(ovnNorthdDefaults)

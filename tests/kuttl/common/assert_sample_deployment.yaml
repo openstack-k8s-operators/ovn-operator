@@ -158,6 +158,13 @@ spec:
           successThreshold: 1
           timeoutSeconds: 1
         resources: {}
+      - command:
+        - /app/openstack-network-exporter
+        env:
+        - name: OPENSTACK_NETWORK_EXPORTER_YAML
+          value: /etc/config/openstack-network-exporter.yaml
+        imagePullPolicy: IfNotPresent
+        name: openstack-network-exporter
       serviceAccount: ovnnorthd-ovnnorthd-sample
       serviceAccountName: ovnnorthd-ovnnorthd-sample
       restartPolicy: Always
