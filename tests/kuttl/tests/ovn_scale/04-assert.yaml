@@ -15,7 +15,7 @@ spec:
   replicas: 0
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: ovn-northd
 spec:

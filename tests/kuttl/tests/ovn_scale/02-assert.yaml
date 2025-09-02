@@ -17,10 +17,10 @@ status:
   readyCount: 3
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: ovn-northd
 spec:
   replicas: 3
 status:
-  availableReplicas: 3
+  readyReplicas: 3

@@ -4,7 +4,7 @@
 # - 1 OVNNorthd CR
 # - 2 OVNDBCluster CR (ovndbcluster-nb-sample, ovndbcluster-sb-sample)
 # - 1 OVNController CR
-# - Deployment with 1 Pod for OVNNorthd CR
+# - StatefulSet with 1 Pod for OVNNorthd CR
 # - Daemonset for OVNController CR
 # - Daemonset for OVNControllerOVS CR
 # - ovsdbserver-nb-0 Pod
@@ -109,11 +109,12 @@ status:
     type: TLSInputReady
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: ovn-northd
 spec:
   replicas: 1
+  serviceName: ovn-northd
   template:
     metadata:
       labels:
@@ -158,11 +159,17 @@ spec:
           successThreshold: 1
           timeoutSeconds: 1
         resources: {}
+      - command:
+        - /app/openstack-network-exporter
+        env:
+        - name: OPENSTACK_NETWORK_EXPORTER_YAML
+          value: /etc/config/openstack-network-exporter.yaml
+        imagePullPolicy: IfNotPresent
+        name: openstack-network-exporter
       serviceAccount: ovnnorthd-ovnnorthd-sample
       serviceAccountName: ovnnorthd-ovnnorthd-sample
-      restartPolicy: Always
 status:
-  availableReplicas: 1
+  readyReplicas: 1
   replicas: 1
 ---
 apiVersion: apps/v1

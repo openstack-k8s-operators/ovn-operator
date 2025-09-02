@@ -31,6 +31,8 @@ const (
 
 	// OVNNorthdContainerImage is the fall-back container image for OVNNorthd
 	OVNNorthdContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-northd:current-podified"
+	// OpenstackNetworkExporterImage is the fall-back container image for openstack-network-exporter
+	OpenstackNetworkExporterImage = "quay.io/openstack-k8s-operators/openstack-network-exporter:current-podified"
 	// ServiceNameOVNNorthd -
 	ServiceNameOVNNorthd = "ovn-northd"
 	// TODO: remove when all external consumers switch to ServiceNameOVNNorthd
@@ -42,6 +44,11 @@ type OVNNorthdSpec struct {
 	// +kubebuilder:validation:Required
 	// ContainerImage - Container Image URL (will be set to environmental default if empty)
 	ContainerImage string `json:"containerImage"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default="quay.io/openstack-k8s-operators/openstack-network-exporter:current-podified"
+	// ExporterImage - Container Image URL for the openstack-network-exporter metrics sidecar (will be set to environmental default if empty)
+	ExporterImage string `json:"exporterImage,omitempty"`
 
 	OVNNorthdSpecCore `json:",inline"`
 }
@@ -84,6 +91,11 @@ type OVNNorthdSpecCore struct {
 	// TopologyRef to apply the Topology defined by the associated CR referenced
 	// by name
 	TopologyRef *topologyv1.TopoRef `json:"topologyRef,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=true
+	// MetricsEnabled enables the metrics sidecar container for collecting OVN metrics
+	MetricsEnabled *bool `json:"metricsEnabled,omitempty"`
 }
 
 // OVNNorthdStatus defines the observed state of OVNNorthd

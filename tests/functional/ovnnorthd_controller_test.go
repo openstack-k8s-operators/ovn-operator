@@ -70,18 +70,18 @@ var _ = Describe("OVNNorthd controller", func() {
 		})
 
 		When("OVNDBCluster instances are available", func() {
-			It("should create a Deployment with the ovn connection CLI args set based on the OVNDBCluster", func() {
+			It("should create a StatefulSet with the ovn connection CLI args set based on the OVNDBCluster", func() {
 				OVNNorthd := ovn.GetOVNNorthd(ovnNorthdName)
 				dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 				DeferCleanup(DeleteOVNDBClusters, dbs)
 
-				deplName := types.NamespacedName{
+				stsName := types.NamespacedName{
 					Namespace: namespace,
 					Name:      "ovn-northd",
 				}
 
-				depl := th.GetDeployment(deplName)
-				Expect(depl.Spec.Template.Spec.Containers[0].Args).To(Equal([]string{
+				sts := th.GetStatefulSet(stsName)
+				Expect(sts.Spec.Template.Spec.Containers[0].Args).To(Equal([]string{
 					"-vfile:off",
 					"-vconsole:info",
 					fmt.Sprintf("--n-threads=%d", *OVNNorthd.Spec.NThreads),
@@ -105,14 +105,14 @@ var _ = Describe("OVNNorthd controller", func() {
 			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
 		})
 
-		It("should create a Deployment with 0 replicas", func() {
-			deplName := types.NamespacedName{
+		It("should create a StatefulSet with 0 replicas", func() {
+			stsName := types.NamespacedName{
 				Namespace: namespace,
 				Name:      "ovn-northd",
 			}
 
-			depl := th.GetDeployment(deplName)
-			Expect(*(depl.Spec.Replicas)).Should(Equal(int32(0)))
+			sts := th.GetStatefulSet(stsName)
+			Expect(*(sts.Spec.Replicas)).Should(Equal(int32(0)))
 		})
 
 		It("should not have deploy ready condition", func() {
@@ -132,81 +132,29 @@ var _ = Describe("OVNNorthd controller", func() {
 		})
 	})
 
-	When("A OVNNorthd Deployment rollout is progressing", func() {
+	When("A OVNNorthd StatefulSet is being created", func() {
 		var ovnNorthdName types.NamespacedName
-		var deploymentName types.NamespacedName
+		var statefulSetName types.NamespacedName
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
 			spec := GetDefaultOVNNorthdSpec()
 			ovnNorthdName = ovn.CreateOVNNorthd(nil, namespace, spec)
 			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
-			deploymentName = types.NamespacedName{
+			statefulSetName = types.NamespacedName{
 				Namespace: namespace,
 				Name:      "ovn-northd",
 			}
-			th.SimulateDeploymentProgressing(deploymentName)
 		})
 
-		It("shows the deployment progressing in DeploymentReadyCondition", func() {
-			th.ExpectConditionWithDetails(
-				ovnNorthdName,
-				ConditionGetterFunc(OVNNorthdConditionGetter),
-				condition.DeploymentReadyCondition,
-				corev1.ConditionFalse,
-				condition.RequestedReason,
-				condition.DeploymentReadyRunningMessage,
-			)
-			th.ExpectCondition(
-				ovnNorthdName,
-				ConditionGetterFunc(OVNNorthdConditionGetter),
-				condition.ReadyCondition,
-				corev1.ConditionFalse,
-			)
+		It("creates a StatefulSet successfully", func() {
+			sts := th.GetStatefulSet(statefulSetName)
+			Expect(*sts.Spec.Replicas).Should(Equal(int32(1)))
+			Expect(sts.Spec.ServiceName).Should(Equal("ovn-northd"))
 		})
 
-		It("still shows the deployment progressing in DeploymentReadyCondition when rollout hits ProgressDeadlineExceeded", func() {
-			th.SimulateDeploymentProgressDeadlineExceeded(deploymentName)
-			th.ExpectConditionWithDetails(
-				ovnNorthdName,
-				ConditionGetterFunc(OVNNorthdConditionGetter),
-				condition.DeploymentReadyCondition,
-				corev1.ConditionFalse,
-				condition.RequestedReason,
-				condition.DeploymentReadyRunningMessage,
-			)
-			th.ExpectCondition(
-				ovnNorthdName,
-				ConditionGetterFunc(OVNNorthdConditionGetter),
-				condition.ReadyCondition,
-				corev1.ConditionFalse,
-			)
-		})
-
-		It("reaches Ready when deployment rollout finished", func() {
-			th.ExpectConditionWithDetails(
-				ovnNorthdName,
-				ConditionGetterFunc(OVNNorthdConditionGetter),
-				condition.DeploymentReadyCondition,
-				corev1.ConditionFalse,
-				condition.RequestedReason,
-				condition.DeploymentReadyRunningMessage,
-			)
-			th.ExpectCondition(
-				ovnNorthdName,
-				ConditionGetterFunc(OVNNorthdConditionGetter),
-				condition.ReadyCondition,
-				corev1.ConditionFalse,
-			)
-
-			th.SimulateDeploymentReplicaReady(deploymentName)
-			th.ExpectCondition(
-				ovnNorthdName,
-				ConditionGetterFunc(OVNNorthdConditionGetter),
-				condition.DeploymentReadyCondition,
-				corev1.ConditionTrue,
-			)
-
+		It("becomes ready when StatefulSet replicas are ready", func() {
+			th.SimulateStatefulSetReplicaReady(statefulSetName)
 			th.ExpectCondition(
 				ovnNorthdName,
 				ConditionGetterFunc(OVNNorthdConditionGetter),
@@ -214,11 +162,12 @@ var _ = Describe("OVNNorthd controller", func() {
 				corev1.ConditionTrue,
 			)
 		})
+
 	})
 
 	When("OVNNorthd is created with nodeSelector", func() {
 		var ovnNorthdName types.NamespacedName
-		var deploymentName types.NamespacedName
+		var statefulSetName types.NamespacedName
 
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
@@ -230,22 +179,22 @@ var _ = Describe("OVNNorthd controller", func() {
 			spec.NodeSelector = &nodeSelector
 			ovnNorthdName = ovn.CreateOVNNorthd(nil, namespace, spec)
 			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
-			deploymentName = types.NamespacedName{
+			statefulSetName = types.NamespacedName{
 				Namespace: namespace,
 				Name:      "ovn-northd",
 			}
-			th.SimulateDeploymentReplicaReady(deploymentName)
+			th.SimulateStatefulSetReplicaReady(statefulSetName)
 		})
 
 		It("sets nodeSelector in resource specs", func() {
 			Eventually(func(g Gomega) {
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
 			}, timeout, interval).Should(Succeed())
 		})
 
 		It("updates nodeSelector in resource specs when changed", func() {
 			Eventually(func(g Gomega) {
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
@@ -258,13 +207,13 @@ var _ = Describe("OVNNorthd controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo2": "bar2"}))
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo2": "bar2"}))
 			}, timeout, interval).Should(Succeed())
 		})
 
 		It("removes nodeSelector from resource specs when cleared", func() {
 			Eventually(func(g Gomega) {
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
@@ -275,13 +224,13 @@ var _ = Describe("OVNNorthd controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(BeNil())
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.NodeSelector).To(BeNil())
 			}, timeout, interval).Should(Succeed())
 		})
 
 		It("removes nodeSelector from resource specs when nilled", func() {
 			Eventually(func(g Gomega) {
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.NodeSelector).To(Equal(map[string]string{"foo": "bar"}))
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
@@ -291,7 +240,7 @@ var _ = Describe("OVNNorthd controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.NodeSelector).To(BeNil())
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.NodeSelector).To(BeNil())
 			}, timeout, interval).Should(Succeed())
 		})
 
@@ -360,7 +309,7 @@ var _ = Describe("OVNNorthd controller", func() {
 			)
 		})
 
-		It("creates a Deployment with TLS certs attached", func() {
+		It("creates a StatefulSet with TLS certs attached", func() {
 			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
 				Name:      CABundleSecretName,
 				Namespace: namespace,
@@ -369,22 +318,21 @@ var _ = Describe("OVNNorthd controller", func() {
 				Name:      OvnDbCertSecretName,
 				Namespace: namespace,
 			}))
-
-			deploymentName := types.NamespacedName{
+			// Create metrics certificate secret for TLS metrics
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      "cert-ovn-metrics",
 				Namespace: namespace,
-				Name:      "ovn-northd",
-			}
-			th.SimulateDeploymentReadyWithPods(
-				deploymentName, map[string][]string{},
-			)
+			}))
 
-			d := th.GetDeployment(deploymentName)
+			th.SimulateStatefulSetReplicaReady(types.NamespacedName{Namespace: namespace, Name: "ovn-northd"})
+
+			sts := th.GetStatefulSet(types.NamespacedName{Namespace: namespace, Name: "ovn-northd"})
 
 			//  check TLS volumes
-			th.AssertVolumeExists(CABundleSecretName, d.Spec.Template.Spec.Volumes)
-			th.AssertVolumeExists("ovn-northd-tls-certs", d.Spec.Template.Spec.Volumes)
+			th.AssertVolumeExists(CABundleSecretName, sts.Spec.Template.Spec.Volumes)
+			th.AssertVolumeExists("ovn-northd-tls-certs", sts.Spec.Template.Spec.Volumes)
 
-			svcC := d.Spec.Template.Spec.Containers[0]
+			svcC := sts.Spec.Template.Spec.Containers[0]
 
 			// check TLS volume mounts
 			th.AssertVolumeMountExists(CABundleSecretName, "tls-ca-bundle.pem", svcC.VolumeMounts)
@@ -398,6 +346,24 @@ var _ = Describe("OVNNorthd controller", func() {
 				ContainElement(ContainSubstring("--certificate=")),
 				ContainElement(ContainSubstring("--ca-cert=")),
 			))
+
+			// Verify metrics container exists and has correct configuration
+			Expect(sts.Spec.Template.Spec.Containers).To(HaveLen(2))
+			metricsC := sts.Spec.Template.Spec.Containers[1]
+			Expect(metricsC.Name).To(Equal("openstack-network-exporter"))
+			Expect(metricsC.Command).To(Equal([]string{"/app/openstack-network-exporter"}))
+
+			// Check metrics container basic volume mounts
+			th.AssertVolumeMountExists("config", "", metricsC.VolumeMounts)
+			th.AssertVolumeMountExists("ovn-rundir", "", metricsC.VolumeMounts)
+
+			// Check metrics container TLS volume mounts
+			th.AssertVolumeMountExists("metrics-certs-tls-certs", "tls.key", metricsC.VolumeMounts)
+			th.AssertVolumeMountExists("metrics-certs-tls-certs", "tls.crt", metricsC.VolumeMounts)
+			th.AssertVolumeMountExists("metrics-certs-tls-certs", "ca.crt", metricsC.VolumeMounts)
+
+			// Check metrics TLS volume exists
+			th.AssertVolumeExists("metrics-certs-tls-certs", sts.Spec.Template.Spec.Volumes)
 
 			th.ExpectCondition(
 				ovnNorthdName,
@@ -417,16 +383,14 @@ var _ = Describe("OVNNorthd controller", func() {
 				Namespace: namespace,
 			}))
 
-			deploymentName := types.NamespacedName{
+			statefulSetName := types.NamespacedName{
 				Namespace: namespace,
 				Name:      "ovn-northd",
 			}
-			th.SimulateDeploymentReadyWithPods(
-				deploymentName, map[string][]string{},
-			)
+			th.SimulateStatefulSetReplicaReady(statefulSetName)
 
 			originalHash := GetEnvVarValue(
-				th.GetDeployment(deploymentName).Spec.Template.Spec.Containers[0].Env,
+				th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Containers[0].Env,
 				"tls-ca-bundle.pem",
 				"",
 			)
@@ -444,7 +408,7 @@ var _ = Describe("OVNNorthd controller", func() {
 			// Assert that the pod is updated
 			Eventually(func(g Gomega) {
 				newHash := GetEnvVarValue(
-					th.GetDeployment(deploymentName).Spec.Template.Spec.Containers[0].Env,
+					th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Containers[0].Env,
 					"tls-ca-bundle.pem",
 					"",
 				)
@@ -463,16 +427,14 @@ var _ = Describe("OVNNorthd controller", func() {
 				Namespace: namespace,
 			}))
 
-			deploymentName := types.NamespacedName{
+			statefulSetName := types.NamespacedName{
 				Namespace: namespace,
 				Name:      "ovn-northd",
 			}
-			th.SimulateDeploymentReadyWithPods(
-				deploymentName, map[string][]string{},
-			)
+			th.SimulateStatefulSetReplicaReady(statefulSetName)
 
 			originalHash := GetEnvVarValue(
-				th.GetDeployment(deploymentName).Spec.Template.Spec.Containers[0].Env,
+				th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Containers[0].Env,
 				"certs",
 				"",
 			)
@@ -490,7 +452,7 @@ var _ = Describe("OVNNorthd controller", func() {
 			// Assert that the pod is updated
 			Eventually(func(g Gomega) {
 				newHash := GetEnvVarValue(
-					th.GetDeployment(deploymentName).Spec.Template.Spec.Containers[0].Env,
+					th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Containers[0].Env,
 					"certs",
 					"",
 				)
@@ -499,9 +461,79 @@ var _ = Describe("OVNNorthd controller", func() {
 			}, timeout, interval).Should(Succeed())
 		})
 	})
+
+	When("OVNNorthd is created with default metrics settings", func() {
+		var ovnNorthdName types.NamespacedName
+
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			spec := GetDefaultOVNNorthdSpec()
+			ovnNorthdName = ovn.CreateOVNNorthd(nil, namespace, spec)
+			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
+		})
+
+		It("creates a StatefulSet with metrics sidecar container", func() {
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-northd",
+			}
+
+			sts := th.GetStatefulSet(statefulSetName)
+
+			// Verify both main and metrics containers exist
+			Expect(sts.Spec.Template.Spec.Containers).To(HaveLen(2))
+
+			// Check main container
+			mainC := sts.Spec.Template.Spec.Containers[0]
+			Expect(mainC.Name).To(Equal("ovn-northd"))
+
+			// Check metrics container
+			metricsC := sts.Spec.Template.Spec.Containers[1]
+			Expect(metricsC.Name).To(Equal("openstack-network-exporter"))
+			Expect(metricsC.Command).To(Equal([]string{"/app/openstack-network-exporter"}))
+
+			// Check metrics container environment
+			Expect(metricsC.Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSTACK_NETWORK_EXPORTER_YAML",
+				Value: "/etc/config/openstack-network-exporter.yaml",
+			}))
+
+			// Check metrics container volume mounts (without TLS)
+			th.AssertVolumeMountExists("config", "", metricsC.VolumeMounts)
+			th.AssertVolumeMountExists("ovn-rundir", "", metricsC.VolumeMounts)
+		})
+	})
+
+	When("OVNNorthd is created with metrics disabled", func() {
+		var ovnNorthdName types.NamespacedName
+
+		BeforeEach(func() {
+			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			spec := GetDefaultOVNNorthdSpec()
+			metricsEnabled := false
+			spec.MetricsEnabled = &metricsEnabled
+			ovnNorthdName = ovn.CreateOVNNorthd(nil, namespace, spec)
+			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
+		})
+
+		It("creates a StatefulSet without metrics sidecar container", func() {
+
+			sts := th.GetStatefulSet(types.NamespacedName{Namespace: namespace, Name: "ovn-northd"})
+
+			// Verify only main container exists (no metrics sidecar)
+			Expect(sts.Spec.Template.Spec.Containers).To(HaveLen(1))
+
+			// Check main container
+			mainC := sts.Spec.Template.Spec.Containers[0]
+			Expect(mainC.Name).To(Equal("ovn-northd"))
+		})
+	})
+
 	When("OVNNorthd is created with topologyref", func() {
 		var ovnNorthdName types.NamespacedName
-		var deploymentName types.NamespacedName
+		var statefulSetName types.NamespacedName
 		var ovnTopologies []types.NamespacedName
 		var topologyRef, topologyRefAlt *topologyv1.TopoRef
 
@@ -543,11 +575,11 @@ var _ = Describe("OVNNorthd controller", func() {
 
 			ovn.CreateOVNNorthd(&ovnNorthdName.Name, namespace, spec)
 
-			deploymentName = types.NamespacedName{
+			statefulSetName = types.NamespacedName{
 				Namespace: namespace,
 				Name:      "ovn-northd",
 			}
-			th.SimulateDeploymentReplicaReady(deploymentName)
+			th.SimulateStatefulSetReplicaReady(statefulSetName)
 		})
 		It("sets topologyref in both .Status CR and resources", func() {
 			Eventually(func(g Gomega) {
@@ -566,9 +598,9 @@ var _ = Describe("OVNNorthd controller", func() {
 
 			Eventually(func(g Gomega) {
 				_, topologySpecObj := GetSampleTopologySpec(ovnNorthdName.Name)
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.TopologySpreadConstraints).ToNot(BeNil())
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.TopologySpreadConstraints).To(Equal(topologySpecObj))
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.Affinity).To(BeNil())
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).ToNot(BeNil())
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).To(Equal(topologySpecObj))
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Affinity).To(BeNil())
 			}, timeout, interval).Should(Succeed())
 		})
 
@@ -595,9 +627,9 @@ var _ = Describe("OVNNorthd controller", func() {
 
 			Eventually(func(g Gomega) {
 				_, topologySpecObj := GetSampleTopologySpec(ovnNorthdName.Name)
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.TopologySpreadConstraints).ToNot(BeNil())
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.TopologySpreadConstraints).To(Equal(topologySpecObj))
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.Affinity).To(BeNil())
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).ToNot(BeNil())
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).To(Equal(topologySpecObj))
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Affinity).To(BeNil())
 			}, timeout, interval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
@@ -625,8 +657,8 @@ var _ = Describe("OVNNorthd controller", func() {
 
 			Eventually(func(g Gomega) {
 				// Both Affinity and TopologySpreadConstraints are not set
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.TopologySpreadConstraints).To(BeNil())
-				g.Expect(th.GetDeployment(deploymentName).Spec.Template.Spec.Affinity).ToNot(BeNil())
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.TopologySpreadConstraints).To(BeNil())
+				g.Expect(th.GetStatefulSet(statefulSetName).Spec.Template.Spec.Affinity).ToNot(BeNil())
 			}, timeout, interval).Should(Succeed())
 
 			// Verify the existing topologies have no finalizer anymore
