@@ -15,10 +15,11 @@ TMPDIR=${TMPDIR:-"/tmp/k8s-webhook-server/serving-certs"}
 SKIP_CERT=${SKIP_CERT:-false}
 CRC_IP=${CRC_IP:-$(/sbin/ip -o -4 addr list crc | awk '{print $4}' | cut -d/ -f1)}
 FIREWALL_ZONE=${FIREWALL_ZONE:-"libvirt"}
+WEBHOOK_PORT=${WEBHOOK_PORT:-9443}
 
-#Open 9443
+#Open ${WEBHOOK_PORT}
 if command -v firewall-cmd &> /dev/null; then
-    sudo firewall-cmd --zone=${FIREWALL_ZONE} --add-port=9443/tcp
+    sudo firewall-cmd --zone=${FIREWALL_ZONE} --add-port=${WEBHOOK_PORT}/tcp
     sudo firewall-cmd --runtime-to-permanent
 fi
 
@@ -50,7 +51,7 @@ webhooks:
   - v1
   clientConfig:
     caBundle: ${CA_BUNDLE}
-    url: https://${CRC_IP}:9443/validate-ovn-openstack-org-v1beta1-ovndbcluster
+    url: https://${CRC_IP}:${WEBHOOK_PORT}/validate-ovn-openstack-org-v1beta1-ovndbcluster
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: vovndbcluster.kb.io
@@ -78,7 +79,7 @@ webhooks:
   - v1
   clientConfig:
     caBundle: ${CA_BUNDLE}
-    url: https://${CRC_IP}:9443/mutate-ovn-openstack-org-v1beta1-ovndbcluster
+    url: https://${CRC_IP}:${WEBHOOK_PORT}/mutate-ovn-openstack-org-v1beta1-ovndbcluster
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: movndbcluster.kb.io
@@ -106,7 +107,7 @@ webhooks:
   - v1
   clientConfig:
     caBundle: ${CA_BUNDLE}
-    url: https://${CRC_IP}:9443/validate-ovn-openstack-org-v1beta1-ovnnorthd
+    url: https://${CRC_IP}:${WEBHOOK_PORT}/validate-ovn-openstack-org-v1beta1-ovnnorthd
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: vovnnorthd.kb.io
@@ -134,7 +135,7 @@ webhooks:
   - v1
   clientConfig:
     caBundle: ${CA_BUNDLE}
-    url: https://${CRC_IP}:9443/mutate-ovn-openstack-org-v1beta1-ovnnorthd
+    url: https://${CRC_IP}:${WEBHOOK_PORT}/mutate-ovn-openstack-org-v1beta1-ovnnorthd
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: movnnorthd.kb.io
@@ -162,7 +163,7 @@ webhooks:
   - v1
   clientConfig:
     caBundle: ${CA_BUNDLE}
-    url: https://${CRC_IP}:9443/validate-ovn-openstack-org-v1beta1-ovncontroller
+    url: https://${CRC_IP}:${WEBHOOK_PORT}/validate-ovn-openstack-org-v1beta1-ovncontroller
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: vovncontroller.kb.io
@@ -190,7 +191,7 @@ webhooks:
   - v1
   clientConfig:
     caBundle: ${CA_BUNDLE}
-    url: https://${CRC_IP}:9443/mutate-ovn-openstack-org-v1beta1-ovncontroller
+    url: https://${CRC_IP}:${WEBHOOK_PORT}/mutate-ovn-openstack-org-v1beta1-ovncontroller
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: movncontroller.kb.io
@@ -246,4 +247,4 @@ else
     oc scale --replicas=0 -n openstack-operators deploy/ovn-operator-controller-manager
 fi
 
-go run ./main.go -metrics-bind-address ":${METRICS_PORT}" -health-probe-bind-address ":${HEALTH_PORT}" -pprof-bind-address ":${PPROF_PORT}"
+go run ./main.go -metrics-bind-address ":${METRICS_PORT}" -health-probe-bind-address ":${HEALTH_PORT}" -pprof-bind-address ":${PPROF_PORT}" -webhook-bind-address "${WEBHOOK_PORT}"
