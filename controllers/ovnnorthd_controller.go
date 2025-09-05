@@ -548,8 +548,8 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 	}
 	// create Deployment - end
 
-	// Create per-pod metrics services if metrics are enabled
-	if instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled {
+	// Create per-pod metrics services if metrics are enabled and exporter image is specified
+	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
 		ctrlResult, err = r.reconcileMetricsServices(ctx, helper, instance, serviceLabels)
 		if err != nil {
 			Log.Error(err, "Failed to reconcile metrics services")
@@ -609,15 +609,18 @@ func (r *OVNNorthdReconciler) generateServiceConfigMaps(
 			Labels:        cmLabels,
 			ConfigOptions: templateParameters,
 		},
-		// ConfigConfigMap for network exporter
-		{
+	}
+
+	// Add ConfigConfigMap for network exporter only if metrics are enabled and exporter image is specified
+	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
+		cms = append(cms, util.Template{
 			Name:          fmt.Sprintf("%s-config", instance.Name),
 			Namespace:     instance.Namespace,
 			Type:          util.TemplateTypeConfig,
 			InstanceType:  instance.Kind,
 			Labels:        cmLabels,
 			ConfigOptions: templateParameters,
-		},
+		})
 	}
 	return configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
 }
@@ -719,7 +722,6 @@ func (r *OVNNorthdReconciler) cleanupLegacyDeployment(
 	if err != nil {
 		if k8s_errors.IsNotFound(err) {
 			// Deployment doesn't exist, migration already complete
-			Log.V(1).Info("No legacy deployment found, migration already complete")
 			return nil
 		}
 		return fmt.Errorf("failed to check for legacy deployment %s: %w", deploymentName, err)

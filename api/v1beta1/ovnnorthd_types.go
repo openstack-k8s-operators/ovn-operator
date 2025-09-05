@@ -46,7 +46,6 @@ type OVNNorthdSpec struct {
 	ContainerImage string `json:"containerImage"`
 
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:default="quay.io/openstack-k8s-operators/openstack-network-exporter:current-podified"
 	// ExporterImage - Container Image URL for the openstack-network-exporter metrics sidecar (will be set to environmental default if empty)
 	ExporterImage string `json:"exporterImage,omitempty"`
 

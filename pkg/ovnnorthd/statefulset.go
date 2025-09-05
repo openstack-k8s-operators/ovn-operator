@@ -121,8 +121,8 @@ func StatefulSet(
 		},
 	}
 
-	// Add metrics sidecar container if MetricsEnabled is true (default)
-	if instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled {
+	// Add metrics sidecar container if MetricsEnabled is true (default) and exporter image is specified
+	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
 		metricsVolumeMounts := []corev1.VolumeMount{
 			{
 				Name:      "ovn-rundir",

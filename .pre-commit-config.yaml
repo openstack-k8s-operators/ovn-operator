@@ -54,7 +54,7 @@ repos:
     - id: destroyed-symlinks
     - id: check-yaml
       args: [-m]
-      exclude: "^templates/(ovnnorthd|openstackconfiggenerator|openstackcontrolplane)/.*$"
+      exclude: "^templates/(ovnnorthd|ovndbcluster|ovncontroller)/.*$"
     - id: check-json
     - id: detect-private-key
     - id: end-of-file-fixer
