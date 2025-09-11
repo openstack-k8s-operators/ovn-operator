@@ -3,3 +3,4 @@ kind: TestStep
 commands:
   - script: |
       oc patch OVNNorthd -n $NAMESPACE ovnnorthd-sample --type='json' -p='[{"op": "replace", "path": "/spec/metricsEnabled", "value":true}]'
+      oc patch OVNController -n $NAMESPACE ovncontroller-sample --type='json' -p='[{"op": "replace", "path": "/spec/metricsEnabled", "value":true}]'

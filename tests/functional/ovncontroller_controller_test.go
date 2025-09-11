@@ -31,10 +31,13 @@ import (
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -998,6 +1001,12 @@ var _ = Describe("OVNController controller", func() {
 				Namespace: namespace,
 			}))
 
+			// Create metrics certificate secret for TLS metrics
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      "cert-ovn-metrics",
+				Namespace: namespace,
+			}))
+
 			daemonSetName := types.NamespacedName{
 				Namespace: namespace,
 				Name:      "ovn-controller",
@@ -1011,6 +1020,13 @@ var _ = Describe("OVNController controller", func() {
 			}
 
 			SimulateDaemonsetNumberReady(daemonSetNameOVS)
+
+			daemonSetNameOVNMetrics := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-metrics",
+			}
+
+			SimulateDaemonsetNumberReady(daemonSetNameOVNMetrics)
 
 			ds := GetDaemonSet(daemonSetName)
 			Expect(ds.Spec.Template.Spec.Containers[0].LivenessProbe).ShouldNot(BeNil())
@@ -1421,5 +1437,172 @@ var _ = Describe("OVNController controller", func() {
 			ContainSubstring(
 				"spec.topologyRef.namespace: Invalid value: \"namespace\": Customizing namespace field is not supported"),
 		)
+	})
+
+	When("A OVNController instance with metrics enabled is created", func() {
+		var OVNControllerName types.NamespacedName
+		BeforeEach(func() {
+			spec := GetDefaultOVNControllerSpec()
+			spec.ExporterImage = "quay.io/openstack-k8s-operators/openstack-network-exporter:current-podified"
+			metricsEnabled := true
+			spec.MetricsEnabled = &metricsEnabled
+			instance := CreateOVNController(namespace, spec)
+			OVNControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+			DeferCleanup(th.DeleteInstance, instance)
+		})
+
+		It("should create a metrics ConfigMap", func() {
+			metricsCM := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      fmt.Sprintf("%s-metrics-config", OVNControllerName.Name),
+			}
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(metricsCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			Expect(th.GetConfigMap(metricsCM).Data["openstack-network-exporter.yaml"]).Should(
+				And(
+					ContainSubstring("ovs-rundir: /var/run/openvswitch"),
+					ContainSubstring("ovn-rundir: /var/run/ovn"),
+					ContainSubstring("collectors: ['ovn', 'vswitch', 'bridge', 'coverage', 'datapath', 'iface', 'memory']"),
+				))
+		})
+
+		It("should create a metrics DaemonSet", func() {
+			metricsDaemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-metrics",
+			}
+
+			ds := GetDaemonSet(metricsDaemonSetName)
+			Expect(ds.Spec.Template.Spec.Containers).To(HaveLen(1))
+			Expect(ds.Spec.Template.Spec.Containers[0].Name).To(Equal("openstack-network-exporter"))
+			Expect(ds.Spec.Template.Spec.Containers[0].Image).To(Equal("quay.io/openstack-k8s-operators/openstack-network-exporter:current-podified"))
+		})
+
+		It("should create a metrics Service", func() {
+			metricsServiceName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-metrics",
+			}
+
+			svc := th.GetService(metricsServiceName)
+			Expect(svc.Spec.Ports).To(HaveLen(1))
+			Expect(svc.Spec.Ports[0].Port).To(Equal(int32(1981)))
+			Expect(svc.Spec.Ports[0].Name).To(Equal("metrics"))
+		})
+	})
+
+	When("A OVNController instance with metrics disabled is created", func() {
+		var OVNControllerName types.NamespacedName
+		BeforeEach(func() {
+			spec := GetDefaultOVNControllerSpec()
+			spec.ExporterImage = "quay.io/openstack-k8s-operators/openstack-network-exporter:current-podified"
+			metricsEnabled := false
+			spec.MetricsEnabled = &metricsEnabled
+			instance := CreateOVNController(namespace, spec)
+			OVNControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+			DeferCleanup(th.DeleteInstance, instance)
+		})
+
+		It("should not create a metrics DaemonSet", func() {
+			metricsDaemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-metrics",
+			}
+
+			Eventually(func() error {
+				ds := &appsv1.DaemonSet{}
+				return k8sClient.Get(ctx, metricsDaemonSetName, ds)
+			}, timeout, interval).Should(MatchError(k8s_errors.IsNotFound, "metrics DaemonSet should not exist"))
+		})
+
+		It("should not create a metrics Service", func() {
+			metricsServiceName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-metrics",
+			}
+
+			Eventually(func() error {
+				svc := &corev1.Service{}
+				return k8sClient.Get(ctx, metricsServiceName, svc)
+			}, timeout, interval).Should(MatchError(k8s_errors.IsNotFound, "metrics Service should not exist"))
+		})
+
+		It("should not create a metrics ConfigMap", func() {
+			metricsCM := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      fmt.Sprintf("%s-metrics-config", OVNControllerName.Name),
+			}
+
+			Eventually(func() error {
+				cm := &corev1.ConfigMap{}
+				return k8sClient.Get(ctx, metricsCM, cm)
+			}, timeout, interval).Should(MatchError(k8s_errors.IsNotFound, "metrics ConfigMap should not exist"))
+		})
+	})
+
+	When("A OVNController instance with metrics enabled is updated to disabled", func() {
+		var OVNControllerName types.NamespacedName
+		var instance client.Object
+		BeforeEach(func() {
+			spec := GetDefaultOVNControllerSpec()
+			spec.ExporterImage = "quay.io/openstack-k8s-operators/openstack-network-exporter:current-podified"
+			metricsEnabled := true
+			spec.MetricsEnabled = &metricsEnabled
+			instance = CreateOVNController(namespace, spec)
+			OVNControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+			DeferCleanup(th.DeleteInstance, instance)
+
+			// Wait for metrics resources to be created first
+			metricsDaemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-metrics",
+			}
+			Eventually(func() *appsv1.DaemonSet {
+				return GetDaemonSet(metricsDaemonSetName)
+			}, timeout, interval).ShouldNot(BeNil())
+		})
+
+		It("should cleanup metrics resources when MetricsEnabled is set to false", func() {
+			// Update the instance to disable metrics
+			Eventually(func(g Gomega) {
+				updatedInstance := &ovnv1.OVNController{}
+				g.Expect(k8sClient.Get(ctx, OVNControllerName, updatedInstance)).Should(Succeed())
+				metricsEnabled := false
+				updatedInstance.Spec.MetricsEnabled = &metricsEnabled
+				g.Expect(k8sClient.Update(ctx, updatedInstance)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			// Verify that metrics DaemonSet is deleted
+			metricsDaemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-metrics",
+			}
+			Eventually(func() error {
+				ds := &appsv1.DaemonSet{}
+				return k8sClient.Get(ctx, metricsDaemonSetName, ds)
+			}, timeout, interval).Should(MatchError(k8s_errors.IsNotFound, "metrics DaemonSet should be deleted"))
+
+			// Verify that metrics Service is deleted
+			metricsServiceName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-metrics",
+			}
+			Eventually(func() error {
+				svc := &corev1.Service{}
+				return k8sClient.Get(ctx, metricsServiceName, svc)
+			}, timeout, interval).Should(MatchError(k8s_errors.IsNotFound, "metrics Service should be deleted"))
+
+			// Verify that metrics ConfigMap is deleted
+			metricsCM := types.NamespacedName{
+				Namespace: OVNControllerName.Namespace,
+				Name:      fmt.Sprintf("%s-metrics-config", OVNControllerName.Name),
+			}
+			Eventually(func() error {
+				cm := &corev1.ConfigMap{}
+				return k8sClient.Get(ctx, metricsCM, cm)
+			}, timeout, interval).Should(MatchError(k8s_errors.IsNotFound, "metrics ConfigMap should be deleted"))
+		})
 	})
 })

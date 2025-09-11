@@ -18,6 +18,7 @@ import (
 	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 
@@ -354,4 +355,177 @@ func CreateOVSDaemonSet(
 	}
 
 	return daemonset
+}
+
+func CreateMetricsDaemonSet(
+	instance *ovnv1.OVNController,
+	configHash string,
+	labels map[string]string,
+	topology *topologyv1.Topology,
+) *appsv1.DaemonSet {
+	// Create metrics configuration volume and mount
+	volumes := []corev1.Volume{
+		{
+			Name: "ovs-rundir",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: fmt.Sprintf("/var/home/core/%s/var/run/openvswitch", instance.Namespace),
+					Type: &[]corev1.HostPathType{corev1.HostPathDirectoryOrCreate}[0],
+				},
+			},
+		},
+		{
+			Name: "ovn-rundir",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: fmt.Sprintf("/var/home/core/%s/var/run/ovn", instance.Namespace),
+					Type: &[]corev1.HostPathType{corev1.HostPathDirectoryOrCreate}[0],
+				},
+			},
+		},
+		{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: fmt.Sprintf("%s-metrics-config", instance.Name),
+					},
+				},
+			},
+		},
+	}
+
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "ovs-rundir",
+			MountPath: "/var/run/openvswitch",
+			ReadOnly:  true,
+		},
+		{
+			Name:      "ovn-rundir",
+			MountPath: "/var/run/ovn",
+			ReadOnly:  true,
+		},
+		{
+			Name:      "config",
+			MountPath: "/etc/config",
+			ReadOnly:  true,
+		},
+	}
+
+	// add TLS volume mounts if TLS is enabled - use the same secret as main controller
+	if instance.Spec.TLS.Enabled() {
+		metricsSvc := tls.Service{
+			SecretName: "cert-ovn-metrics",
+			CertMount:  ptr.To(ovn_common.OVNMetricsCertPath),
+			KeyMount:   ptr.To(ovn_common.OVNMetricsKeyPath),
+			CaMount:    ptr.To(ovn_common.OVNDbCaCertPath), // Use the same CA for now
+		}
+		// Add the metrics certificate volume to the main volumes list
+		// Use "metrics-certs" as volume name to stay within 63 char limit
+		volumes = append(volumes, metricsSvc.CreateVolume("metrics-certs"))
+		volumeMounts = append(volumeMounts, metricsSvc.CreateVolumeMounts("metrics-certs")...)
+
+		// add CA bundle if defined
+		if instance.Spec.TLS.CaBundleSecretName != "" {
+			volumes = append(volumes, instance.Spec.TLS.CreateVolume())
+			volumeMounts = append(volumeMounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
+		}
+	}
+
+	envVars := map[string]env.Setter{}
+	envVars["CONFIG_HASH"] = env.SetValue(configHash)
+
+	runAsUser := int64(0)
+	privileged := true
+
+	containers := []corev1.Container{
+		{
+			Name:    "openstack-network-exporter",
+			Image:   instance.Spec.ExporterImage,
+			Command: []string{"/app/openstack-network-exporter"},
+			SecurityContext: &corev1.SecurityContext{
+				Capabilities: &corev1.Capabilities{
+					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
+					Drop: []corev1.Capability{},
+				},
+				RunAsUser:  &runAsUser,
+				Privileged: &privileged,
+			},
+			Env: []corev1.EnvVar{
+				{
+					Name:  "OPENSTACK_NETWORK_EXPORTER_YAML",
+					Value: "/etc/config/openstack-network-exporter.yaml",
+				},
+			},
+			VolumeMounts:             volumeMounts,
+			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+		},
+	}
+
+	daemonset := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ovnv1.ServiceNameOVNControllerMetrics,
+			Namespace: instance.Namespace,
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					ServiceAccountName: instance.RbacResourceName(),
+					Containers:         containers,
+					Volumes:            volumes,
+				},
+			},
+		},
+	}
+
+	if instance.Spec.NodeSelector != nil {
+		daemonset.Spec.Template.Spec.NodeSelector = *instance.Spec.NodeSelector
+	}
+	// DaemonSet automatically place one Pod per node that matches the
+	// node selector, but topology spread constraints and PodAffinity/PodAntiaffinity
+	// rules are ignored. However, NodeAffinity, part of the Topology interface,
+	// might be used to influence Pod scheduling.
+	if topology != nil {
+		// Get the Topology .Spec
+		ts := topology.Spec
+		// Process Affinity if defined in the referenced Topology
+		if ts.Affinity != nil {
+			daemonset.Spec.Template.Spec.Affinity = ts.Affinity
+		}
+	}
+
+	return daemonset
+}
+
+// GetMetricsConfigMap creates the metrics configuration template
+func GetMetricsConfigMap(
+	instance *ovnv1.OVNController,
+) util.Template {
+	templateParameters := make(map[string]interface{})
+
+	templateParameters["TLS"] = instance.Spec.TLS.Enabled()
+
+	// Add TLS configuration if enabled
+	if instance.Spec.TLS.Enabled() {
+		templateParameters["OVN_METRICS_CERT_PATH"] = ovn_common.OVNMetricsCertPath
+		templateParameters["OVN_METRICS_KEY_PATH"] = ovn_common.OVNMetricsKeyPath
+	}
+
+	return util.Template{
+		Name:      fmt.Sprintf("%s-metrics-config", instance.Name),
+		Namespace: instance.Namespace,
+		Type:      util.TemplateTypeNone,
+		AdditionalTemplate: map[string]string{
+			"openstack-network-exporter.yaml": "/ovncontroller/config/openstack-network-exporter.yaml",
+		},
+		InstanceType:  instance.Kind,
+		ConfigOptions: templateParameters,
+	}
 }

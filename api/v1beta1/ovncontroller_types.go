@@ -44,6 +44,8 @@ const (
 
 	// ServiceNameOVS - ovn-controller-ovs service name
 	ServiceNameOVS = "ovn-controller-ovs"
+	// ServiceNameOVNControllerMetrics - ovn-controller-metrics service name
+	ServiceNameOVNControllerMetrics = "ovn-controller-metrics"
 )
 
 // OVNControllerSpec defines the desired state of OVNController
@@ -55,6 +57,10 @@ type OVNControllerSpec struct {
 	// +kubebuilder:validation:Required
 	// Image used for the ovn-controller container (will be set to environmental default if empty)
 	OvnContainerImage string `json:"ovnContainerImage"`
+
+	// +kubebuilder:validation:Optional
+	// ExporterImage - Container Image URL for the openstack-network-exporter metrics daemonset (will be set to environmental default if empty)
+	ExporterImage string `json:"exporterImage,omitempty"`
 
 	OVNControllerSpecCore `json:",inline"`
 }
@@ -92,6 +98,11 @@ type OVNControllerSpecCore struct {
 	// TopologyRef to apply the Topology defined by the associated CR referenced
 	// by name
 	TopologyRef *topologyv1.TopoRef `json:"topologyRef,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=true
+	// MetricsEnabled enables the metrics daemonset for collecting OVN metrics
+	MetricsEnabled *bool `json:"metricsEnabled,omitempty"`
 }
 
 // OVNControllerStatus defines the observed state of OVNController
@@ -101,6 +112,9 @@ type OVNControllerStatus struct {
 
 	// ovsNumberReady of ovs instances
 	OVSNumberReady int32 `json:"ovsNumberReady,omitempty"`
+
+	// MetricsNumberReady of metrics instances
+	MetricsNumberReady int32 `json:"metricsNumberReady,omitempty"`
 
 	// DesiredNumberScheduled - total number of the nodes which should be running Daemon
 	DesiredNumberScheduled int32 `json:"desiredNumberScheduled,omitempty"`
