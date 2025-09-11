@@ -28,10 +28,12 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"go.uber.org/zap/zapcore"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -108,6 +110,13 @@ func main() {
 				Port:    webhookPort,
 				TLSOpts: []func(config *tls.Config){disableHTTP2},
 			}),
+		Client: client.Options{
+			Cache: &client.CacheOptions{
+				DisableFor: []client.Object{
+					&appsv1.Deployment{},
+				},
+			},
+		},
 	}
 
 	err := operator.SetManagerOptions(&options, setupLog)
