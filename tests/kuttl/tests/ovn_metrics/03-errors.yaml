@@ -1,11 +1,18 @@
 #
 # Check for:
 #
-# No OVNNorthd metric services
+# No OVNNorthd and OVNController metric services
 #
 apiVersion: v1
 kind: Service
 metadata:
   labels:
     service: ovn-northd
+    type: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: ovn-controller-metrics
     type: metrics

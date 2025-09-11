@@ -31,6 +31,7 @@ import (
 type OVNControllerDefaults struct {
 	OVSContainerImageURL           string
 	OVNControllerContainerImageURL string
+	ExporterImageURL               string
 }
 
 var ovnDefaults OVNControllerDefaults
@@ -68,6 +69,9 @@ func (spec *OVNControllerSpec) Default() {
 	}
 	if spec.OvnContainerImage == "" {
 		spec.OvnContainerImage = ovnDefaults.OVNControllerContainerImageURL
+	}
+	if spec.ExporterImage == "" {
+		spec.ExporterImage = ovnDefaults.ExporterImageURL
 	}
 	spec.OVNControllerSpecCore.Default()
 }

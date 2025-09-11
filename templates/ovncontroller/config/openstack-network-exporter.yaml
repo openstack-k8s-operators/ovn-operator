@@ -1,0 +1,7 @@
+ovn-rundir: /var/run/ovn
+ovs-rundir: /var/run/openvswitch
+collectors: ['ovn', 'vswitch', 'bridge', 'coverage', 'datapath', 'iface', 'memory']
+{{- if .TLS }}
+tls-cert: {{ .OVN_METRICS_CERT_PATH }}
+tls-key: {{ .OVN_METRICS_KEY_PATH }}
+{{- end }}

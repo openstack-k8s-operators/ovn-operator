@@ -49,6 +49,7 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
 	nad "github.com/openstack-k8s-operators/lib-common/modules/common/networkattachment"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/service"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
@@ -82,6 +83,7 @@ func (r *OVNControllerReconciler) GetClient() client.Client {
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
+//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;get;list;patch;update;watch
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;patch;update;delete;
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovndbclusters,verbs=get;list;watch;
@@ -248,6 +250,7 @@ func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&batchv1.Job{}).
 		Owns(&netattdefv1.NetworkAttachmentDefinition{}).
 		Owns(&appsv1.DaemonSet{}).
+		Owns(&corev1.Service{}).
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
@@ -663,10 +666,119 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 	instance.Status.Conditions.MarkTrue(condition.NetworkAttachmentsReadyCondition, condition.NetworkAttachmentsReadyMessage)
 
-	if instance.Status.NumberReady == instance.Status.DesiredNumberScheduled && instance.Status.OVSNumberReady == instance.Status.DesiredNumberScheduled {
+	// Check if all DaemonSets are ready
+	allReady := instance.Status.NumberReady == instance.Status.DesiredNumberScheduled &&
+		instance.Status.OVSNumberReady == instance.Status.DesiredNumberScheduled
+
+	// If metrics are enabled, also check metrics DaemonSet
+	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
+		allReady = allReady && instance.Status.MetricsNumberReady == instance.Status.DesiredNumberScheduled
+	}
+
+	if allReady {
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
 	}
 	// create DaemonSet - end
+
+	// Create metrics DaemonSet - start
+	// Create metrics DaemonSet if metrics are enabled and exporter image is specified
+	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
+		cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnv1.ServiceNameOVNController), map[string]string{})
+		metricsConfigMap := ovncontroller.GetMetricsConfigMap(instance)
+		metricsConfigMap.Labels = cmLabels
+		metricsCms := []util.Template{metricsConfigMap}
+		err = configmap.EnsureConfigMaps(ctx, helper, instance, metricsCms, nil)
+		if err != nil {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.ServiceConfigReadyCondition,
+				condition.ErrorReason,
+				condition.SeverityWarning,
+				condition.ServiceConfigReadyErrorMessage,
+				err.Error()))
+			return ctrl.Result{}, err
+		}
+
+		metricsLabels := map[string]string{
+			common.AppSelector: ovnv1.ServiceNameOVNControllerMetrics,
+			"type":             "metrics",
+		}
+
+		// Define a new DaemonSet object for OVNController metrics
+		metricsdset := daemonset.NewDaemonSet(
+			ovncontroller.CreateMetricsDaemonSet(instance, inputHash, metricsLabels, topology),
+			time.Duration(5)*time.Second,
+		)
+
+		ctrlResult, err = metricsdset.CreateOrPatch(ctx, helper)
+		if err != nil {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.DeploymentReadyCondition,
+				condition.ErrorReason,
+				condition.SeverityWarning,
+				condition.DeploymentReadyErrorMessage,
+				err.Error()))
+			return ctrlResult, err
+		} else if (ctrlResult != ctrl.Result{}) {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.DeploymentReadyCondition,
+				condition.RequestedReason,
+				condition.SeverityInfo,
+				condition.DeploymentReadyRunningMessage))
+			return ctrlResult, nil
+		}
+
+		instance.Status.MetricsNumberReady = metricsdset.GetDaemonSet().Status.NumberReady
+
+		// Create metrics service
+		// Split to per pod service as part of https://issues.redhat.com/browse/OSPRH-3019
+		serviceName := fmt.Sprintf("%s-metrics", ovnv1.ServiceNameOVNController)
+		metricsService, err := service.NewService(
+			ovncontroller.MetricsService(serviceName, instance, metricsLabels, metricsLabels),
+			time.Duration(5)*time.Second,
+			nil,
+		)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		ctrlResult, err = metricsService.CreateOrPatch(ctx, helper)
+		if err != nil {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.DeploymentReadyCondition,
+				condition.ErrorReason,
+				condition.SeverityWarning,
+				condition.DeploymentReadyErrorMessage,
+				err.Error()))
+			return ctrlResult, err
+		} else if (ctrlResult != ctrl.Result{}) {
+			return ctrlResult, nil
+		}
+	} else {
+		// Cleanup metrics DaemonSet
+		metricsDsName := ovnv1.ServiceNameOVNControllerMetrics
+		if err := r.deleteResourceIfExists(ctx, &appsv1.DaemonSet{}, metricsDsName, instance.Namespace); err != nil {
+			Log.Error(err, "Failed to delete metrics DaemonSet")
+			return ctrl.Result{}, err
+		}
+
+		// Cleanup metrics Service
+		metricsServiceName := fmt.Sprintf("%s-metrics", ovnv1.ServiceNameOVNController)
+		if err := r.deleteResourceIfExists(ctx, &corev1.Service{}, metricsServiceName, instance.Namespace); err != nil {
+			Log.Error(err, "Failed to delete metrics Service")
+			return ctrl.Result{}, err
+		}
+
+		// Cleanup metrics ConfigMap
+		metricsConfigMapName := fmt.Sprintf("%s-metrics-config", instance.Name)
+		if err := r.deleteResourceIfExists(ctx, &corev1.ConfigMap{}, metricsConfigMapName, instance.Namespace); err != nil {
+			Log.Error(err, "Failed to delete metrics ConfigMap")
+			return ctrl.Result{}, err
+		}
+
+		// Reset metrics status counter
+		instance.Status.MetricsNumberReady = 0
+	}
+	// create metrics DaemonSet - end
 
 	sbCluster, err := ovnv1.GetDBClusterByType(ctx, helper, instance.Namespace, map[string]string{}, ovnv1.SBDBType)
 	if err != nil {
@@ -760,6 +872,7 @@ func (r *OVNControllerReconciler) generateServiceConfigMaps(
 			ConfigOptions: templateParameters,
 		},
 	}
+
 	return configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
 }
 
@@ -786,4 +899,16 @@ func (r *OVNControllerReconciler) createHashOfInputHashes(
 		Log.Info(fmt.Sprintf("Input maps hash %s - %s", common.InputHashName, hash))
 	}
 	return hash, changed, nil
+}
+
+// deleteResourceIfExists deletes a Kubernetes resource if it exists, ignoring NotFound errors
+func (r *OVNControllerReconciler) deleteResourceIfExists(ctx context.Context, obj client.Object, name, namespace string) error {
+	obj.SetName(name)
+	obj.SetNamespace(namespace)
+
+	err := r.Client.Delete(ctx, obj)
+	if err != nil && !k8s_errors.IsNotFound(err) {
+		return err
+	}
+	return nil
 }
