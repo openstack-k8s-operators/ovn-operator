@@ -23,6 +23,29 @@ func Service(
 		dbPort = DbPortSB
 		raftPort = RaftPortSB
 	}
+
+	ports := []corev1.ServicePort{
+		{
+			Name:     dbPortName,
+			Port:     dbPort,
+			Protocol: corev1.ProtocolTCP,
+		},
+		{
+			Name:     raftPortName,
+			Port:     raftPort,
+			Protocol: corev1.ProtocolTCP,
+		},
+	}
+
+	// Add metrics port if metrics are enabled and exporter image is specified
+	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
+		ports = append(ports, corev1.ServicePort{
+			Name:     "metrics",
+			Port:     1981,
+			Protocol: corev1.ProtocolTCP,
+		})
+	}
+
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
@@ -31,18 +54,7 @@ func Service(
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: selectorLabels,
-			Ports: []corev1.ServicePort{
-				{
-					Name:     dbPortName,
-					Port:     dbPort,
-					Protocol: corev1.ProtocolTCP,
-				},
-				{
-					Name:     raftPortName,
-					Port:     raftPort,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
+			Ports:    ports,
 		},
 	}
 }

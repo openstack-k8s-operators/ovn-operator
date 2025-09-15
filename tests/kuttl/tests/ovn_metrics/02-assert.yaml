@@ -10,3 +10,5 @@ commands:
     - script: |
         oc rsh -n $NAMESPACE statefulset/ovn-northd curl http://ovn-northd-0.${NAMESPACE}.svc:1981/metrics | grep ^ovn_northd_status
         oc rsh -n $NAMESPACE ds/ovn-controller-metrics curl http://ovn-controller-metrics.${NAMESPACE}.svc:1981/metrics | grep ^ovnc_encap_type
+        oc rsh -n $NAMESPACE pod/ovsdbserver-nb-0 curl http://ovsdbserver-nb-0.${NAMESPACE}.svc:1981/metrics | grep ^ovn_raft_cluster_id
+        oc rsh -n $NAMESPACE pod/ovsdbserver-sb-0 curl http://ovsdbserver-sb-0.${NAMESPACE}.svc:1981/metrics | grep ^ovn_raft_cluster_id

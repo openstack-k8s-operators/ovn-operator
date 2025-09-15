@@ -265,6 +265,8 @@ metadata:
   labels:
     service: ovsdbserver-nb
     statefulset.kubernetes.io/pod-name: ovsdbserver-nb-0
+    type: cluster
+    metrics: enabled
   name: ovsdbserver-nb-0
 spec:
   ports:
@@ -276,6 +278,10 @@ spec:
       port: 6643
       protocol: TCP
       targetPort: 6643
+    - name: metrics
+      port: 1981
+      protocol: TCP
+      targetPort: 1981
   selector:
     service: ovsdbserver-nb
   type: ClusterIP
@@ -302,6 +308,8 @@ metadata:
   labels:
     service: ovsdbserver-sb
     statefulset.kubernetes.io/pod-name: ovsdbserver-sb-0
+    type: cluster
+    metrics: enabled
   name: ovsdbserver-sb-0
 spec:
   ports:
@@ -313,6 +321,10 @@ spec:
       port: 6644
       protocol: TCP
       targetPort: 6644
+    - name: metrics
+      port: 1981
+      protocol: TCP
+      targetPort: 1981
   selector:
     service: ovsdbserver-sb
   type: ClusterIP

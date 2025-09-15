@@ -143,6 +143,67 @@ func StatefulSet(
 	// nevertheless, and manual cluster recovery will be needed.
 	terminationGracePeriodSeconds := int64(300)
 
+	// Create container list starting with the main ovndbcluster container
+	containers := []corev1.Container{
+		{
+			Name:                     serviceName,
+			Command:                  cmd,
+			Args:                     args,
+			Image:                    instance.Spec.ContainerImage,
+			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			VolumeMounts:             volumeMounts,
+			Resources:                instance.Spec.Resources,
+			ReadinessProbe:           readinessProbe,
+			LivenessProbe:            livenessProbe,
+			StartupProbe:             startupProbe,
+			Lifecycle:                lifecycle,
+			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+		},
+	}
+
+	// Add metrics sidecar container if MetricsEnabled is true (default) and exporter image is specified
+	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
+		metricsVolumeMounts := []corev1.VolumeMount{
+			{
+				Name:      "ovsdb-rundir",
+				MountPath: "/tmp",
+			},
+			{
+				Name:      "config",
+				MountPath: "/etc/config",
+				ReadOnly:  true,
+			},
+		}
+
+		// add TLS volume mounts if TLS is enabled - use dedicated metrics certificate
+		if instance.Spec.TLS.Enabled() {
+			metricsSvc := tls.Service{
+				SecretName: "cert-ovn-metrics",
+				CertMount:  ptr.To(ovn_common.OVNMetricsCertPath),
+				KeyMount:   ptr.To(ovn_common.OVNMetricsKeyPath),
+				CaMount:    ptr.To(ovn_common.OVNDbCaCertPath), // Use the same CA for now
+			}
+			// Add the metrics certificate volume to the main volumes list
+			// Use "metrics-certs" as volume name to stay within 63 char limit
+			volumes = append(volumes, metricsSvc.CreateVolume("metrics-certs"))
+			metricsVolumeMounts = append(metricsVolumeMounts, metricsSvc.CreateVolumeMounts("metrics-certs")...)
+		}
+
+		metricsContainer := corev1.Container{
+			Name:    "openstack-network-exporter",
+			Image:   instance.Spec.ExporterImage,
+			Command: []string{"/app/openstack-network-exporter"},
+			Env: []corev1.EnvVar{
+				{
+					Name:  "OPENSTACK_NETWORK_EXPORTER_YAML",
+					Value: "/etc/config/openstack-network-exporter.yaml",
+				},
+			},
+			VolumeMounts: metricsVolumeMounts,
+		}
+		containers = append(containers, metricsContainer)
+	}
+
 	statefulset := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
@@ -163,22 +224,7 @@ func StatefulSet(
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
 					ServiceAccountName:            instance.RbacResourceName(),
-					Containers: []corev1.Container{
-						{
-							Name:                     serviceName,
-							Command:                  cmd,
-							Args:                     args,
-							Image:                    instance.Spec.ContainerImage,
-							Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
-							VolumeMounts:             volumeMounts,
-							Resources:                instance.Spec.Resources,
-							ReadinessProbe:           readinessProbe,
-							LivenessProbe:            livenessProbe,
-							StartupProbe:             startupProbe,
-							Lifecycle:                lifecycle,
-							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-						},
-					},
+					Containers:                    containers,
 				},
 			},
 		},

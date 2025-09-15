@@ -4,3 +4,5 @@ commands:
   - script: |
       oc patch OVNNorthd -n $NAMESPACE ovnnorthd-sample --type='json' -p='[{"op": "replace", "path": "/spec/metricsEnabled", "value":true}]'
       oc patch OVNController -n $NAMESPACE ovncontroller-sample --type='json' -p='[{"op": "replace", "path": "/spec/metricsEnabled", "value":true}]'
+      oc patch OVNDBCluster -n $NAMESPACE ovndbcluster-nb-sample --type='json' -p='[{"op": "replace", "path": "/spec/metricsEnabled", "value":true}]'
+      oc patch OVNDBCluster -n $NAMESPACE ovndbcluster-sb-sample --type='json' -p='[{"op": "replace", "path": "/spec/metricsEnabled", "value":true}]'
