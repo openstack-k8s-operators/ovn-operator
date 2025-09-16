@@ -700,7 +700,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 
 		metricsLabels := map[string]string{
 			common.AppSelector: ovnv1.ServiceNameOVNControllerMetrics,
-			"type":             "metrics",
+			"metrics":          "enabled",
 		}
 
 		// Define a new DaemonSet object for OVNController metrics

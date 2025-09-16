@@ -8,11 +8,11 @@ kind: Service
 metadata:
   labels:
     service: ovn-northd
-    type: metrics
+    metrics: enabled
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
     service: ovn-controller-metrics
-    type: metrics
+    metrics: enabled

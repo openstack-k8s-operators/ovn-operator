@@ -648,7 +648,7 @@ func (r *OVNNorthdReconciler) reconcileMetricsServices(
 
 		// Create StatefulSet pod-specific labels
 		metricsServiceLabels := util.MergeMaps(serviceLabels, map[string]string{
-			"type": "metrics",
+			"metrics": "enabled",
 		})
 
 		// StatefulSet pods have predictable names and stable labels
