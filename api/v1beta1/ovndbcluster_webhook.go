@@ -23,20 +23,21 @@ limitations under the License.
 package v1beta1
 
 import (
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	"k8s.io/apimachinery/pkg/util/validation/field"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // OVNDBClusterDefaults -
 type OVNDBClusterDefaults struct {
 	NBContainerImageURL string
 	SBContainerImageURL string
+	ExporterImageURL    string
 }
 
 var ovnDbClusterDefaults OVNDBClusterDefaults
@@ -76,6 +77,9 @@ func (spec *OVNDBClusterSpec) Default() {
 		} else if spec.DBType == SBDBType {
 			spec.ContainerImage = ovnDbClusterDefaults.SBContainerImageURL
 		}
+	}
+	if spec.ExporterImage == "" {
+		spec.ExporterImage = ovnDbClusterDefaults.ExporterImageURL
 	}
 	spec.OVNDBClusterSpecCore.Default()
 }

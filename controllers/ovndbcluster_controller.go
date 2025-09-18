@@ -706,6 +706,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		}
 
 	}
+
 	Log.Info("Reconciled Service successfully")
 	return ctrl.Result{}, nil
 }
@@ -828,7 +829,14 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 			common.AppSelector:                   serviceName,
 			"statefulset.kubernetes.io/pod-name": ovnPod.Name,
 		}
-		ovndbServiceLabels := util.MergeMaps(ovndbSelectorLabels, map[string]string{"type": ovnv1.ServiceClusterType})
+		// Build service labels - always use cluster type, add metrics label if enabled
+		serviceTypeLabels := map[string]string{"type": ovnv1.ServiceClusterType}
+		// Add metrics label if metrics are enabled and exporter image is specified
+		if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
+			serviceTypeLabels["metrics"] = "enabled"
+		}
+		ovndbServiceLabels := util.MergeMaps(ovndbSelectorLabels, serviceTypeLabels)
+
 		svc, err := service.NewService(
 			ovndbcluster.Service(ovnPod.Name, instance, ovndbServiceLabels, ovndbSelectorLabels),
 			time.Duration(5)*time.Second,
@@ -842,6 +850,23 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 			return ctrl.Result{}, err
 		} else if (ctrlResult != ctrl.Result{}) {
 			return ctrl.Result{}, nil
+		}
+
+		// Check if we need to remove metrics label from existing service
+		needsMetricsRemoval := instance.Spec.ExporterImage == "" || (instance.Spec.MetricsEnabled != nil && !*instance.Spec.MetricsEnabled)
+		if needsMetricsRemoval {
+			// Get the service that was just created/updated
+			existingSvc, err := service.GetServiceWithName(ctx, helper, ovnPod.Name, ovnPod.Namespace)
+			if err == nil && existingSvc != nil {
+				if _, exists := existingSvc.Labels["metrics"]; exists {
+					// Create a patch to remove the metrics label
+					delete(existingSvc.Labels, "metrics")
+					err = r.GetClient().Update(ctx, existingSvc)
+					if err != nil {
+						return ctrl.Result{}, fmt.Errorf("error removing metrics label from service %s: %w", ovnPod.Name, err)
+					}
+				}
+			}
 		}
 		// create service - end
 	}
@@ -985,9 +1010,12 @@ func (r *OVNDBClusterReconciler) generateExternalConfigMaps(
 	cms := []util.Template{
 		// EDP ConfigMap
 		{
-			Name:          "ovncontroller-config",
-			Namespace:     instance.Namespace,
-			Type:          util.TemplateTypeConfig,
+			Name:      "ovncontroller-config",
+			Namespace: instance.Namespace,
+			Type:      util.TemplateTypeNone,
+			AdditionalTemplate: map[string]string{
+				"ovsdb-config": "/ovndbcluster/config/ovsdb-config",
+			},
 			InstanceType:  instance.Kind,
 			Labels:        cmLabels,
 			ConfigOptions: externalTemplateParameters,
@@ -1045,6 +1073,8 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 	templateParameters["OVNDB_CERT_PATH"] = ovn_common.OVNDbCertPath
 	templateParameters["OVNDB_KEY_PATH"] = ovn_common.OVNDbKeyPath
 	templateParameters["OVNDB_CACERT_PATH"] = ovn_common.OVNDbCaCertPath
+	templateParameters["OVN_METRICS_CERT_PATH"] = ovn_common.OVNMetricsCertPath
+	templateParameters["OVN_METRICS_KEY_PATH"] = ovn_common.OVNMetricsKeyPath
 
 	cms := []util.Template{
 		// ScriptsConfigMap
@@ -1056,6 +1086,20 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 			Labels:        cmLabels,
 			ConfigOptions: templateParameters,
 		},
+	}
+	// Add ConfigConfigMap for network exporter only if metrics are enabled and exporter image is specified
+	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
+		cms = append(cms, util.Template{
+			Name:      fmt.Sprintf("%s-config", instance.Name),
+			Namespace: instance.Namespace,
+			Type:      util.TemplateTypeNone,
+			AdditionalTemplate: map[string]string{
+				"openstack-network-exporter.yaml": "/ovndbcluster/config/openstack-network-exporter.yaml",
+			},
+			InstanceType:  instance.Kind,
+			Labels:        cmLabels,
+			ConfigOptions: templateParameters,
+		})
 	}
 	return configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
 }

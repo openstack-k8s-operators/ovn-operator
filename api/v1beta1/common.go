@@ -24,6 +24,7 @@ func SetupDefaults() {
 	ovnDbClusterDefaults := OVNDBClusterDefaults{
 		NBContainerImageURL: util.GetEnvVar("RELATED_IMAGE_OVN_NB_DBCLUSTER_IMAGE_URL_DEFAULT", OVNNBContainerImage),
 		SBContainerImageURL: util.GetEnvVar("RELATED_IMAGE_OVN_SB_DBCLUSTER_IMAGE_URL_DEFAULT", OVNSBContainerImage),
+		ExporterImageURL:    util.GetEnvVar("RELATED_IMAGE_OPENSTACK_NETWORK_EXPORTER_IMAGE_URL_DEFAULT", OpenstackNetworkExporterImage),
 	}
 
 	SetupOVNDBClusterDefaults(ovnDbClusterDefaults)

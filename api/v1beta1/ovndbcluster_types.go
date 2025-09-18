@@ -19,10 +19,10 @@ package v1beta1
 import (
 	"fmt"
 
+	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/service"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
-	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	corev1 "k8s.io/api/core/v1"
@@ -55,6 +55,10 @@ type OVNDBClusterSpec struct {
 	// +kubebuilder:validation:Required
 	// ContainerImage - Container Image URL (will be set to environmental default if empty)
 	ContainerImage string `json:"containerImage"`
+
+	// +kubebuilder:validation:Optional
+	// ExporterImage - Container Image URL for the openstack-network-exporter metrics sidecar (will be set to environmental default if empty)
+	ExporterImage string `json:"exporterImage,omitempty"`
 
 	OVNDBClusterSpecCore `json:",inline"`
 }
@@ -130,6 +134,11 @@ type OVNDBClusterSpecCore struct {
 	// TopologyRef to apply the Topology defined by the associated CR referenced
 	// by name
 	TopologyRef *topologyv1.TopoRef `json:"topologyRef,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=true
+	// MetricsEnabled enables the metrics sidecar container for collecting OVN DB metrics
+	MetricsEnabled *bool `json:"metricsEnabled,omitempty"`
 }
 
 // OVNDBClusterOverrideSpec to override the generated manifest of several child resources.

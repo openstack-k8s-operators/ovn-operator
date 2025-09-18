@@ -224,6 +224,158 @@ var _ = Describe("OVNDBCluster controller", func() {
 		})
 	})
 
+	When("A OVNDBCluster instance is created with metrics enabled", func() {
+		var OVNDBClusterName types.NamespacedName
+		var statefulSetName types.NamespacedName
+
+		BeforeEach(func() {
+			spec := GetDefaultOVNDBClusterSpec()
+			// Ensure ExporterImage is set to enable metrics
+			spec.ExporterImage = "test-exporter:latest"
+			instance := CreateOVNDBCluster(namespace, spec)
+			OVNDBClusterName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+			DeferCleanup(th.DeleteInstance, instance)
+
+			statefulSetName = types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      "ovsdbserver-nb", // Use NB as default
+			}
+		})
+
+		It("creates a StatefulSet with metrics sidecar container", func() {
+			sts := th.GetStatefulSet(statefulSetName)
+
+			// Verify both main and metrics containers exist
+			Expect(sts.Spec.Template.Spec.Containers).To(HaveLen(2))
+
+			// Check main container
+			mainC := sts.Spec.Template.Spec.Containers[0]
+			Expect(mainC.Name).To(Equal("ovsdbserver-nb"))
+
+			// Check metrics container
+			metricsC := sts.Spec.Template.Spec.Containers[1]
+			Expect(metricsC.Name).To(Equal("openstack-network-exporter"))
+			Expect(metricsC.Command).To(Equal([]string{"/app/openstack-network-exporter"}))
+
+			// Check metrics container environment
+			Expect(metricsC.Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSTACK_NETWORK_EXPORTER_YAML",
+				Value: "/etc/config/openstack-network-exporter.yaml",
+			}))
+
+			// Check metrics container volume mounts
+			th.AssertVolumeMountExists("config", "", metricsC.VolumeMounts)
+			th.AssertVolumeMountExists("ovsdb-rundir", "", metricsC.VolumeMounts)
+		})
+
+		It("creates the required volumes for metrics", func() {
+			sts := th.GetStatefulSet(statefulSetName)
+
+			// Verify required volumes exist
+			th.AssertVolumeExists("ovsdb-rundir", sts.Spec.Template.Spec.Volumes)
+			th.AssertVolumeExists("config", sts.Spec.Template.Spec.Volumes)
+		})
+
+		It("creates the metrics config ConfigMap", func() {
+			configMapName := types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      fmt.Sprintf("%s-config", OVNDBClusterName.Name),
+			}
+
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(configMapName)
+			}, timeout, interval).ShouldNot(BeNil())
+		})
+
+		It("creates services with metrics labels and ports", func() {
+			// Simulate StatefulSet ready with pods to trigger service creation
+			th.SimulateStatefulSetReplicaReadyWithPods(statefulSetName, map[string][]string{})
+
+			// Look for services with metrics enabled label
+			Eventually(func(g Gomega) {
+				services := GetServicesListWithLabel(OVNDBClusterName.Namespace, map[string]string{"metrics": "enabled"})
+				g.Expect(services.Items).ToNot(BeEmpty())
+
+				// Verify services still have cluster type and metrics port
+				for _, svc := range services.Items {
+					// Should have cluster type
+					g.Expect(svc.Labels["type"]).To(Equal("cluster"))
+
+					// Should have metrics port
+					var hasMetricsPort bool
+					for _, port := range svc.Spec.Ports {
+						if port.Name == "metrics" && port.Port == 1981 {
+							hasMetricsPort = true
+							break
+						}
+					}
+					g.Expect(hasMetricsPort).To(BeTrue(), fmt.Sprintf("Service %s should have metrics port", svc.Name))
+				}
+			}, timeout, interval).Should(Succeed())
+		})
+	})
+
+	When("A OVNDBCluster instance is created with metrics disabled", func() {
+		var OVNDBClusterName types.NamespacedName
+		var statefulSetName types.NamespacedName
+
+		BeforeEach(func() {
+			spec := GetDefaultOVNDBClusterSpec()
+			metricsEnabled := false
+			spec.MetricsEnabled = &metricsEnabled
+			// Set ExporterImage but disable metrics
+			spec.ExporterImage = "test-exporter:latest"
+			instance := CreateOVNDBCluster(namespace, spec)
+			OVNDBClusterName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+			DeferCleanup(th.DeleteInstance, instance)
+
+			statefulSetName = types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      "ovsdbserver-nb", // Use NB as default
+			}
+		})
+
+		It("creates a StatefulSet without metrics sidecar container", func() {
+			sts := th.GetStatefulSet(statefulSetName)
+
+			// Verify only main container exists (no metrics sidecar)
+			Expect(sts.Spec.Template.Spec.Containers).To(HaveLen(1))
+			Expect(sts.Spec.Template.Spec.Containers[0].Name).To(Equal("ovsdbserver-nb"))
+		})
+
+		It("does not create the metrics config ConfigMap", func() {
+			configMapName := types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      fmt.Sprintf("%s-config", OVNDBClusterName.Name),
+			}
+
+			th.AssertConfigMapDoesNotExist(configMapName)
+		})
+
+		It("creates services without metrics labels and ports", func() {
+			// Simulate StatefulSet ready with pods to trigger service creation
+			th.SimulateStatefulSetReplicaReadyWithPods(statefulSetName, map[string][]string{})
+
+			// Verify no services have metrics enabled label
+			Eventually(func(g Gomega) {
+				metricsServices := GetServicesListWithLabel(OVNDBClusterName.Namespace, map[string]string{"metrics": "enabled"})
+				g.Expect(metricsServices.Items).To(BeEmpty())
+
+				// Check that cluster services exist but don't have metrics ports or metrics labels
+				clusterServices := GetServicesListWithLabel(OVNDBClusterName.Namespace, map[string]string{"type": "cluster"})
+				for _, svc := range clusterServices.Items {
+					// Should not have metrics label
+					g.Expect(svc.Labels["metrics"]).To(BeEmpty())
+
+					// Services should not have metrics port
+					for _, port := range svc.Spec.Ports {
+						g.Expect(port.Name).ToNot(Equal("metrics"))
+					}
+				}
+			}, timeout, interval).Should(Succeed())
+		})
+	})
+
 	When("A OVNDBCluster instance is created with nodeSelector", func() {
 		var OVNDBClusterName types.NamespacedName
 		var statefulSetName types.NamespacedName
@@ -373,6 +525,9 @@ var _ = Describe("OVNDBCluster controller", func() {
 			spec := GetDefaultOVNDBClusterSpec()
 			spec.NetworkAttachment = "internalapi"
 			spec.DBType = ovnv1.SBDBType
+			// Disable metrics for network attachment tests to avoid sidecar container complications
+			metricsEnabled := false
+			spec.MetricsEnabled = &metricsEnabled
 			instance := CreateOVNDBCluster(namespace, spec)
 			OVNDBClusterName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
