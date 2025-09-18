@@ -2,6 +2,7 @@ package ovncontroller
 
 import (
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	"github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -24,7 +25,7 @@ func MetricsService(
 			Ports: []corev1.ServicePort{
 				{
 					Name:     "metrics",
-					Port:     1981,
+					Port:     common.MetricsPort,
 					Protocol: corev1.ProtocolTCP,
 				},
 			},

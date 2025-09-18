@@ -31,6 +31,7 @@ import (
 	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovn_common "github.com/openstack-k8s-operators/ovn-operator/pkg/common"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -304,7 +305,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 					// Should have metrics port
 					var hasMetricsPort bool
 					for _, port := range svc.Spec.Ports {
-						if port.Name == "metrics" && port.Port == 1981 {
+						if port.Name == "metrics" && port.Port == ovn_common.MetricsPort {
 							hasMetricsPort = true
 							break
 						}

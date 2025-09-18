@@ -8,4 +8,7 @@ const (
 	// Metrics certificate paths
 	OVNMetricsCertPath string = "/etc/pki/tls/certs/ovnmetrics.crt"
 	OVNMetricsKeyPath  string = "/etc/pki/tls/private/ovnmetrics.key"
+
+	// Metrics port
+	MetricsPort int32 = 1981
 )
