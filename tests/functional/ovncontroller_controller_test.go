@@ -1488,7 +1488,7 @@ var _ = Describe("OVNController controller", func() {
 
 			svc := th.GetService(metricsServiceName)
 			Expect(svc.Spec.Ports).To(HaveLen(1))
-			Expect(svc.Spec.Ports[0].Port).To(Equal(int32(1981)))
+			Expect(svc.Spec.Ports[0].Port).To(Equal(ovn_common.MetricsPort))
 			Expect(svc.Spec.Ports[0].Name).To(Equal("metrics"))
 		})
 	})
