@@ -73,7 +73,7 @@ func (r *OVNNorthdReconciler) GetScheme() *runtime.Scheme {
 	return r.Scheme
 }
 
-// getlog returns a logger object with a prefix of "conroller.name" and aditional controller context fields
+// GetLogger returns a logger object with a prefix of "controller.name" and additional controller context fields
 func (r *OVNNorthdReconciler) GetLogger(ctx context.Context) logr.Logger {
 	return log.FromContext(ctx).WithName("Controllers").WithName("OVNNorthd")
 }
@@ -105,7 +105,7 @@ func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// Fetch the OVNNorthd instance
 	instance := &ovnv1.OVNNorthd{}
-	err := r.Client.Get(ctx, req.NamespacedName, instance)
+	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if k8s_errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -268,7 +268,7 @@ func (r *OVNNorthdReconciler) findObjectsForSrc(ctx context.Context, src client.
 			FieldSelector: fields.OneTermEqualSelector(field, src.GetName()),
 			Namespace:     src.GetNamespace(),
 		}
-		err := r.Client.List(ctx, crList, listOps)
+		err := r.List(ctx, crList, listOps)
 		if err != nil {
 			Log.Error(err, fmt.Sprintf("listing %s for field: %s - %s", crList.GroupVersionKind().Kind, field, src.GetNamespace()))
 			return requests
@@ -410,7 +410,7 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 					condition.TLSInputReadyCondition,
 					condition.RequestedReason,
 					condition.SeverityInfo,
-					fmt.Sprintf(condition.TLSInputReadyWaitingMessage, instance.Spec.TLS.CaBundleSecretName)))
+					condition.TLSInputReadyWaitingMessage, instance.Spec.TLS.CaBundleSecretName))
 				return ctrl.Result{}, nil
 			}
 			instance.Status.Conditions.Set(condition.FalseCondition(
@@ -436,7 +436,7 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 					condition.TLSInputReadyCondition,
 					condition.RequestedReason,
 					condition.SeverityInfo,
-					fmt.Sprintf(condition.TLSInputReadyWaitingMessage, err.Error())))
+					condition.TLSInputReadyWaitingMessage, err.Error()))
 				return ctrl.Result{}, nil
 			}
 			instance.Status.Conditions.Set(condition.FalseCondition(
@@ -695,11 +695,11 @@ func (r *OVNNorthdReconciler) cleanupExtraServices(
 
 		// Try to delete service
 		svc := &corev1.Service{}
-		err := r.Client.Get(ctx, types.NamespacedName{Name: serviceName, Namespace: instance.Namespace}, svc)
+		err := r.Get(ctx, types.NamespacedName{Name: serviceName, Namespace: instance.Namespace}, svc)
 		if err == nil {
 			// Service exists, delete it
 			Log.Info(fmt.Sprintf("Deleting extra metrics service %s (scaled down)", serviceName))
-			err = r.Client.Delete(ctx, svc)
+			err = r.Delete(ctx, svc)
 			if err != nil && !k8s_errors.IsNotFound(err) {
 				Log.Error(err, fmt.Sprintf("Failed to delete extra service %s", serviceName))
 			}
@@ -718,7 +718,7 @@ func (r *OVNNorthdReconciler) cleanupLegacyDeployment(
 
 	// Check if legacy deployment exists
 	deployment := &appsv1.Deployment{}
-	err := r.Client.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: instance.Namespace}, deployment)
+	err := r.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: instance.Namespace}, deployment)
 	if err != nil {
 		if k8s_errors.IsNotFound(err) {
 			// Deployment doesn't exist, migration already complete
@@ -736,7 +736,7 @@ func (r *OVNNorthdReconciler) cleanupLegacyDeployment(
 			// Optional: Scale down deployment to 0 first for graceful shutdown
 			if deployment.Spec.Replicas != nil && *deployment.Spec.Replicas > 0 {
 				deployment.Spec.Replicas = &[]int32{0}[0]
-				err = r.Client.Update(ctx, deployment)
+				err = r.Update(ctx, deployment)
 				if err != nil {
 					Log.Error(err, "Failed to scale down legacy deployment, proceeding with deletion")
 				} else {
@@ -745,7 +745,7 @@ func (r *OVNNorthdReconciler) cleanupLegacyDeployment(
 			}
 
 			// Delete the deployment
-			err = r.Client.Delete(ctx, deployment)
+			err = r.Delete(ctx, deployment)
 			if err != nil && !k8s_errors.IsNotFound(err) {
 				return fmt.Errorf("failed to delete legacy deployment %s: %w", deploymentName, err)
 			}

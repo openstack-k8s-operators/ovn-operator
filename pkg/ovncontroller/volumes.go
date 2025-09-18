@@ -6,6 +6,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+// GetOVNControllerVolumes returns the volumes needed for OVN controller pods
 func GetOVNControllerVolumes(name string, namespace string) []corev1.Volume {
 
 	var scriptsVolumeDefaultMode int32 = 0755
@@ -82,6 +83,7 @@ func GetOVNControllerVolumes(name string, namespace string) []corev1.Volume {
 
 }
 
+// GetOVSVolumes returns the volumes needed for OVS (Open vSwitch) pods
 func GetOVSVolumes(name string, namespace string) []corev1.Volume {
 
 	var scriptsVolumeDefaultMode int32 = 0755

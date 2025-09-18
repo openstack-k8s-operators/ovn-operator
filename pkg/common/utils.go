@@ -10,13 +10,4 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package common
-
-// Helper function while can't use buildin min
-// TOOD(averdagu) remove when using go1.21.0
-func Min(x, y int) int {
-	if x < y {
-		return x
-	}
-	return y
-}
+package common //nolint:revive // G101: "common" is a legitimate package name for shared utilities
