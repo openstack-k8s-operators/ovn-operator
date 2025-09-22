@@ -84,7 +84,7 @@ func (r *OVNDBClusterReconciler) GetScheme() *runtime.Scheme {
 	return r.Scheme
 }
 
-// getlog returns a logger object with a prefix of "conroller.name" and aditional controller context fields
+// GetLogger returns a logger object with a prefix of "controller.name" and additional controller context fields
 func (r *OVNDBClusterReconciler) GetLogger(ctx context.Context) logr.Logger {
 	return log.FromContext(ctx).WithName("Controllers").WithName("OVNDBCluster")
 }
@@ -116,7 +116,7 @@ func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	// Fetch the OVNDBCluster instance
 	instance := &ovnv1.OVNDBCluster{}
-	err := r.Client.Get(ctx, req.NamespacedName, instance)
+	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if k8s_errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -290,7 +290,7 @@ func (r *OVNDBClusterReconciler) findObjectsForSrc(ctx context.Context, src clie
 			FieldSelector: fields.OneTermEqualSelector(field, src.GetName()),
 			Namespace:     src.GetNamespace(),
 		}
-		err := r.Client.List(ctx, crList, listOps)
+		err := r.List(ctx, crList, listOps)
 		if err != nil {
 			Log.Error(err, fmt.Sprintf("listing %s for field: %s - %s", crList.GroupVersionKind().Kind, field, src.GetNamespace()))
 			return requests
@@ -463,7 +463,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 					condition.TLSInputReadyCondition,
 					condition.RequestedReason,
 					condition.SeverityInfo,
-					fmt.Sprintf(condition.TLSInputReadyWaitingMessage, instance.Spec.TLS.CaBundleSecretName)))
+					condition.TLSInputReadyWaitingMessage, instance.Spec.TLS.CaBundleSecretName))
 				return ctrl.Result{}, nil
 			}
 			instance.Status.Conditions.Set(condition.FalseCondition(
@@ -489,7 +489,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 					condition.TLSInputReadyCondition,
 					condition.RequestedReason,
 					condition.SeverityInfo,
-					fmt.Sprintf(condition.TLSInputReadyWaitingMessage, err.Error())))
+					condition.TLSInputReadyWaitingMessage, err.Error()))
 				return ctrl.Result{}, nil
 			}
 			instance.Status.Conditions.Set(condition.FalseCondition(
@@ -907,8 +907,7 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 	// get it automatically registered in DNS.
 	if instance.Spec.NetworkAttachment != "" && ssvc.GetServiceType() != corev1.ServiceTypeLoadBalancer {
 		var dnsIPsList []string
-		// TODO(averdagu): use built in Min once go1.21 is used
-		minLen := ovn_common.Min(len(podList.Items), int(*(instance.Spec.Replicas)))
+		minLen := min(len(podList.Items), int(*(instance.Spec.Replicas)))
 		for _, ovnPod := range podList.Items[:minLen] {
 			svc, err = service.GetServiceWithName(
 				ctx,

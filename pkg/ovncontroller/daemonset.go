@@ -28,6 +28,7 @@ import (
 	"k8s.io/utils/ptr"
 )
 
+// CreateOVNDaemonSet creates a DaemonSet for OVN controller pods
 func CreateOVNDaemonSet(
 	instance *ovnv1.OVNController,
 	configHash string,
@@ -44,7 +45,7 @@ func CreateOVNDaemonSet(
 	// add OVN dbs cert and CA
 	if instance.Spec.TLS.Enabled() {
 		svc := tls.Service{
-			SecretName: *instance.Spec.TLS.GenericService.SecretName,
+			SecretName: *instance.Spec.TLS.SecretName,
 			CertMount:  ptr.To(ovn_common.OVNDbCertPath),
 			KeyMount:   ptr.To(ovn_common.OVNDbKeyPath),
 			CaMount:    ptr.To(ovn_common.OVNDbCaCertPath),
@@ -171,6 +172,7 @@ func CreateOVNDaemonSet(
 	return daemonset
 }
 
+// CreateOVSDaemonSet creates a DaemonSet for OVS (Open vSwitch) pods
 func CreateOVSDaemonSet(
 	instance *ovnv1.OVNController,
 	configHash string,
@@ -351,12 +353,13 @@ func CreateOVSDaemonSet(
 	}
 
 	if len(annotations) > 0 {
-		daemonset.Spec.Template.ObjectMeta.Annotations = annotations
+		daemonset.Spec.Template.Annotations = annotations
 	}
 
 	return daemonset
 }
 
+// CreateMetricsDaemonSet creates a DaemonSet for metrics pods
 func CreateMetricsDaemonSet(
 	instance *ovnv1.OVNController,
 	configHash string,

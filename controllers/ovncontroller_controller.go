@@ -60,7 +60,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 )
 
-// getlog returns a logger object with a prefix of "conroller.name" and aditional controller context fields
+// GetLogger returns a logger object with a prefix of "controller.name" and additional controller context fields
 func (r *OVNControllerReconciler) GetLogger(ctx context.Context) logr.Logger {
 	return log.FromContext(ctx).WithName("Controllers").WithName("OVNController")
 }
@@ -98,12 +98,13 @@ func (r *OVNControllerReconciler) GetClient() client.Client {
 // +kubebuilder:rbac:groups="",resources=pods,verbs=create;delete;get;list;patch;update;watch
 // +kubebuilder:rbac:groups=topology.openstack.org,resources=topologies,verbs=get;list;watch;update
 
+// Reconcile reconciles the OVNController CR to deploy OVN controller pods
 func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, _err error) {
 	Log := r.GetLogger(ctx)
 
 	// Fetch OVNController instance
 	instance := &ovnv1.OVNController{}
-	err := r.Client.Get(ctx, req.NamespacedName, instance)
+	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if k8s_errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -277,7 +278,7 @@ func (r *OVNControllerReconciler) findObjectsForSrc(ctx context.Context, src cli
 			FieldSelector: fields.OneTermEqualSelector(field, src.GetName()),
 			Namespace:     src.GetNamespace(),
 		}
-		err := r.Client.List(ctx, crList, listOps)
+		err := r.List(ctx, crList, listOps)
 		if err != nil {
 			Log.Error(err, fmt.Sprintf("listing %s for field: %s - %s", crList.GroupVersionKind().Kind, field, src.GetNamespace()))
 			return requests
@@ -403,7 +404,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 					condition.TLSInputReadyCondition,
 					condition.RequestedReason,
 					condition.SeverityInfo,
-					fmt.Sprintf(condition.TLSInputReadyWaitingMessage, instance.Spec.TLS.CaBundleSecretName)))
+					condition.TLSInputReadyWaitingMessage, instance.Spec.TLS.CaBundleSecretName))
 				return ctrl.Result{}, nil
 			}
 			instance.Status.Conditions.Set(condition.FalseCondition(
@@ -429,7 +430,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 					condition.TLSInputReadyCondition,
 					condition.RequestedReason,
 					condition.SeverityInfo,
-					fmt.Sprintf(condition.TLSInputReadyWaitingMessage, err.Error())))
+					condition.TLSInputReadyWaitingMessage, err.Error()))
 				return ctrl.Result{}, nil
 			}
 			instance.Status.Conditions.Set(condition.FalseCondition(
@@ -906,7 +907,7 @@ func (r *OVNControllerReconciler) deleteResourceIfExists(ctx context.Context, ob
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
 
-	err := r.Client.Delete(ctx, obj)
+	err := r.Delete(ctx, obj)
 	if err != nil && !k8s_errors.IsNotFound(err) {
 		return err
 	}
