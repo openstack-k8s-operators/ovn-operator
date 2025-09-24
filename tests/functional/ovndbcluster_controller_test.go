@@ -603,11 +603,13 @@ var _ = Describe("OVNDBCluster controller", func() {
 			}, timeout, interval).Should(Succeed())
 		})
 
-		It("should create an external ConfigMap with ovn-encap-type if OVNController is configured", func() {
+		It("should create an external ConfigMap with ovn-encap-type and ovn-encap-tos if OVNController is configured", func() {
 			ExpectedEncapType := "vxlan"
+			ExpectedEncapTos := "inherit"
 			// Spawn OVNController with vxlan as ExternalIDs.OvnEncapType
 			ovncontrollerSpec := GetDefaultOVNControllerSpec()
 			ovncontrollerSpec.ExternalIDS.OvnEncapType = ExpectedEncapType
+			ovncontrollerSpec.ExternalIDS.OvnEncapTos = ExpectedEncapTos
 			ovnController := CreateOVNController(namespace, ovncontrollerSpec)
 			DeferCleanup(th.DeleteInstance, ovnController)
 			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
@@ -646,13 +648,19 @@ var _ = Describe("OVNDBCluster controller", func() {
 				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
 					ContainSubstring("ovn-encap-type: %s", ExpectedEncapType))
 			}, timeout, interval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-encap-tos: %s", ExpectedEncapTos))
+			}, timeout, interval).Should(Succeed())
 		})
 
 		It("should remove ovnEncapType if OVNController gets deleted", func() {
 			ExpectedEncapType := "vxlan"
+			ExpectedEncapTos := "inherit"
 			// Spawn OVNController with vxlan as ExternalIDs.OvnEncapType
 			ovncontrollerSpec := GetDefaultOVNControllerSpec()
 			ovncontrollerSpec.ExternalIDS.OvnEncapType = ExpectedEncapType
+			ovncontrollerSpec.ExternalIDS.OvnEncapTos = ExpectedEncapTos
 			ovnController := CreateOVNController(namespace, ovncontrollerSpec)
 			//DeferCleanup(th.DeleteInstance, ovnController)
 			internalAPINADName := types.NamespacedName{Namespace: namespace, Name: "internalapi"}
@@ -691,9 +699,13 @@ var _ = Describe("OVNDBCluster controller", func() {
 				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
 					ContainSubstring("ovn-encap-type: %s", ExpectedEncapType))
 			}, timeout, interval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-encap-tos: %s", ExpectedEncapTos))
+			}, timeout, interval).Should(Succeed())
 
 			// This should trigger an OVNDBCluster reconcile and update config map
-			// without ovn-encap-type
+			// without ovn-encap-type and ovn-encap-tos
 			DeleteOVNController(types.NamespacedName{Name: ovnController.GetName(), Namespace: namespace})
 
 			Eventually(func() corev1.ConfigMap {
@@ -706,6 +718,10 @@ var _ = Describe("OVNDBCluster controller", func() {
 			Eventually(func(g Gomega) {
 				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).ShouldNot(
 					ContainSubstring("ovn-encap-type: %s", ExpectedEncapType))
+			}, timeout, interval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).ShouldNot(
+					ContainSubstring("ovn-encap-tos: %s", ExpectedEncapTos))
 			}, timeout, interval).Should(Succeed())
 		})
 
@@ -1036,11 +1052,13 @@ var _ = Describe("OVNDBCluster controller", func() {
 			}, timeout, interval).Should(Succeed())
 		})
 
-		It("should create an external ConfigMap with ovn-encap-type if OVNController is configured", func() {
+		It("should create an external ConfigMap with ovn-encap-type and ovn-encap-tos if OVNController is configured", func() {
 			ExpectedEncapType := "vxlan"
+			ExpectedEncapTos := "inherit"
 			// Spawn OVNController with vxlan as ExternalIDs.OvnEncapType
 			ovncontrollerSpec := GetDefaultOVNControllerSpec()
 			ovncontrollerSpec.ExternalIDS.OvnEncapType = ExpectedEncapType
+			ovncontrollerSpec.ExternalIDS.OvnEncapTos = ExpectedEncapTos
 			ovnController := CreateOVNController(namespace, ovncontrollerSpec)
 			DeferCleanup(th.DeleteInstance, ovnController)
 
@@ -1077,13 +1095,19 @@ var _ = Describe("OVNDBCluster controller", func() {
 				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
 					ContainSubstring("ovn-encap-type: %s", ExpectedEncapType))
 			}, timeout, interval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-encap-tos: %s", ExpectedEncapTos))
+			}, timeout, interval).Should(Succeed())
 		})
 
-		It("should remove ovnEncapType if OVNController gets deleted", func() {
+		It("should remove ovnEncapType and ovnEncapTos if OVNController gets deleted", func() {
 			ExpectedEncapType := "vxlan"
+			ExpectedEncapTos := "inherit"
 			// Spawn OVNController with vxlan as ExternalIDs.OvnEncapType
 			ovncontrollerSpec := GetDefaultOVNControllerSpec()
 			ovncontrollerSpec.ExternalIDS.OvnEncapType = ExpectedEncapType
+			ovncontrollerSpec.ExternalIDS.OvnEncapTos = ExpectedEncapTos
 			ovnController := CreateOVNController(namespace, ovncontrollerSpec)
 
 			statefulSetName := types.NamespacedName{
@@ -1119,9 +1143,13 @@ var _ = Describe("OVNDBCluster controller", func() {
 				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
 					ContainSubstring("ovn-encap-type: %s", ExpectedEncapType))
 			}, timeout, interval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
+					ContainSubstring("ovn-encap-tos: %s", ExpectedEncapTos))
+			}, timeout, interval).Should(Succeed())
 
 			// This should trigger an OVNDBCluster reconcile and update config map
-			// without ovn-encap-type
+			// without ovn-encap-type and ovn-encap-tos
 			DeleteOVNController(types.NamespacedName{Name: ovnController.GetName(), Namespace: namespace})
 
 			Eventually(func() corev1.ConfigMap {
@@ -1134,6 +1162,10 @@ var _ = Describe("OVNDBCluster controller", func() {
 			Eventually(func(g Gomega) {
 				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).ShouldNot(
 					ContainSubstring("ovn-encap-type: %s", ExpectedEncapType))
+			}, timeout, interval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).ShouldNot(
+					ContainSubstring("ovn-encap-tos: %s", ExpectedEncapTos))
 			}, timeout, interval).Should(Succeed())
 		})
 

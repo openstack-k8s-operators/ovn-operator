@@ -6,14 +6,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// GetOVNControllerVolumes returns the volumes needed for OVN controller pods
-func GetOVNControllerVolumes(name string, namespace string) []corev1.Volume {
+// GetOVNControllerVolumes returns the volumes needed for OVN controller pods with optional additional ConfigMap
+func GetOVNControllerVolumes(name string, namespace string, includeAdditional bool) []corev1.Volume {
 
 	var scriptsVolumeDefaultMode int32 = 0755
 	directoryOrCreate := corev1.HostPathDirectoryOrCreate
 
 	//source_type := corev1.HostPathDirectoryOrCreate
-	return []corev1.Volume{
+	volumes := []corev1.Volume{
 		{
 			Name: "etc-ovs",
 			VolumeSource: corev1.VolumeSource{
@@ -81,6 +81,22 @@ func GetOVNControllerVolumes(name string, namespace string) []corev1.Volume {
 		},
 	}
 
+	// Add additional scripts volume if needed
+	if includeAdditional {
+		volumes = append(volumes, corev1.Volume{
+			Name: "additional-scripts",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					DefaultMode: &scriptsVolumeDefaultMode,
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: name + "-extra-scripts",
+					},
+				},
+			},
+		})
+	}
+
+	return volumes
 }
 
 // GetOVSVolumes returns the volumes needed for OVS (Open vSwitch) pods
@@ -199,9 +215,9 @@ func GetVswitchdVolumeMounts() []corev1.VolumeMount {
 	}
 }
 
-// GetOVNControllerVolumeMounts - ovn-controller VolumeMounts
-func GetOVNControllerVolumeMounts() []corev1.VolumeMount {
-	return []corev1.VolumeMount{
+// GetOVNControllerVolumeMounts - ovn-controller VolumeMounts with optional additional mount
+func GetOVNControllerVolumeMounts(includeAdditional bool) []corev1.VolumeMount {
+	mounts := []corev1.VolumeMount{
 		{
 			Name:      "var-run",
 			MountPath: "/var/run/openvswitch",
@@ -223,4 +239,15 @@ func GetOVNControllerVolumeMounts() []corev1.VolumeMount {
 			ReadOnly:  true,
 		},
 	}
+
+	// Add additional scripts mount if needed
+	if includeAdditional {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      "additional-scripts",
+			MountPath: "/usr/local/bin/additional-scripts",
+			ReadOnly:  true,
+		})
+	}
+
+	return mounts
 }

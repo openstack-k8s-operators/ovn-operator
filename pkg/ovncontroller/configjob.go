@@ -60,11 +60,18 @@ func ConfigJob(
 	envVars["OVNBridge"] = env.SetValue(instance.Spec.ExternalIDS.OvnBridge)
 	envVars["OVNRemote"] = env.SetValue(internalEndpoint)
 	envVars["OVNEncapType"] = env.SetValue(instance.Spec.ExternalIDS.OvnEncapType)
+	envVars["OVNEncapTos"] = env.SetValue(instance.Spec.ExternalIDS.OvnEncapTos)
 	envVars["OVNAvailabilityZones"] = env.SetValue(strings.Join(instance.Spec.ExternalIDS.OvnAvailabilityZones, ":"))
 	envVars["PhysicalNetworks"] = env.SetValue(getPhysicalNetworks(instance))
 	envVars["OVNHostName"] = env.DownwardAPI("spec.nodeName")
 
 	for _, ovnPod := range ovnPods.Items {
+		commands := []string{
+			"/usr/local/bin/container-scripts/init.sh",
+			"&&",
+			"/usr/local/bin/additional-scripts/configure-ovn.sh",
+		}
+
 		jobs = append(
 			jobs,
 			&batchv1.Job{
@@ -84,7 +91,7 @@ func ConfigJob(
 									Name:  "ovn-config",
 									Image: instance.Spec.OvnContainerImage,
 									Command: []string{
-										"/usr/local/bin/container-scripts/init.sh",
+										"/bin/bash", "-c", strings.Join(commands, " "),
 									},
 									Args: []string{},
 									SecurityContext: &corev1.SecurityContext{
@@ -92,11 +99,11 @@ func ConfigJob(
 										Privileged: &privileged,
 									},
 									Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-									VolumeMounts: GetOVNControllerVolumeMounts(),
+									VolumeMounts: GetOVNControllerVolumeMounts(true),
 									Resources:    instance.Spec.Resources,
 								},
 							},
-							Volumes:  GetOVNControllerVolumes(instance.Name, instance.Namespace),
+							Volumes:  GetOVNControllerVolumes(instance.Name, instance.Namespace, true),
 							NodeName: ovnPod.Spec.NodeName,
 							// ^ NodeSelector not required
 						},
