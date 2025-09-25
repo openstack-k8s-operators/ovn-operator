@@ -1,0 +1,14 @@
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNController
+metadata:
+  name: ovncontroller-sample
+spec:
+  bondConfiguration:
+    bond0:
+      mode: active-backup
+      mtu: 1000
+      links:
+        - datacentre2
+        - data-centre3
+  nicMappings:
+    datacentre5: bond0

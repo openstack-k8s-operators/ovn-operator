@@ -1,0 +1,44 @@
+#
+# Check for:
+#
+# - The interface "data-centre3" NAD exists
+# - The interface "datacentre2" NAD exists
+# - The interface "datacentre5" NAD exists
+# - Pods have the correct NADs assigned
+# - The correspondent interfaces exist in the ovn-controller-ovs pod
+# - The bond configuration is applied correctly
+
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: data-centre3
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: datacentre2
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: datacentre5
+spec:
+  config: '{"cniVersion": "0.3.1","name": "datacentre5", "type": "bond", "mode": "active-backup",
+    "failOverMac": 1, "linksInContainer": true, "miimon": "100", "mtu": 1000, "links":
+    [{"name": "datacentre2"}, {"name": "data-centre3"}]}'
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 300
+commands:
+    - script: |
+        oc get pod -n "$NAMESPACE" -l service=ovn-controller-ovs -o json | jq -e '
+        (.items[].metadata.annotations."k8s.v1.cni.cncf.io/networks" | fromjson) as $networks |
+        ($networks | length) == 3 and
+        (all($networks[]; .name | IN("datacentre2", "data-centre3", "datacentre5")) and
+               all($networks[]; .interface | IN("datacentre2", "data-centre3", "datacentre5")))' || exit 1
+        controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller-ovs -o name|head -1)
+        oc rsh -n $NAMESPACE ${controller_pod} ip a show datacentre2 || exit 1
+        oc rsh -n $NAMESPACE ${controller_pod} ip a show data-centre3 || exit 1
+        oc rsh -n $NAMESPACE ${controller_pod} ip a show datacentre5 || exit 1
+        oc rsh -n $NAMESPACE ${controller_pod} cat /proc/net/bonding/datacentre5 || exit 1

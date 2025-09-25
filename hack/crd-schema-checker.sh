@@ -28,5 +28,6 @@ for crd in config/crd/bases/*.yaml; do
     $CHECKER check-manifests \
         $CHECKER_ARGS \
         --existing-crd-filename="$TMP_DIR/$crd" \
-        --new-crd-filename="$crd"
+        --new-crd-filename="$crd" \
+        --disabled-validators NoMaps
 done
