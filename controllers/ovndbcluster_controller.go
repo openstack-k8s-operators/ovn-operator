@@ -1004,6 +1004,7 @@ func (r *OVNDBClusterReconciler) generateExternalConfigMaps(
 	}
 	if ovnController != nil {
 		externalTemplateParameters["OVNEncapType"] = ovnController.Spec.ExternalIDS.OvnEncapType
+		externalTemplateParameters["OVNEncapTos"] = ovnController.Spec.ExternalIDS.OvnEncapTos
 	}
 
 	cms := []util.Template{

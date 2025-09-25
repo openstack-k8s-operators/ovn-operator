@@ -68,6 +68,7 @@ spec:
   external-ids:
     ovn-bridge: br-int
     ovn-encap-type: geneve
+    ovn-encap-tos: "0"
     system-id: random
 status:
   conditions:

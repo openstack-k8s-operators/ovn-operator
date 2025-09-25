@@ -874,7 +874,32 @@ func (r *OVNControllerReconciler) generateServiceConfigMaps(
 		},
 	}
 
-	return configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
+	// Create the main scripts configmap with envVars
+	err := configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
+	if err != nil {
+		return err
+	}
+
+	// Add additional ConfigMap for extra configuration scripts
+	extraScriptsTemplateParameters := make(map[string]interface{})
+	extraScriptsTemplateParameters["OVNEncapTos"] = instance.Spec.ExternalIDS.OvnEncapTos
+
+	extraCms := []util.Template{
+		{
+			Name:      fmt.Sprintf("%s-extra-scripts", instance.Name),
+			Namespace: instance.Namespace,
+			Type:      util.TemplateTypeNone,
+			AdditionalTemplate: map[string]string{
+				"configure-ovn.sh": "/ovncontroller/config/configure-ovn.sh",
+			},
+			InstanceType:  instance.Kind,
+			Labels:        cmLabels,
+			ConfigOptions: extraScriptsTemplateParameters,
+		},
+	}
+
+	// Create the extra scripts configmap without envVars (only used by config job)
+	return configmap.EnsureConfigMaps(ctx, h, instance, extraCms, nil)
 }
 
 // createHashOfInputHashes - creates a hash of hashes which gets added to the resources which requires a restart

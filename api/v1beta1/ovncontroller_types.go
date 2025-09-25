@@ -186,6 +186,11 @@ type OVSExternalIDs struct {
 	OvnEncapType string `json:"ovn-encap-type,omitempty"`
 
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:default="0"
+	// +kubebuilder:validation:Enum={"0","inherit"}
+	OvnEncapTos string `json:"ovn-encap-tos,omitempty"`
+
+	// +kubebuilder:validation:Optional
 	// +kubebuilder:default={}
 	OvnAvailabilityZones []string `json:"availability-zones,omitempty"`
 

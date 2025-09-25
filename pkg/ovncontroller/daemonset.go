@@ -35,8 +35,8 @@ func CreateOVNDaemonSet(
 	labels map[string]string,
 	topology *topologyv1.Topology,
 ) *appsv1.DaemonSet {
-	volumes := GetOVNControllerVolumes(instance.Name, instance.Namespace)
-	mounts := GetOVNControllerVolumeMounts()
+	volumes := GetOVNControllerVolumes(instance.Name, instance.Namespace, false)
+	mounts := GetOVNControllerVolumeMounts(false)
 
 	cmd := []string{
 		"ovn-controller", "--pidfile", "unix:/run/openvswitch/db.sock",
