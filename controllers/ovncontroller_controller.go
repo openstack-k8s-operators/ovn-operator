@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -513,7 +512,6 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		networkAttachments = append(networkAttachments, instance.Spec.NetworkAttachment)
 		networkAttachmentsNoPhysNet = append(networkAttachmentsNoPhysNet, instance.Spec.NetworkAttachment)
 	}
-	sort.Strings(networkAttachments)
 
 	nadList := []netattdefv1.NetworkAttachmentDefinition{}
 	for _, netAtt := range networkAttachments {
