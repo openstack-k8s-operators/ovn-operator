@@ -856,7 +856,7 @@ func (r *OVNControllerReconciler) generateServiceConfigMaps(
 	// Create/update configmaps from templates
 	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnv1.ServiceNameOVNController), map[string]string{})
 
-	templateParameters := make(map[string]interface{})
+	templateParameters := make(map[string]any)
 	if instance.Spec.NetworkAttachment != "" {
 		templateParameters["OVNEncapNIC"] = nad.GetNetworkIFName(instance.Spec.NetworkAttachment)
 	} else {
@@ -881,7 +881,7 @@ func (r *OVNControllerReconciler) generateServiceConfigMaps(
 	}
 
 	// Add additional ConfigMap for extra configuration scripts
-	extraScriptsTemplateParameters := make(map[string]interface{})
+	extraScriptsTemplateParameters := make(map[string]any)
 	extraScriptsTemplateParameters["OVNEncapTos"] = instance.Spec.ExternalIDS.OvnEncapTos
 
 	extraCms := []util.Template{

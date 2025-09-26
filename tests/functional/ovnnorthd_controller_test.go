@@ -675,16 +675,16 @@ var _ = Describe("OVNNorthd controller", func() {
 		})
 	})
 	It("rejects a wrong topologyRef on a different namespace", func() {
-		spec := map[string]interface{}{}
+		spec := map[string]any{}
 		// Inject a topologyRef that points to a different namespace
-		spec["topologyRef"] = map[string]interface{}{
+		spec["topologyRef"] = map[string]any{
 			"name":      "foo",
 			"namespace": "bar",
 		}
-		raw := map[string]interface{}{
+		raw := map[string]any{
 			"apiVersion": "ovn.openstack.org/v1beta1",
 			"kind":       "OVNNorthd",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name":      "ovnnorthd-sample",
 				"namespace": namespace,
 			},

@@ -994,7 +994,7 @@ func (r *OVNDBClusterReconciler) generateExternalConfigMaps(
 		return err
 	}
 
-	externalTemplateParameters := make(map[string]interface{})
+	externalTemplateParameters := make(map[string]any)
 	externalTemplateParameters["OVNRemote"] = externalEndpoint
 
 	ovnController, err := ovnv1.GetOVNController(ctx, h, instance.Namespace)
@@ -1054,7 +1054,7 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 	// Create/update configmaps from templates
 	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(serviceName), map[string]string{})
 
-	templateParameters := make(map[string]interface{})
+	templateParameters := make(map[string]any)
 
 	templateParameters["OVN_LOG_LEVEL"] = instance.Spec.LogLevel
 	templateParameters["SERVICE_NAME"] = serviceName
