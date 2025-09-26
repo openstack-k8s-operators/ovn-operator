@@ -594,7 +594,7 @@ func (r *OVNNorthdReconciler) generateServiceConfigMaps(
 
 	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(serviceName), map[string]string{})
 
-	templateParameters := make(map[string]interface{})
+	templateParameters := make(map[string]any)
 	templateParameters["TLS"] = instance.Spec.TLS.Enabled()
 	templateParameters["OVN_METRICS_CERT_PATH"] = ovn_common.OVNMetricsCertPath
 	templateParameters["OVN_METRICS_KEY_PATH"] = ovn_common.OVNMetricsKeyPath

@@ -511,7 +511,7 @@ func CreateMetricsDaemonSet(
 func GetMetricsConfigMap(
 	instance *ovnv1.OVNController,
 ) util.Template {
-	templateParameters := make(map[string]interface{})
+	templateParameters := make(map[string]any)
 
 	templateParameters["TLS"] = instance.Spec.TLS.Enabled()
 

@@ -251,7 +251,7 @@ func OVNControllerConditionGetter(name types.NamespacedName) condition.Condition
 func SimulateDaemonsetNumberReadyWithPods(name types.NamespacedName, networkIPs map[string][]string) {
 	ds := GetDaemonSet(name)
 
-	for i := 0; i < int(1); i++ {
+	for range int(1) {
 		pod := &corev1.Pod{
 			ObjectMeta: ds.Spec.Template.ObjectMeta,
 			Spec:       ds.Spec.Template.Spec,
@@ -366,7 +366,7 @@ func GetServicesListWithLabel(namespace string, labelSelectorMap ...map[string]s
 		Namespace: namespace,
 	}
 	if len(labelSelectorMap) > 0 {
-		for i := 0; i < len(labelSelectorMap); i++ {
+		for i := range labelSelectorMap {
 			for key, value := range labelSelectorMap[i] {
 				ml := client.MatchingLabels{
 					key: value,
@@ -386,15 +386,15 @@ func GetServicesListWithLabel(namespace string, labelSelectorMap ...map[string]s
 
 // GetSampleDaemonSetTopologySpec - A sample (and opinionated) Topology Spec used to
 // test OVN components
-func GetSampleDaemonSetTopologySpec(selector string) map[string]interface{} {
+func GetSampleDaemonSetTopologySpec(selector string) map[string]any {
 	// Build the topology Spec
-	topologySpec := map[string]interface{}{
-		"affinity": map[string]interface{}{
-			"nodeAffinity": map[string]interface{}{
-				"requiredDuringSchedulingIgnoredDuringExecution": map[string]interface{}{
-					"nodeSelectorTerms": []map[string]interface{}{
+	topologySpec := map[string]any{
+		"affinity": map[string]any{
+			"nodeAffinity": map[string]any{
+				"requiredDuringSchedulingIgnoredDuringExecution": map[string]any{
+					"nodeSelectorTerms": []map[string]any{
 						{
-							"matchExpressions": []map[string]interface{}{
+							"matchExpressions": []map[string]any{
 								{
 									"key":      "service",
 									"operator": "In",
@@ -414,16 +414,16 @@ func GetSampleDaemonSetTopologySpec(selector string) map[string]interface{} {
 
 // GetSampleTopologySpec - A sample (and opinionated) Topology Spec used to
 // test OVN components
-func GetSampleTopologySpec(label string) (map[string]interface{}, []corev1.TopologySpreadConstraint) {
+func GetSampleTopologySpec(label string) (map[string]any, []corev1.TopologySpreadConstraint) {
 	// Build the topology Spec
-	topologySpec := map[string]interface{}{
-		"topologySpreadConstraints": []map[string]interface{}{
+	topologySpec := map[string]any{
+		"topologySpreadConstraints": []map[string]any{
 			{
 				"maxSkew":           1,
 				"topologyKey":       corev1.LabelHostname,
 				"whenUnsatisfiable": "ScheduleAnyway",
-				"labelSelector": map[string]interface{}{
-					"matchLabels": map[string]interface{}{
+				"labelSelector": map[string]any{
+					"matchLabels": map[string]any{
 						"service": label,
 					},
 				},
