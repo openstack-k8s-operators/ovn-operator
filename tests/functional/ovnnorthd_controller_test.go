@@ -276,7 +276,7 @@ var _ = Describe("OVNNorthd controller", func() {
 				ConditionGetterFunc(OVNNorthdConditionGetter),
 				condition.TLSInputReadyCondition,
 				corev1.ConditionFalse,
-				condition.RequestedReason,
+				condition.ErrorReason,
 				fmt.Sprintf("TLSInput is missing: %s", CABundleSecretName),
 			)
 			th.ExpectCondition(
