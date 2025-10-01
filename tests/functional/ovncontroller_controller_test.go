@@ -533,7 +533,7 @@ var _ = Describe("OVNController controller", func() {
 				ConditionGetterFunc(OVNControllerConditionGetter),
 				condition.NetworkAttachmentsReadyCondition,
 				corev1.ConditionFalse,
-				condition.RequestedReason,
+				condition.ErrorReason,
 				"NetworkAttachment resources missing: internalapi",
 			)
 		})
@@ -924,7 +924,7 @@ var _ = Describe("OVNController controller", func() {
 				ConditionGetterFunc(OVNControllerConditionGetter),
 				condition.TLSInputReadyCondition,
 				corev1.ConditionFalse,
-				condition.RequestedReason,
+				condition.ErrorReason,
 				fmt.Sprintf("TLSInput is missing: %s", CABundleSecretName),
 			)
 			th.ExpectCondition(
