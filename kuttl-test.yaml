@@ -18,7 +18,7 @@ apiVersion: kuttl.dev/v1beta1
 kind: TestSuite
 reportFormat: JSON
 reportName: kuttl-test-ovn
-namespace: openstack
+namespace: ovn-kuttl-tests
 timeout: 600
 parallel: 1
 suppress:
