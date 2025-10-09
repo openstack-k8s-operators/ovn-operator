@@ -1,0 +1,12 @@
+#
+# Prepare env for step 6, need to put this on a different step to make sure it gets executed first.
+#
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+timeout: 60
+commands:
+  - script: |
+      oc patch OVNController -n $NAMESPACE ovncontroller-sample --type='json' -p='[{
+        "op": "remove",
+        "path": "/spec/nicMappings"
+      }]'

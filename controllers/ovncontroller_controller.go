@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -497,7 +496,16 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 
 	// Create or Update additional Physical Network Attachments
-	networkAttachments, err := ovncontroller.CreateOrUpdateAdditionalNetworks(ctx, helper, instance, ovsServiceLabels)
+	// network to attach to
+	networkAttachments := []string{}
+	networkAttachmentsNoPhysNet := []string{}
+	if instance.Spec.NetworkAttachment != "" {
+		networkAttachments = append(networkAttachments, instance.Spec.NetworkAttachment)
+		networkAttachmentsNoPhysNet = append(networkAttachmentsNoPhysNet, instance.Spec.NetworkAttachment)
+	}
+
+	networkAttachments, err = ovncontroller.CreateOrUpdateAdditionalNetworks(ctx, helper, instance, ovsServiceLabels, networkAttachments)
+
 	if err != nil {
 		Log.Info(fmt.Sprintf("Failed to create additional networks: %s", err))
 		instance.Status.Conditions.Set(condition.FalseCondition(
@@ -508,14 +516,6 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 			err.Error()))
 		return ctrl.Result{}, err
 	}
-
-	// network to attach to
-	networkAttachmentsNoPhysNet := []string{}
-	if instance.Spec.NetworkAttachment != "" {
-		networkAttachments = append(networkAttachments, instance.Spec.NetworkAttachment)
-		networkAttachmentsNoPhysNet = append(networkAttachmentsNoPhysNet, instance.Spec.NetworkAttachment)
-	}
-	sort.Strings(networkAttachments)
 
 	nadList := []netattdefv1.NetworkAttachmentDefinition{}
 	for _, netAtt := range networkAttachments {
