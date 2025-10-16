@@ -95,6 +95,10 @@ type OVNNorthdSpecCore struct {
 	// +kubebuilder:default=true
 	// MetricsEnabled enables the metrics sidecar container for collecting OVN metrics
 	MetricsEnabled *bool `json:"metricsEnabled,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// MetricsTLS - Parameters related to TLS for metrics sidecar
+	MetricsTLS tls.SimpleService `json:"metricsTLS,omitempty"`
 }
 
 // OVNNorthdStatus defines the observed state of OVNNorthd
@@ -104,6 +108,9 @@ type OVNNorthdStatus struct {
 
 	// Conditions
 	Conditions condition.Conditions `json:"conditions,omitempty" optional:"true"`
+
+	// Map of hashes to track e.g. job status
+	Hash map[string]string `json:"hash,omitempty"`
 
 	//ObservedGeneration - the most recent generation observed for this service. If the observed generation is less than the spec generation, then the controller has not processed the latest changes.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`

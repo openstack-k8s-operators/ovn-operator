@@ -108,6 +108,10 @@ type OVNControllerSpecCore struct {
 	// +kubebuilder:default=true
 	// MetricsEnabled enables the metrics daemonset for collecting OVN metrics
 	MetricsEnabled *bool `json:"metricsEnabled,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// MetricsTLS - Parameters related to TLS for metrics daemonset
+	MetricsTLS tls.SimpleService `json:"metricsTLS,omitempty"`
 }
 
 // OVNControllerStatus defines the observed state of OVNController

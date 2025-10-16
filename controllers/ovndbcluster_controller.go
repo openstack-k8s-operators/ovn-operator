@@ -246,6 +246,18 @@ func (r *OVNDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
+	// index metricsTLSField
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &ovnv1.OVNDBCluster{}, metricsTLSField, func(rawObj client.Object) []string {
+		// Extract the metrics TLS secret name from the spec, if one is provided
+		cr := rawObj.(*ovnv1.OVNDBCluster)
+		if cr.Spec.MetricsTLS.SecretName == nil {
+			return nil
+		}
+		return []string{*cr.Spec.MetricsTLS.SecretName}
+	}); err != nil {
+		return err
+	}
+
 	// index topologyField
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &ovnv1.OVNDBCluster{}, topologyField, func(rawObj client.Object) []string {
 		// Extract the topology name from the spec, if one is provided
@@ -505,6 +517,35 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 			return ctrl.Result{}, err
 		}
 		configMapVars[tls.TLSHashName] = env.SetValue(hash)
+	}
+
+	//
+	// Metrics TLS input validation (if metrics are enabled)
+	//
+	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
+
+		// Validate metrics cert secret
+		if instance.Spec.MetricsTLS.Enabled() {
+			hash, err := instance.Spec.MetricsTLS.ValidateCertSecret(ctx, helper, instance.Namespace)
+			if err != nil {
+				if k8s_errors.IsNotFound(err) {
+					instance.Status.Conditions.Set(condition.FalseCondition(
+						condition.TLSInputReadyCondition,
+						condition.RequestedReason,
+						condition.SeverityInfo,
+						condition.TLSInputReadyWaitingMessage, err.Error()))
+					return ctrl.Result{}, nil
+				}
+				instance.Status.Conditions.Set(condition.FalseCondition(
+					condition.TLSInputReadyCondition,
+					condition.ErrorReason,
+					condition.SeverityWarning,
+					condition.TLSInputErrorMessage,
+					err.Error()))
+				return ctrl.Result{}, err
+			}
+			configMapVars[tls.TLSHashName+"_metrics"] = env.SetValue(hash)
+		}
 	}
 	// all cert input checks out so report InputReady
 	instance.Status.Conditions.MarkTrue(condition.TLSInputReadyCondition, condition.InputReadyMessage)

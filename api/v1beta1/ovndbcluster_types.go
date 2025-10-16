@@ -139,6 +139,10 @@ type OVNDBClusterSpecCore struct {
 	// +kubebuilder:default=true
 	// MetricsEnabled enables the metrics sidecar container for collecting OVN DB metrics
 	MetricsEnabled *bool `json:"metricsEnabled,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// MetricsTLS - Parameters related to TLS for metrics sidecar
+	MetricsTLS tls.SimpleService `json:"metricsTLS,omitempty"`
 }
 
 // OVNDBClusterOverrideSpec to override the generated manifest of several child resources.

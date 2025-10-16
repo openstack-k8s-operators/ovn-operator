@@ -232,6 +232,18 @@ func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
+	// index metricsTLSField
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &ovnv1.OVNController{}, metricsTLSField, func(rawObj client.Object) []string {
+		// Extract the metrics TLS secret name from the spec, if one is provided
+		cr := rawObj.(*ovnv1.OVNController)
+		if cr.Spec.MetricsTLS.SecretName == nil {
+			return nil
+		}
+		return []string{*cr.Spec.MetricsTLS.SecretName}
+	}); err != nil {
+		return err
+	}
+
 	// index topologyField
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &ovnv1.OVNController{}, topologyField, func(rawObj client.Object) []string {
 		// Extract the topology name from the spec, if one is provided
@@ -381,6 +393,8 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 
 	// ConfigMap
 	configMapVars := make(map[string]env.Setter)
+	// ConfigMap for metrics daemonset
+	metricsConfigMapVars := make(map[string]env.Setter)
 
 	instance.Status.Conditions.MarkTrue(condition.InputReadyCondition, condition.InputReadyMessage)
 
@@ -443,6 +457,35 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 			return ctrl.Result{}, err
 		}
 		configMapVars[tls.TLSHashName] = env.SetValue(hash)
+	}
+
+	//
+	// Metrics TLS input validation (if metrics are enabled)
+	//
+	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
+
+		// Validate metrics cert secret
+		if instance.Spec.MetricsTLS.Enabled() {
+			hash, err := instance.Spec.MetricsTLS.ValidateCertSecret(ctx, helper, instance.Namespace)
+			if err != nil {
+				if k8s_errors.IsNotFound(err) {
+					instance.Status.Conditions.Set(condition.FalseCondition(
+						condition.TLSInputReadyCondition,
+						condition.RequestedReason,
+						condition.SeverityInfo,
+						condition.TLSInputReadyWaitingMessage, err.Error()))
+					return ctrl.Result{}, nil
+				}
+				instance.Status.Conditions.Set(condition.FalseCondition(
+					condition.TLSInputReadyCondition,
+					condition.ErrorReason,
+					condition.SeverityWarning,
+					condition.TLSInputErrorMessage,
+					err.Error()))
+				return ctrl.Result{}, err
+			}
+			metricsConfigMapVars[tls.TLSHashName+"_metrics"] = env.SetValue(hash)
+		}
 	}
 	// all cert input checks out so report InputReady
 	instance.Status.Conditions.MarkTrue(condition.TLSInputReadyCondition, condition.InputReadyMessage)
@@ -688,11 +731,24 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	// Create metrics DaemonSet - start
 	// Create metrics DaemonSet if metrics are enabled and exporter image is specified
 	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
+
 		cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnv1.ServiceNameOVNController), map[string]string{})
 		metricsConfigMap := ovncontroller.GetMetricsConfigMap(instance)
 		metricsConfigMap.Labels = cmLabels
 		metricsCms := []util.Template{metricsConfigMap}
-		err = configmap.EnsureConfigMaps(ctx, helper, instance, metricsCms, nil)
+		err = configmap.EnsureConfigMaps(ctx, helper, instance, metricsCms, &metricsConfigMapVars)
+		if err != nil {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.ServiceConfigReadyCondition,
+				condition.ErrorReason,
+				condition.SeverityWarning,
+				condition.ServiceConfigReadyErrorMessage,
+				err.Error()))
+			return ctrl.Result{}, err
+		}
+
+		// Create metrics-specific hash from only metrics-relevant configurations
+		metricsInputHash, err := r.createMetricsHashOfInputHashes(ctx, instance, metricsConfigMapVars)
 		if err != nil {
 			instance.Status.Conditions.Set(condition.FalseCondition(
 				condition.ServiceConfigReadyCondition,
@@ -708,9 +764,9 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 			"metrics":          "enabled",
 		}
 
-		// Define a new DaemonSet object for OVNController metrics
+		// Define a new DaemonSet object for OVNController metrics using metrics-specific hash
 		metricsdset := daemonset.NewDaemonSet(
-			ovncontroller.CreateMetricsDaemonSet(instance, inputHash, metricsLabels, topology),
+			ovncontroller.CreateMetricsDaemonSet(instance, metricsInputHash, metricsLabels, topology),
 			time.Duration(5)*time.Second,
 		)
 
@@ -929,6 +985,27 @@ func (r *OVNControllerReconciler) createHashOfInputHashes(
 		Log.Info(fmt.Sprintf("Input maps hash %s - %s", common.InputHashName, hash))
 	}
 	return hash, changed, nil
+}
+
+// createMetricsHashOfInputHashes - creates a metrics-specific hash of hashes for the metrics daemonset
+// This is separate from the main config hash to avoid unnecessary restarts when non-metrics configs change
+func (r *OVNControllerReconciler) createMetricsHashOfInputHashes(
+	ctx context.Context,
+	instance *ovnv1.OVNController,
+	envVars map[string]env.Setter,
+) (string, error) {
+	Log := r.GetLogger(ctx)
+
+	mergedMapVars := env.MergeEnvs([]corev1.EnvVar{}, envVars)
+	hash, err := util.ObjectHash(mergedMapVars)
+	if err != nil {
+		return hash, err
+	}
+	if hashMap, changed := util.SetHash(instance.Status.Hash, "MetricsInputHashName", hash); changed {
+		instance.Status.Hash = hashMap
+		Log.Info(fmt.Sprintf("Metrics input maps hash %s - %s", "MetricsInputHashName", hash))
+	}
+	return hash, nil
 }
 
 // deleteResourceIfExists deletes a Kubernetes resource if it exists, ignoring NotFound errors
