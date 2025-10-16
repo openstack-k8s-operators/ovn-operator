@@ -158,6 +158,10 @@ func (r *OVNNorthdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	instance.Status.Conditions.Init(&cl)
 	instance.Status.ObservedGeneration = instance.Generation
 
+	if instance.Status.Hash == nil {
+		instance.Status.Hash = map[string]string{}
+	}
+
 	// Always patch the instance status when exiting this function so we can persist any changes.
 	defer func() {
 		// Don't update the status, if reconciler Panics
@@ -222,6 +226,18 @@ func (r *OVNNorthdReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return nil
 		}
 		return []string{*cr.Spec.TLS.SecretName}
+	}); err != nil {
+		return err
+	}
+
+	// index metricsTLSField
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &ovnv1.OVNNorthd{}, metricsTLSField, func(rawObj client.Object) []string {
+		// Extract the metrics TLS secret name from the spec, if one is provided
+		cr := rawObj.(*ovnv1.OVNNorthd)
+		if cr.Spec.MetricsTLS.SecretName == nil {
+			return nil
+		}
+		return []string{*cr.Spec.MetricsTLS.SecretName}
 	}); err != nil {
 		return err
 	}
@@ -451,6 +467,35 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 		}
 		envVars[tls.TLSHashName] = env.SetValue(hash)
 	}
+
+	//
+	// Metrics TLS input validation (if metrics are enabled)
+	//
+	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
+
+		// Validate metrics cert secret
+		if instance.Spec.MetricsTLS.Enabled() {
+			hash, err := instance.Spec.MetricsTLS.ValidateCertSecret(ctx, helper, instance.Namespace)
+			if err != nil {
+				if k8s_errors.IsNotFound(err) {
+					instance.Status.Conditions.Set(condition.FalseCondition(
+						condition.TLSInputReadyCondition,
+						condition.RequestedReason,
+						condition.SeverityInfo,
+						condition.TLSInputReadyWaitingMessage, err.Error()))
+					return ctrl.Result{}, nil
+				}
+				instance.Status.Conditions.Set(condition.FalseCondition(
+					condition.TLSInputReadyCondition,
+					condition.ErrorReason,
+					condition.SeverityWarning,
+					condition.TLSInputErrorMessage,
+					err.Error()))
+				return ctrl.Result{}, err
+			}
+			envVars[tls.TLSHashName+"_metrics"] = env.SetValue(hash)
+		}
+	}
 	// all cert input checks out so report InputReady
 	instance.Status.Conditions.MarkTrue(condition.TLSInputReadyCondition, condition.InputReadyMessage)
 
@@ -468,7 +513,25 @@ func (r *OVNNorthdReconciler) reconcileNormal(ctx context.Context, instance *ovn
 			err.Error()))
 		return ctrl.Result{}, err
 	}
-	// Create ConfigMaps - end
+
+	//
+	// create hash over all the different input resources to identify if any those changed
+	// and a restart/recreate is required.
+	//
+	inputHash, err := r.createHashOfInputHashes(ctx, instance, envVars)
+	if err != nil {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.ServiceConfigReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.ServiceConfigReadyErrorMessage,
+			err.Error()))
+		return ctrl.Result{}, err
+	}
+
+	// Add CONFIG_HASH to envVars for the containers
+	envVars["CONFIG_HASH"] = env.SetValue(inputHash)
+	// Create ConfigMaps and Secrets - end
 
 	instance.Status.Conditions.MarkTrue(condition.ServiceConfigReadyCondition, condition.ServiceConfigReadyMessage)
 
@@ -757,4 +820,25 @@ func (r *OVNNorthdReconciler) cleanupLegacyDeployment(
 	}
 
 	return nil
+}
+
+// createHashOfInputHashes - creates a hash of hashes which gets added to the resources which requires a restart
+// if any of the input resources change, like configs, passwords, ...
+func (r *OVNNorthdReconciler) createHashOfInputHashes(
+	ctx context.Context,
+	instance *ovnv1.OVNNorthd,
+	envVars map[string]env.Setter,
+) (string, error) {
+	Log := r.GetLogger(ctx)
+
+	mergedMapVars := env.MergeEnvs([]corev1.EnvVar{}, envVars)
+	hash, err := util.ObjectHash(mergedMapVars)
+	if err != nil {
+		return hash, err
+	}
+	if hashMap, changed := util.SetHash(instance.Status.Hash, common.InputHashName, hash); changed {
+		instance.Status.Hash = hashMap
+		Log.Info(fmt.Sprintf("Input maps hash %s - %s", common.InputHashName, hash))
+	}
+	return hash, nil
 }

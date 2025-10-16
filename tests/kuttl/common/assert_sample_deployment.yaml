@@ -165,6 +165,7 @@ spec:
         env:
         - name: OPENSTACK_NETWORK_EXPORTER_YAML
           value: /etc/config/openstack-network-exporter.yaml
+        - name: CONFIG_HASH
         imagePullPolicy: IfNotPresent
         name: openstack-network-exporter
       serviceAccount: ovnnorthd-ovnnorthd-sample
