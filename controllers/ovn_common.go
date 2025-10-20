@@ -31,6 +31,7 @@ import (
 const (
 	tlsField                = ".spec.tls.secretName"
 	caBundleSecretNameField = ".spec.tls.caBundleSecretName" // #nosec
+	metricsTLSField         = ".spec.metricsTLS.secretName"
 	topologyField           = ".spec.topologyRef.Name"
 )
 
@@ -38,6 +39,7 @@ var (
 	allWatchFields = []string{
 		caBundleSecretNameField,
 		tlsField,
+		metricsTLSField,
 		topologyField,
 	}
 )

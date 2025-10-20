@@ -175,10 +175,16 @@ func StatefulSet(
 			},
 		}
 
-		// add TLS volume mounts if TLS is enabled - use dedicated metrics certificate
+		// add TLS volume mounts if TLS is enabled - use dedicated metrics cert secret
 		if instance.Spec.TLS.Enabled() {
+			// cleanup fallback once openstack-operator provides it
+			metricsCertSecretName := "cert-ovn-metrics" //nolint:gosec // G101: Not actual credentials, just secret name constants
+			if instance.Spec.MetricsTLS.SecretName != nil && *instance.Spec.MetricsTLS.SecretName != "" {
+				metricsCertSecretName = *instance.Spec.MetricsTLS.SecretName
+			}
+
 			metricsSvc := tls.Service{
-				SecretName: "cert-ovn-metrics",
+				SecretName: metricsCertSecretName,
 				CertMount:  ptr.To(ovn_common.OVNMetricsCertPath),
 				KeyMount:   ptr.To(ovn_common.OVNMetricsKeyPath),
 				CaMount:    ptr.To(ovn_common.OVNDbCaCertPath), // Use the same CA for now
@@ -189,16 +195,23 @@ func StatefulSet(
 			metricsVolumeMounts = append(metricsVolumeMounts, metricsSvc.CreateVolumeMounts("metrics-certs")...)
 		}
 
+		// Create metrics-specific environment variables map with only necessary variables
+		metricsEnvVars := make(map[string]env.Setter)
+		// Add CONFIG_HASH if it exists in the main envVars
+		if configHash, exists := envVars["CONFIG_HASH"]; exists {
+			metricsEnvVars["CONFIG_HASH"] = configHash
+		}
+
 		metricsContainer := corev1.Container{
 			Name:    "openstack-network-exporter",
 			Image:   instance.Spec.ExporterImage,
 			Command: []string{"/app/openstack-network-exporter"},
-			Env: []corev1.EnvVar{
+			Env: env.MergeEnvs([]corev1.EnvVar{
 				{
 					Name:  "OPENSTACK_NETWORK_EXPORTER_YAML",
 					Value: "/etc/config/openstack-network-exporter.yaml",
 				},
-			},
+			}, metricsEnvVars),
 			VolumeMounts: metricsVolumeMounts,
 		}
 		containers = append(containers, metricsContainer)
