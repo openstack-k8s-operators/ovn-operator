@@ -64,6 +64,8 @@ func ConfigJob(
 	envVars["OVNAvailabilityZones"] = env.SetValue(strings.Join(instance.Spec.ExternalIDS.OvnAvailabilityZones, ":"))
 	envVars["PhysicalNetworks"] = env.SetValue(getPhysicalNetworks(instance))
 	envVars["OVNHostName"] = env.DownwardAPI("spec.nodeName")
+	envVars["OVNLogLevel"] = env.SetValue(instance.Spec.OVNLogLevel)
+	envVars["OVSLogLevel"] = env.SetValue(instance.Spec.OVSLogLevel)
 
 	for _, ovnPod := range ovnPods.Items {
 		commands := []string{

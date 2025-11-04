@@ -15,15 +15,30 @@
 # under the License.
 
 # This script configures ovn-encap-tos setting in OVS external-ids
-# It is only used when ovn-encap-tos is explicitly set to a non-default value
+# It is used when ovn-encap-tos is explicitly set to a non-default value or
+# when OVN or OVS log level values change.
 
 source $(dirname $0)/../container-scripts/functions
 
 OVNEncapTos={{.OVNEncapTos}}
+OVSLogLevel={{.OVSLogLevel}}
+OVNLogLevel={{.OVNLogLevel}}
 
 function configure_ovn_external_ids {
     ovs-vsctl set open . external-ids:ovn-encap-tos=${OVNEncapTos}
 }
 
+function configure_log_level {
+    for svc in ovsdb-server ovs-vswitchd; do
+        ctl_path=$(find /var/run/openvswitch/ -maxdepth 1 -name "${svc}.*.ctl")
+        ovs-appctl -t ${ctl_path} vlog/set ${OVSLogLevel}
+    done
+
+    ctl_path=$(find /var/run/ovn/ -maxdepth 1 -name "ovn-controller.*.ctl")
+    ovn-appctl -t "$ctl_path" vlog/set ${OVNLogLevel}
+}
+
+
 wait_for_ovsdb_server
 configure_ovn_external_ids
+configure_log_level
