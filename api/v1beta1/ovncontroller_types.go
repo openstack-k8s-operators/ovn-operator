@@ -95,6 +95,16 @@ type OVNControllerSpecCore struct {
 	NetworkAttachment string `json:"networkAttachment"`
 
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=info
+	// OVNLogLevel - Set log level off, emer, err, warn, info, or dbg. Default is info.
+	OVNLogLevel string `json:"ovnLogLevel,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=info
+	// OVSLogLevel - Set log level off, emer, err, warn, info, or dbg. Default is info.
+	OVSLogLevel string `json:"ovsLogLevel,omitempty"`
+
+	// +kubebuilder:validation:Optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// TLS - Parameters related to TLS
 	TLS tls.SimpleService `json:"tls,omitempty"`
