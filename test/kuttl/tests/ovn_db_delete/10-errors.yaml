@@ -1,1 +1,103 @@
-../../common/errors_cleanup_ovn.yaml
+#
+# Check for:
+#
+# No OVNNorthd CR
+# No OVNDBCluster CR
+# No OVNController CR
+# No StatefulSet for OVNNorthd CR
+# No DaemonSet for OVNController CR
+# No DaemonSet for OVNController-OVS CR
+# No Pods in ovn StatefulSet
+# No OVN Services
+#
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNNorthd
+metadata:
+  finalizers:
+  - openstack.org/ovnnorthd
+  name: ovnnorthd-sample
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  finalizers:
+  - openstack.org/ovndbcluster
+  name: ovndbcluster-nb-sample
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  finalizers:
+  - openstack.org/ovndbcluster
+  name: ovndbcluster-sb-sample
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNController
+metadata:
+  finalizers:
+  - openstack.org/ovncontroller
+  name: ovncontroller-sample
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ovn-northd
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ovncontroller
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ovncontroller-ovs
+---
+# the openshift annotations can't be checked through the deployment above
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    service: ovn-northd
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    service: ovsdbserver-nb
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    service: ovsdbserver-sb
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    openshift.io/scc: privileged
+  generateName: ovn-controller-
+  labels:
+    service: ovn-controller
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    openshift.io/scc: privileged
+  generateName: ovn-controller-ovs-
+  labels:
+    service: ovn-controller-ovs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: ovsdbserver-nb
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: ovsdbserver-sb

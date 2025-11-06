@@ -1,0 +1,35 @@
+#
+# Check for:
+#
+# No PVCs for OVNDBCluster nb CR
+# No PVCs for OVNDBCluster sb CR
+#
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-nb-sample-etc-ovn-ovsdbserver-nb-0
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-nb-sample-etc-ovn-ovsdbserver-nb-1
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-nb-sample-etc-ovn-ovsdbserver-nb-2
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-sb-sample-etc-ovn-ovsdbserver-sb-0
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-sb-sample-etc-ovn-ovsdbserver-sb-1
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-sb-sample-etc-ovn-ovsdbserver-sb-2

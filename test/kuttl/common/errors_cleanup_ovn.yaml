@@ -9,6 +9,7 @@
 # No DaemonSet for OVNController-OVS CR
 # No Pods in ovn StatefulSet
 # No OVN Services
+# No PVCs for OVNDBCluster
 #
 apiVersion: ovn.openstack.org/v1beta1
 kind: OVNNorthd
@@ -101,3 +102,33 @@ kind: Service
 metadata:
   labels:
     service: ovsdbserver-sb
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-nb-sample-etc-ovn-ovsdbserver-nb-0
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-nb-sample-etc-ovn-ovsdbserver-nb-1
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-nb-sample-etc-ovn-ovsdbserver-nb-2
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-sb-sample-etc-ovn-ovsdbserver-sb-0
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-sb-sample-etc-ovn-ovsdbserver-sb-1
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-sb-sample-etc-ovn-ovsdbserver-sb-2
