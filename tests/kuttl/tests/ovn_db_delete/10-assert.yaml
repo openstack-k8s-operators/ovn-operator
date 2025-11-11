@@ -1,53 +1,9 @@
 #
 # Check for:
 #
-# - 1 OVNDBCluster CR
-# - 1 Pod for OVNDBCluster nb CR
-# - 1 Pod for OVNDBCluster sb CR
-# - 3 PVCs for OVNDBCluster nb CR
-# - 3 PVCs for OVNDBCluster sb CR
+# PVCs for OVNDBCluster nb CR is not deleted
+# PVCs for OVNDBCluster sb CR is not deleted
 #
-
-apiVersion: ovn.openstack.org/v1beta1
-kind: OVNDBCluster
-metadata:
-  finalizers:
-  - openstack.org/ovndbcluster
-  name: ovndbcluster-nb-sample
-spec:
-  replicas: 1
-status:
-  readyCount: 1
----
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: ovsdbserver-nb
-spec:
-  replicas: 1
-status:
-  availableReplicas: 1
----
-apiVersion: ovn.openstack.org/v1beta1
-kind: OVNDBCluster
-metadata:
-  finalizers:
-  - openstack.org/ovndbcluster
-  name: ovndbcluster-sb-sample
-spec:
-  replicas: 1
-status:
-  readyCount: 1
----
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: ovsdbserver-sb
-spec:
-  replicas: 1
-status:
-  availableReplicas: 1
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
