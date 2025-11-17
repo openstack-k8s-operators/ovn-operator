@@ -17,14 +17,13 @@ limitations under the License.
 package v1beta1
 
 import (
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // OVNControllerDefaults -
@@ -44,14 +43,6 @@ func SetupOVNControllerDefaults(defaults OVNControllerDefaults) {
 	ovnDefaults = defaults
 	ovncontrollerlog.Info("OVNController defaults initialized", "defaults", defaults)
 }
-
-func (r *OVNController) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
-		Complete()
-}
-
-//+kubebuilder:webhook:path=/mutate-ovn-openstack-org-v1beta1-ovncontroller,mutating=true,failurePolicy=fail,sideEffects=None,groups=ovn.openstack.org,resources=ovncontrollers,verbs=create;update,versions=v1beta1,name=movncontroller.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Defaulter = &OVNController{}
 
@@ -80,8 +71,6 @@ func (spec *OVNControllerSpec) Default() {
 func (spec *OVNControllerSpecCore) Default() {
 	// nothing here yet
 }
-
-//+kubebuilder:webhook:path=/validate-ovn-openstack-org-v1beta1-ovncontroller,mutating=false,failurePolicy=fail,sideEffects=None,groups=ovn.openstack.org,resources=ovncontrollers,verbs=create;update,versions=v1beta1,name=vovncontroller.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Validator = &OVNController{}
 
