@@ -1,0 +1,224 @@
+/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package ovnnorthd
+
+import (
+	"fmt"
+
+	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
+	"github.com/openstack-k8s-operators/lib-common/modules/common"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/affinity"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
+	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovn_common "github.com/openstack-k8s-operators/ovn-operator/internal/common"
+
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
+)
+
+const (
+	// ServiceCommand -
+	ServiceCommand = "/usr/bin/ovn-northd"
+)
+
+// StatefulSet func
+func StatefulSet(
+	instance *ovnv1.OVNNorthd,
+	labels map[string]string,
+	nbEndpoint string,
+	sbEndpoint string,
+	envVars map[string]env.Setter,
+	topology *topologyv1.Topology,
+) *appsv1.StatefulSet {
+
+	livenessProbe := &corev1.Probe{
+		TimeoutSeconds:      1,
+		PeriodSeconds:       5,
+		InitialDelaySeconds: 10,
+	}
+	readinessProbe := &corev1.Probe{
+		TimeoutSeconds:      1,
+		PeriodSeconds:       5,
+		InitialDelaySeconds: 10,
+	}
+	cmd := []string{ServiceCommand}
+	args := []string{
+		"-vfile:off",
+		fmt.Sprintf("-vconsole:%s", instance.Spec.LogLevel),
+		fmt.Sprintf("--n-threads=%d", *instance.Spec.NThreads),
+		fmt.Sprintf("--ovnnb-db=%s", nbEndpoint),
+		fmt.Sprintf("--ovnsb-db=%s", sbEndpoint),
+	}
+
+	// create Volume and VolumeMounts
+	volumes := GetNorthdVolumes(instance.Name)
+	volumeMounts := GetNorthdVolumeMounts()
+
+	// add CA bundle if defined
+	if instance.Spec.TLS.CaBundleSecretName != "" {
+		volumes = append(volumes, instance.Spec.TLS.CreateVolume())
+		volumeMounts = append(volumeMounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
+	}
+
+	// add OVN dbs cert and CA
+	if instance.Spec.TLS.Enabled() {
+		svc := tls.Service{
+			SecretName: *instance.Spec.TLS.SecretName,
+			CertMount:  ptr.To(ovn_common.OVNDbCertPath),
+			KeyMount:   ptr.To(ovn_common.OVNDbKeyPath),
+			CaMount:    ptr.To(ovn_common.OVNDbCaCertPath),
+		}
+		volumes = append(volumes, svc.CreateVolume(ovnv1.ServiceNameOVNNorthd))
+		volumeMounts = append(volumeMounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOVNNorthd)...)
+
+		args = append(args,
+			fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath),
+			fmt.Sprintf("--private-key=%s", ovn_common.OVNDbKeyPath),
+			fmt.Sprintf("--ca-cert=%s", ovn_common.OVNDbCaCertPath),
+		)
+	}
+
+	//
+	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+	//
+	livenessProbe.Exec = &corev1.ExecAction{
+		Command: []string{
+			"/usr/local/bin/container-scripts/status_check.sh",
+		},
+	}
+	readinessProbe.Exec = livenessProbe.Exec
+
+	// Add default env vars to the passed-in envVars map
+	// TODO: Make confs customizable
+	envVars["OVN_RUNDIR"] = env.SetValue("/tmp")
+
+	// Create container list starting with the main northd container
+	containers := []corev1.Container{
+		{
+			Name:                     ovnv1.ServiceNameOVNNorthd,
+			Command:                  cmd,
+			Args:                     args,
+			Image:                    instance.Spec.ContainerImage,
+			SecurityContext:          getOVNNorthdSecurityContext(),
+			Env:                      env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			Resources:                instance.Spec.Resources,
+			ReadinessProbe:           readinessProbe,
+			LivenessProbe:            livenessProbe,
+			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+			VolumeMounts:             volumeMounts,
+		},
+	}
+
+	// Add metrics sidecar container if MetricsEnabled is true (default) and exporter image is specified
+	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
+		metricsVolumeMounts := []corev1.VolumeMount{
+			{
+				Name:      "ovn-rundir",
+				MountPath: "/tmp",
+			},
+			{
+				Name:      "config",
+				MountPath: "/etc/config",
+				ReadOnly:  true,
+			},
+		}
+
+		// add TLS volume mounts if TLS is enabled - use dedicated metrics cert secret
+		if instance.Spec.TLS.Enabled() {
+			// cleanup fallback once openstack-operator provides it
+			metricsCertSecretName := "cert-ovn-metrics" //nolint:gosec // G101: Not actual credentials, just secret name constants
+			if instance.Spec.MetricsTLS.SecretName != nil && *instance.Spec.MetricsTLS.SecretName != "" {
+				metricsCertSecretName = *instance.Spec.MetricsTLS.SecretName
+			}
+
+			metricsSvc := tls.Service{
+				SecretName: metricsCertSecretName,
+				CertMount:  ptr.To(ovn_common.OVNMetricsCertPath),
+				KeyMount:   ptr.To(ovn_common.OVNMetricsKeyPath),
+				CaMount:    ptr.To(ovn_common.OVNDbCaCertPath), // Use the same CA for now
+			}
+			// Add the metrics certificate volume to the main volumes list
+			// Use "metrics-certs" as volume name to stay within 63 char limit
+			volumes = append(volumes, metricsSvc.CreateVolume("metrics-certs"))
+			metricsVolumeMounts = append(metricsVolumeMounts, metricsSvc.CreateVolumeMounts("metrics-certs")...)
+		}
+
+		// Create metrics-specific environment variables map with only necessary variables
+		metricsEnvVars := make(map[string]env.Setter)
+		// Add CONFIG_HASH if it exists in the main envVars
+		if configHash, exists := envVars["CONFIG_HASH"]; exists {
+			metricsEnvVars["CONFIG_HASH"] = configHash
+		}
+
+		metricsContainer := corev1.Container{
+			Name:    "openstack-network-exporter",
+			Image:   instance.Spec.ExporterImage,
+			Command: []string{"/app/openstack-network-exporter"},
+			Env: env.MergeEnvs([]corev1.EnvVar{
+				{
+					Name:  "OPENSTACK_NETWORK_EXPORTER_YAML",
+					Value: "/etc/config/openstack-network-exporter.yaml",
+				},
+			}, metricsEnvVars),
+			VolumeMounts: metricsVolumeMounts,
+		}
+		containers = append(containers, metricsContainer)
+	}
+
+	statefulSet := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ovnv1.ServiceNameOVNNorthd,
+			Namespace: instance.Namespace,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			ServiceName:         ovnv1.ServiceNameOVNNorthd,
+			PodManagementPolicy: appsv1.ParallelPodManagement,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Replicas: instance.Spec.Replicas,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					ServiceAccountName: instance.RbacResourceName(),
+					Containers:         containers,
+					Volumes:            volumes,
+				},
+			},
+		},
+	}
+	if instance.Spec.NodeSelector != nil {
+		statefulSet.Spec.Template.Spec.NodeSelector = *instance.Spec.NodeSelector
+	}
+	if topology != nil {
+		topology.ApplyTo(&statefulSet.Spec.Template)
+	} else {
+		// If possible two pods of the same service should not
+		// run on the same worker node. If this is not possible
+		// the get still created on the same worker node.
+		statefulSet.Spec.Template.Spec.Affinity = affinity.DistributePods(
+			common.AppSelector,
+			[]string{
+				ovnv1.ServiceNameOVNNorthd,
+			},
+			corev1.LabelHostname,
+		)
+	}
+
+	return statefulSet
+}
