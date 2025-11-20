@@ -458,7 +458,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 	})
 
 	When("OVNDBClusters are created with networkAttachments", func() {
-		It("does not break if pods are not created yet", func() {
+		It("does not break if pods get scaled", func() {
 			// Create OVNDBCluster with 1 replica
 			spec := GetDefaultOVNDBClusterSpec()
 			spec.NetworkAttachment = "internalapi"
@@ -474,12 +474,13 @@ var _ = Describe("OVNDBCluster controller", func() {
 				g.Expect(k8sClient.Update(ctx, c)).Should(Succeed())
 			}).Should(Succeed())
 
-			//Check that error occurs
-			Eventually(func(g Gomega) {
-				conditions := GetOVNDBCluster(dbs[0]).Status.Conditions
-				cond := conditions.Get(condition.ExposeServiceReadyCondition)
-				g.Expect(cond.Status).To(Equal(corev1.ConditionFalse))
-			}).Should(Succeed())
+			// check that cluster reaches ready
+			th.ExpectCondition(
+				dbs[0],
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionTrue,
+			)
 
 			// Decrease replicas back to 1
 			Eventually(func(g Gomega) {
@@ -488,12 +489,13 @@ var _ = Describe("OVNDBCluster controller", func() {
 				g.Expect(k8sClient.Update(ctx, c)).Should(Succeed())
 			}).Should(Succeed())
 
-			//Check that error doesn't happen and instance is ready
-			Eventually(func(g Gomega) {
-				conditions := GetOVNDBCluster(dbs[0]).Status.Conditions
-				cond := conditions.Get(condition.DeploymentReadyCondition)
-				g.Expect(cond.Status).To(Equal(corev1.ConditionTrue))
-			}).Should(Succeed())
+			// check that cluster reaches ready
+			th.ExpectCondition(
+				dbs[0],
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionTrue,
+			)
 
 		})
 

@@ -653,7 +653,10 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		return ctrlResult, nil
 	}
 
-	instance.Status.ReadyCount = sfset.GetStatefulSet().Status.ReadyReplicas
+	stateful := sfset.GetStatefulSet()
+	if stateful.Generation == stateful.Status.ObservedGeneration {
+		instance.Status.ReadyCount = stateful.Status.ReadyReplicas
+	}
 
 	// verify if network attachment matches expectations
 	networkReady, networkAttachmentStatus, err := nad.VerifyNetworkStatusFromAnnotation(ctx, helper, networkAttachments, serviceLabels, instance.Status.ReadyCount)
@@ -712,7 +715,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		return ctrl.Result{}, err
 	}
 
-	if instance.Status.ReadyCount > 0 && len(svcList.Items) > 0 {
+	if statefulset.IsReady(stateful) && len(svcList.Items) > 0 {
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
 		instance.Status.Conditions.MarkTrue(condition.ExposeServiceReadyCondition, condition.ExposeServiceReadyMessage)
 		internalDbAddress := []string{}
@@ -750,6 +753,15 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 			}
 		}
 
+	} else {
+		Log.Info("Deployment is not ready")
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.DeploymentReadyCondition,
+			condition.RequestedReason,
+			condition.SeverityInfo,
+			condition.DeploymentReadyRunningMessage))
+		// It is OK to return success as we are watching for StatefulSet changes
+		return ctrl.Result{}, nil
 	}
 
 	Log.Info("Reconciled Service successfully")
