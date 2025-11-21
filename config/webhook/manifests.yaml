@@ -12,7 +12,7 @@ webhooks:
       namespace: system
       path: /mutate-ovn-openstack-org-v1beta1-ovncontroller
   failurePolicy: Fail
-  name: movncontroller.kb.io
+  name: movncontroller-v1beta1.kb.io
   rules:
   - apiGroups:
     - ovn.openstack.org
@@ -32,7 +32,7 @@ webhooks:
       namespace: system
       path: /mutate-ovn-openstack-org-v1beta1-ovndbcluster
   failurePolicy: Fail
-  name: movndbcluster.kb.io
+  name: movndbcluster-v1beta1.kb.io
   rules:
   - apiGroups:
     - ovn.openstack.org
@@ -52,7 +52,7 @@ webhooks:
       namespace: system
       path: /mutate-ovn-openstack-org-v1beta1-ovnnorthd
   failurePolicy: Fail
-  name: movnnorthd.kb.io
+  name: movnnorthd-v1beta1.kb.io
   rules:
   - apiGroups:
     - ovn.openstack.org
@@ -78,7 +78,7 @@ webhooks:
       namespace: system
       path: /validate-ovn-openstack-org-v1beta1-ovncontroller
   failurePolicy: Fail
-  name: vovncontroller.kb.io
+  name: vovncontroller-v1beta1.kb.io
   rules:
   - apiGroups:
     - ovn.openstack.org
@@ -98,7 +98,7 @@ webhooks:
       namespace: system
       path: /validate-ovn-openstack-org-v1beta1-ovndbcluster
   failurePolicy: Fail
-  name: vovndbcluster.kb.io
+  name: vovndbcluster-v1beta1.kb.io
   rules:
   - apiGroups:
     - ovn.openstack.org
@@ -118,7 +118,7 @@ webhooks:
       namespace: system
       path: /validate-ovn-openstack-org-v1beta1-ovnnorthd
   failurePolicy: Fail
-  name: vovnnorthd.kb.io
+  name: vovnnorthd-v1beta1.kb.io
   rules:
   - apiGroups:
     - ovn.openstack.org

@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -50,15 +49,6 @@ func SetupOVNDBClusterDefaults(defaults OVNDBClusterDefaults) {
 	ovnDbClusterDefaults = defaults
 	ovndbclusterlog.Info("OVNDBCluster defaults initialized", "defaults", defaults)
 }
-
-// SetupWebhookWithManager sets up the webhook with the Manager
-func (r *OVNDBCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
-		Complete()
-}
-
-//+kubebuilder:webhook:path=/mutate-ovn-openstack-org-v1beta1-ovndbcluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=ovn.openstack.org,resources=ovndbclusters,verbs=create;update,versions=v1beta1,name=movndbcluster.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Defaulter = &OVNDBCluster{}
 
@@ -88,9 +78,6 @@ func (spec *OVNDBClusterSpec) Default() {
 func (spec *OVNDBClusterSpecCore) Default() {
 	// nothing here yet
 }
-
-// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-//+kubebuilder:webhook:path=/validate-ovn-openstack-org-v1beta1-ovndbcluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=ovn.openstack.org,resources=ovndbclusters,verbs=create;update,versions=v1beta1,name=vovndbcluster.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Validator = &OVNDBCluster{}
 
