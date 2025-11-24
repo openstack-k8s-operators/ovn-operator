@@ -23,14 +23,13 @@ limitations under the License.
 package v1beta1
 
 import (
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	"k8s.io/apimachinery/pkg/util/validation/field"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // OVNNorthdDefaults -
@@ -49,15 +48,6 @@ func SetupOVNNorthdDefaults(defaults OVNNorthdDefaults) {
 	ovnNorthdDefaults = defaults
 	ovndbclusterlog.Info("OVNNorthd defaults initialized", "defaults", defaults)
 }
-
-// SetupWebhookWithManager sets up the webhook with the Manager
-func (r *OVNNorthd) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
-		Complete()
-}
-
-//+kubebuilder:webhook:path=/mutate-ovn-openstack-org-v1beta1-ovnnorthd,mutating=true,failurePolicy=fail,sideEffects=None,groups=ovn.openstack.org,resources=ovnnorthds,verbs=create;update,versions=v1beta1,name=movnnorthd.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Defaulter = &OVNNorthd{}
 
@@ -83,9 +73,6 @@ func (spec *OVNNorthdSpec) Default() {
 func (spec *OVNNorthdSpecCore) Default() {
 	// nothing here yet
 }
-
-// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-//+kubebuilder:webhook:path=/validate-ovn-openstack-org-v1beta1-ovnnorthd,mutating=false,failurePolicy=fail,sideEffects=None,groups=ovn.openstack.org,resources=ovnnorthds,verbs=create;update,versions=v1beta1,name=vovnnorthd.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Validator = &OVNNorthd{}
 
