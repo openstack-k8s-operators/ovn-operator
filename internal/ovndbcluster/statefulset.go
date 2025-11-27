@@ -18,6 +18,7 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/affinity"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovn_common "github.com/openstack-k8s-operators/ovn-operator/internal/common"
 
@@ -245,21 +246,18 @@ func StatefulSet(
 
 	// https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#persistentvolumeclaim-retention
 	statefulset.Spec.PersistentVolumeClaimRetentionPolicy = &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
-		WhenDeleted: appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+		WhenDeleted: appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
 		WhenScaled:  appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
 	}
 
-	blockOwnerDeletion := false
-	ownerRef := metav1.NewControllerRef(instance, instance.GroupVersionKind())
-	ownerRef.BlockOwnerDeletion = &blockOwnerDeletion
+	volumeClaimLabels := util.MergeMaps(labels, map[string]string{"owner": instance.Name})
 
 	statefulset.Spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:            instance.Name + PVCSuffixEtcOVN,
-				Namespace:       instance.Namespace,
-				Labels:          labels,
-				OwnerReferences: []metav1.OwnerReference{*ownerRef},
+				Name:      instance.Name + PVCSuffixEtcOVN,
+				Namespace: instance.Namespace,
+				Labels:    volumeClaimLabels,
 			},
 			Spec: corev1.PersistentVolumeClaimSpec{
 				AccessModes: []corev1.PersistentVolumeAccessMode{

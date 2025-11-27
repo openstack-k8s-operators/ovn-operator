@@ -1,1 +1,21 @@
-../../common/cleanup-ovn.yaml
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+delete:
+- apiVersion: ovn.openstack.org/v1beta1
+  kind: OVNDBCluster
+  name: ovndbcluster-nb-sample
+- apiVersion: ovn.openstack.org/v1beta1
+  kind: OVNDBCluster
+  name: ovndbcluster-sb-sample
+- apiVersion: ovn.openstack.org/v1beta1
+  kind: OVNNorthd
+  name: ovnnorthd-sample
+- apiVersion: ovn.openstack.org/v1beta1
+  kind: OVNController
+  name: ovncontroller-sample
+- apiVersion: k8s.cni.cncf.io/v1
+  kind: NetworkAttachmentDefinition
+  name: datacentre2
+- apiVersion: k8s.cni.cncf.io/v1
+  kind: NetworkAttachmentDefinition
+  name: data-centre3
