@@ -8,14 +8,14 @@ require (
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
-	github.com/openstack-k8s-operators/infra-operator/apis v0.6.1-0.20251101153632-7b8179a60945
-	github.com/openstack-k8s-operators/lib-common/modules/common v0.6.1-0.20251103072528-9eb684fef4ef
-	github.com/openstack-k8s-operators/lib-common/modules/test v0.6.0
+	github.com/openstack-k8s-operators/infra-operator/apis v0.6.1-0.20251124130651-1ff40691b66d
+	github.com/openstack-k8s-operators/lib-common/modules/common v0.6.1-0.20251122131503-b76943960b6c
+	github.com/openstack-k8s-operators/lib-common/modules/test v0.6.1-0.20251122131503-b76943960b6c
 	github.com/openstack-k8s-operators/ovn-operator/api v0.0.0-20230418071801-b5843d9e05fb
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
-	k8s.io/api v0.31.13
-	k8s.io/apimachinery v0.31.13
-	k8s.io/client-go v0.31.13
+	k8s.io/api v0.31.14
+	k8s.io/apimachinery v0.31.14
+	k8s.io/client-go v0.31.14
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
 	sigs.k8s.io/controller-runtime v0.19.7
 )
@@ -78,7 +78,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.27.0 // indirect
+	go.uber.org/zap v1.27.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/mod v0.27.0 // indirect
