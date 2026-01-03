@@ -5,9 +5,9 @@ go 1.24.4
 require (
 	github.com/go-logr/logr v1.4.3
 	github.com/google/uuid v1.6.0
-	github.com/onsi/gomega v1.38.2
-	github.com/openstack-k8s-operators/infra-operator/apis v0.6.1-0.20251124130651-1ff40691b66d
-	github.com/openstack-k8s-operators/lib-common/modules/common v0.6.1-0.20251122131503-b76943960b6c
+	github.com/onsi/gomega v1.38.3
+	github.com/openstack-k8s-operators/infra-operator/apis v0.6.1-0.20251223124749-eedb97238c5f
+	github.com/openstack-k8s-operators/lib-common/modules/common v0.6.1-0.20251230215914-6ba873b49a35
 	k8s.io/api v0.31.14
 	k8s.io/apimachinery v0.31.14
 	sigs.k8s.io/controller-runtime v0.19.7
@@ -18,6 +18,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
+	github.com/evanphx/json-patch v5.9.11+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
