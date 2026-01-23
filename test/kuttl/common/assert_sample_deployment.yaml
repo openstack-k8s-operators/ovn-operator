@@ -145,9 +145,9 @@ spec:
               - /usr/local/bin/container-scripts/status_check.sh
           failureThreshold: 3
           initialDelaySeconds: 10
-          periodSeconds: 5
+          periodSeconds: 10
           successThreshold: 1
-          timeoutSeconds: 1
+          timeoutSeconds: 15
         securityContext:
           allowPrivilegeEscalation: false
           runAsNonRoot: true
@@ -158,9 +158,9 @@ spec:
               - /usr/local/bin/container-scripts/status_check.sh
           failureThreshold: 3
           initialDelaySeconds: 10
-          periodSeconds: 5
+          periodSeconds: 10
           successThreshold: 1
-          timeoutSeconds: 1
+          timeoutSeconds: 15
         resources: {}
       - command:
         - /app/openstack-network-exporter
