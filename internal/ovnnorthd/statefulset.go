@@ -45,13 +45,13 @@ func StatefulSet(
 ) *appsv1.StatefulSet {
 
 	livenessProbe := &corev1.Probe{
-		TimeoutSeconds:      1,
-		PeriodSeconds:       5,
+		TimeoutSeconds:      15,
+		PeriodSeconds:       10,
 		InitialDelaySeconds: 10,
 	}
 	readinessProbe := &corev1.Probe{
-		TimeoutSeconds:      1,
-		PeriodSeconds:       5,
+		TimeoutSeconds:      15,
+		PeriodSeconds:       10,
 		InitialDelaySeconds: 10,
 	}
 	cmd := []string{ServiceCommand}
