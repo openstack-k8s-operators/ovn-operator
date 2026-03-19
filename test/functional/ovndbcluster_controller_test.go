@@ -182,6 +182,12 @@ var _ = Describe("OVNDBCluster controller", func() {
 				Name:      "ovncontroller-config",
 			}
 			th.AssertConfigMapDoesNotExist(externalCM)
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				ovnv1.ExternalConfigReadyCondition,
+				corev1.ConditionTrue,
+			)
 		})
 
 		DescribeTable("should not create the config map",
@@ -519,6 +525,12 @@ var _ = Describe("OVNDBCluster controller", func() {
 			Eventually(func() corev1.ConfigMap {
 				return *th.GetConfigMap(configCM)
 			}, timeout, interval).ShouldNot(BeNil())
+			th.ExpectCondition(
+				types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()},
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				ovnv1.ExternalConfigReadyCondition,
+				corev1.ConditionTrue,
+			)
 		})
 	})
 
@@ -603,6 +615,12 @@ var _ = Describe("OVNDBCluster controller", func() {
 				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
 					ContainSubstring("ovn-remote: %s", ExpectedExternalSBEndpoint))
 			}, timeout, interval).Should(Succeed())
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				ovnv1.ExternalConfigReadyCondition,
+				corev1.ConditionTrue,
+			)
 		})
 
 		It("should create an external ConfigMap with ovn-encap-type and ovn-encap-tos if OVNController is configured", func() {
@@ -654,6 +672,12 @@ var _ = Describe("OVNDBCluster controller", func() {
 				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
 					ContainSubstring("ovn-encap-tos: %s", ExpectedEncapTos))
 			}, timeout, interval).Should(Succeed())
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				ovnv1.ExternalConfigReadyCondition,
+				corev1.ConditionTrue,
+			)
 		})
 
 		It("should remove ovnEncapType if OVNController gets deleted", func() {
@@ -758,6 +782,12 @@ var _ = Describe("OVNDBCluster controller", func() {
 				g.Expect(k8sClient.Update(ctx, ovndbcluster)).Should(Succeed())
 			}, timeout, interval).Should(Succeed())
 			th.AssertConfigMapDoesNotExist(externalCM)
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				ovnv1.ExternalConfigReadyCondition,
+				corev1.ConditionTrue,
+			)
 		})
 
 		It("reports that the definition is missing", func() {
@@ -1052,6 +1082,12 @@ var _ = Describe("OVNDBCluster controller", func() {
 				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
 					ContainSubstring("ovn-remote: %s", ExpectedExternalSBEndpoint))
 			}, timeout, interval).Should(Succeed())
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				ovnv1.ExternalConfigReadyCondition,
+				corev1.ConditionTrue,
+			)
 		})
 
 		It("should create an external ConfigMap with ovn-encap-type and ovn-encap-tos if OVNController is configured", func() {
@@ -1101,6 +1137,12 @@ var _ = Describe("OVNDBCluster controller", func() {
 				g.Expect(th.GetConfigMap(externalCM).Data["ovsdb-config"]).Should(
 					ContainSubstring("ovn-encap-tos: %s", ExpectedEncapTos))
 			}, timeout, interval).Should(Succeed())
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				ovnv1.ExternalConfigReadyCondition,
+				corev1.ConditionTrue,
+			)
 		})
 
 		It("should remove ovnEncapType and ovnEncapTos if OVNController gets deleted", func() {
@@ -1199,6 +1241,12 @@ var _ = Describe("OVNDBCluster controller", func() {
 				g.Expect(k8sClient.Update(ctx, ovndbcluster)).Should(Succeed())
 			}, timeout, interval).Should(Succeed())
 			th.AssertConfigMapDoesNotExist(externalCM)
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				ovnv1.ExternalConfigReadyCondition,
+				corev1.ConditionTrue,
+			)
 		})
 	})
 

@@ -113,7 +113,6 @@ var _ = Describe("OVNController controller", func() {
 			th.AssertJobDoesNotExist(configJobOVS)
 		})
 
-		// TODO(ihar) introduce a new condition for the external config?
 		It("should be in input ready condition", func() {
 			th.ExpectCondition(
 				OVNControllerName,
