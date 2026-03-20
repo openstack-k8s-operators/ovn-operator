@@ -14,18 +14,20 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-# This script configures ovn-encap-tos setting in OVS external-ids
-# It is used when ovn-encap-tos is explicitly set to a non-default value or
-# when OVN or OVS log level values change.
+# This script configures OVN external-ids settings in OVS
+# It is used when ovn-encap-tos or ovn-remote-probe-interval are explicitly set to
+# a non-default value or when OVN or OVS log level values change.
 
 source $(dirname $0)/../container-scripts/functions
 
 OVNEncapTos={{.OVNEncapTos}}
+OVNRemoteProbeInterval={{.OVNRemoteProbeInterval}}
 OVSLogLevel={{.OVSLogLevel}}
 OVNLogLevel={{.OVNLogLevel}}
 
 function configure_ovn_external_ids {
     ovs-vsctl set open . external-ids:ovn-encap-tos=${OVNEncapTos}
+    ovs-vsctl set open . external-ids:ovn-remote-probe-interval="${OVNRemoteProbeInterval}"
 }
 
 function configure_log_level {
