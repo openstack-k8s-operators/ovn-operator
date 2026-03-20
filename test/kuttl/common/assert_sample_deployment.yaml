@@ -71,6 +71,7 @@ spec:
     ovn-bridge: br-int
     ovn-encap-type: geneve
     ovn-encap-tos: "0"
+    ovn-remote-probe-interval: 60000
     system-id: random
 status:
   conditions:
