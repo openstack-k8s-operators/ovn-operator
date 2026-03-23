@@ -210,6 +210,10 @@ type OVSExternalIDs struct {
 	OvnEncapTos string `json:"ovn-encap-tos,omitempty"`
 
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=60000
+	OvnRemoteProbeInterval int `json:"ovn-remote-probe-interval,omitempty"`
+
+	// +kubebuilder:validation:Optional
 	// +kubebuilder:default={}
 	OvnAvailabilityZones []string `json:"availability-zones,omitempty"`
 
