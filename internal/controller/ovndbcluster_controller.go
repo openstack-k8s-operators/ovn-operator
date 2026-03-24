@@ -161,6 +161,7 @@ func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		condition.UnknownCondition(condition.RoleReadyCondition, condition.InitReason, condition.RoleReadyInitMessage),
 		condition.UnknownCondition(condition.RoleBindingReadyCondition, condition.InitReason, condition.RoleBindingReadyInitMessage),
 		condition.UnknownCondition(condition.TLSInputReadyCondition, condition.InitReason, condition.InputReadyInitMessage),
+		condition.UnknownCondition(ovnv1.ExternalConfigReadyCondition, condition.InitReason, ovnv1.ExternalConfigInitMessage),
 	)
 
 	// Init Topology condition if there's a reference
@@ -399,6 +400,8 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	serviceName := ovnv1.ServiceNameNB
 	if instance.Spec.DBType == ovnv1.SBDBType {
 		serviceName = ovnv1.ServiceNameSB
+	} else {
+		instance.Status.Conditions.MarkTrue(ovnv1.ExternalConfigReadyCondition, "External config not required for NB DBCluster")
 	}
 	serviceLabels := map[string]string{
 		common.AppSelector: serviceName,
@@ -445,6 +448,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		if err != nil {
 			return ctrl.Result{}, err
 		}
+		instance.Status.Conditions.MarkTrue(ovnv1.ExternalConfigReadyCondition, "External config not required")
 	}
 
 	serviceAnnotations, err := nad.EnsureNetworksAnnotation(nadList)
@@ -749,8 +753,16 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 			configMapVars := make(map[string]env.Setter)
 			err = r.generateExternalConfigMaps(ctx, helper, instance, serviceName, &configMapVars)
 			if err != nil {
-				Log.Info(fmt.Sprintf("Error while generating external config map: %v", err))
+				Log.Error(err, "Error while generating external config map")
+				instance.Status.Conditions.Set(condition.FalseCondition(
+					ovnv1.ExternalConfigReadyCondition,
+					condition.ErrorReason,
+					condition.SeverityWarning,
+					ovnv1.ExternalConfigErrorMessage,
+					err.Error()))
+				return ctrl.Result{}, err
 			}
+			instance.Status.Conditions.MarkTrue(ovnv1.ExternalConfigReadyCondition, condition.ServiceConfigReadyMessage)
 		}
 
 	} else {
