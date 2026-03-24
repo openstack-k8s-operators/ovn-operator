@@ -80,7 +80,8 @@ func HeadlessService(
 			Labels:    serviceLabels,
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: selectorLabels,
+			Selector:                 selectorLabels,
+			PublishNotReadyAddresses: true,
 			Ports: []corev1.ServicePort{
 				{
 					Name:     raftPortName,
