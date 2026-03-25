@@ -53,9 +53,9 @@ func StatefulSet(
 	}
 	readinessProbe := &corev1.Probe{
 		// TODO might need tuning
-		TimeoutSeconds:      5,
-		PeriodSeconds:       5,
-		InitialDelaySeconds: 5,
+		TimeoutSeconds:      15,
+		PeriodSeconds:       10,
+		InitialDelaySeconds: 10,
 	}
 	startupProbe := &corev1.Probe{
 		// TODO might need tuning
@@ -81,7 +81,11 @@ func StatefulSet(
 			"/usr/bin/pidof", "ovsdb-server",
 		},
 	}
-	readinessProbe.Exec = livenessProbe.Exec
+	readinessProbe.Exec = &corev1.ExecAction{
+		Command: []string{
+			"/usr/local/bin/container-scripts/ovndb_readiness.sh",
+		},
+	}
 	startupProbe.Exec = livenessProbe.Exec
 
 	preStopCmd = []string{
