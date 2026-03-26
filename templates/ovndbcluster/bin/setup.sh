@@ -148,6 +148,10 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
     unset OVN_${DB_TYPE^^}_DAEMON
 fi
 
+# Check and perform database conversion if needed
+# This can be cleaned up once https://redhat.atlassian.net/browse/FDP-3108 is fixed
+check_and_convert_db
+
 wait_for_ovsdb_tool
 trap - EXIT
 

@@ -25,3 +25,46 @@ function wait_for_ovsdb_tool {
         sleep 1
     done
 }
+
+function wait_for_ovsdb_client {
+    while pgrep -a ovsdb-client; do
+        echo "ovsdb-client still working. Waiting..."
+        sleep 1
+    done
+}
+
+function check_and_convert_db {
+    local db_socket="/tmp/ovn${DB_TYPE}_db.sock"
+    local db_schema="/usr/share/ovn/ovn-${DB_TYPE}.ovsschema"
+
+    # Check prerequisites
+    if [ ! -f "$db_schema" ]; then
+        echo "Warning: Schema file $db_schema not found, skipping conversion check"
+        return
+    fi
+
+    if [ ! -S "$db_socket" ]; then
+        echo "Warning: Database socket $db_socket not found, skipping conversion check"
+        return
+    fi
+
+    # Check if conversion is needed
+    if test X"`ovsdb-client needs-conversion unix:$db_socket "$db_schema"`" = Xyes; then
+        echo "Database conversion needed for ${DB_TYPE} database, performing conversion..."
+
+        # Set trap to wait for ovsdb-client to finish conversion
+        trap wait_for_ovsdb_client EXIT
+
+        if ovsdb-client convert unix:$db_socket "$db_schema"; then
+            echo "Database conversion completed successfully for ${DB_TYPE} database"
+        else
+            echo "Error: Database conversion failed for ${DB_TYPE} database"
+            trap - EXIT
+            return 1
+        fi
+
+        # Wait for conversion to complete and remove trap
+        wait_for_ovsdb_client
+        trap - EXIT
+    fi
+}
