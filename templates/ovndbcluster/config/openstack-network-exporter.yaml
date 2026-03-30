@@ -1,4 +1,4 @@
-ovsdb-rundir: /tmp
+ovsdb-rundir: {{ .OVN_RUNDIR }}
 collectors: ['ovsdbserver']
 {{- if .TLS }}
 tls-cert: {{ .OVN_METRICS_CERT_PATH }}

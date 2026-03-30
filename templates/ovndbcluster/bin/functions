@@ -34,7 +34,7 @@ function wait_for_ovsdb_client {
 }
 
 function check_and_convert_db {
-    local db_socket="/tmp/ovn${DB_TYPE}_db.sock"
+    local db_socket="${OVN_RUNDIR}/ovn${DB_TYPE}_db.sock"
     local db_schema="/usr/share/ovn/ovn-${DB_TYPE}.ovsschema"
 
     # Check prerequisites
@@ -67,4 +67,14 @@ function check_and_convert_db {
         wait_for_ovsdb_client
         trap - EXIT
     fi
+}
+
+function cleanup_stale_runtime_files {
+    # Remove specific runtime files that may persist in PVC across pod restarts
+    # These can prevent service startup if left from previous crashed containers
+    rm -f "${OVN_RUNDIR}/ovn${DB_TYPE}_db.ctl"         # Control socket
+    rm -f "${OVN_RUNDIR}/ovn${DB_TYPE}_db.sock"        # Unix socket
+    rm -f "${OVN_RUNDIR}/ovn${DB_TYPE}_db.pid"         # Main PID file
+    rm -f "${OVN_RUNDIR}/ovn-${DB_TYPE}ctl.pid"        # Control daemon PID file
+    rm -f "${OVN_RUNDIR}/.ovn${DB_TYPE}_db.db.~lock~"  # Database lock file
 }
