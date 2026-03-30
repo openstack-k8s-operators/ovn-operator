@@ -27,7 +27,7 @@ done
 for pod in "${pods[@]}"; do
 
     echo "Checking status of $pod"
-    output=$(oc exec $pod -n $NAMESPACE -- bash -c "OVS_RUNDIR=/tmp ovs-appctl -t /tmp/$CTL_FILE cluster/status $DB_NAME")
+    output=$(oc exec $pod -n $NAMESPACE -- bash -c "OVS_RUNDIR=/etc/ovn ovs-appctl -t /etc/ovn/$CTL_FILE cluster/status $DB_NAME")
 
     # Example of part of output string that needs parsing:
     # Status: cluster member

@@ -272,15 +272,18 @@ var _ = Describe("OVNDBCluster controller", func() {
 
 			// Check metrics container volume mounts
 			th.AssertVolumeMountExists("config", "", metricsC.VolumeMounts)
-			th.AssertVolumeMountExists("ovsdb-rundir", "", metricsC.VolumeMounts)
+			th.AssertVolumeMountExists(OVNDBClusterName.Name+"-etc-ovn", "", metricsC.VolumeMounts)
 		})
 
 		It("creates the required volumes for metrics", func() {
 			sts := th.GetStatefulSet(statefulSetName)
 
-			// Verify required volumes exist
-			th.AssertVolumeExists("ovsdb-rundir", sts.Spec.Template.Spec.Volumes)
+			// Verify required ConfigMap volumes exist
 			th.AssertVolumeExists("config", sts.Spec.Template.Spec.Volumes)
+
+			// Verify VolumeClaimTemplate exists for PVC volume (VolumeClaimTemplates don't appear in volumes list)
+			Expect(sts.Spec.VolumeClaimTemplates).To(HaveLen(1))
+			Expect(sts.Spec.VolumeClaimTemplates[0].Name).To(Equal(OVNDBClusterName.Name + "-etc-ovn"))
 		})
 
 		It("creates the metrics config ConfigMap", func() {

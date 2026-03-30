@@ -21,12 +21,6 @@ func GetDBClusterVolumes(name string) []corev1.Volume {
 			},
 		},
 		{
-			Name: "ovsdb-rundir",
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		},
-		{
 			Name: "config",
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -53,10 +47,6 @@ func GetDBClusterVolumeMounts(name string) []corev1.VolumeMount {
 			Name:      name,
 			MountPath: "/etc/ovn",
 			ReadOnly:  false,
-		},
-		{
-			Name:      "ovsdb-rundir",
-			MountPath: "/tmp",
 		},
 	}
 

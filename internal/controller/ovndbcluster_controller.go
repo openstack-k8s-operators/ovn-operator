@@ -46,6 +46,7 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/configmap"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/job"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
 	nad "github.com/openstack-k8s-operators/lib-common/modules/common/networkattachment"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
@@ -562,6 +563,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	// create Configmap required for dbcluster input
 	// - %-config configmap holding minimal dbcluster config required to get the service up
 	//
+	// Create ConfigMaps with ALL parameters included for setup script (pods will use these)
 	err = r.generateServiceConfigMaps(ctx, helper, instance, &configMapVars, serviceName)
 	if err != nil {
 		instance.Status.Conditions.Set(condition.FalseCondition(
@@ -660,6 +662,21 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	stateful := sfset.GetStatefulSet()
 	if stateful.Generation == stateful.Status.ObservedGeneration {
 		instance.Status.ReadyCount = stateful.Status.ReadyReplicas
+	}
+
+	// Only run runtime config when all pods are ready and no rolling update in progress
+	if instance.Status.ReadyCount == *instance.Spec.Replicas &&
+		stateful.Status.UpdatedReplicas == *instance.Spec.Replicas {
+		err = r.reconcileRuntimeConfig(ctx, helper, instance, serviceLabels, serviceName)
+		if err != nil {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.ServiceConfigReadyCondition,
+				condition.ErrorReason,
+				condition.SeverityWarning,
+				condition.ServiceConfigReadyErrorMessage,
+				err.Error()))
+			return ctrl.Result{}, err
+		}
 	}
 
 	// verify if network attachment matches expectations
@@ -1112,6 +1129,138 @@ func (r *OVNDBClusterReconciler) deleteExternalConfigMaps(
 	return nil
 }
 
+// reconcileRuntimeConfig - handle runtime configuration without pod restart using consolidated event-driven Jobs
+func (r *OVNDBClusterReconciler) reconcileRuntimeConfig(
+	ctx context.Context,
+	h *helper.Helper,
+	instance *ovnv1.OVNDBCluster,
+	serviceLabels map[string]string,
+	serviceName string,
+) error {
+	Log := r.GetLogger(ctx)
+
+	// Calculate combined hash for all runtime parameters using deterministic ordering
+	runtimeEnvVars := map[string]env.Setter{
+		"ElectionTimer":   env.SetValue(fmt.Sprintf("%d", instance.Spec.ElectionTimer)),
+		"InactivityProbe": env.SetValue(fmt.Sprintf("%d", instance.Spec.InactivityProbe)),
+		"LogLevel":        env.SetValue(instance.Spec.LogLevel),
+	}
+	mergedRuntimeVars := env.MergeEnvs([]corev1.EnvVar{}, runtimeEnvVars)
+	runtimeConfigHash, err := util.ObjectHash(mergedRuntimeVars)
+	if err != nil {
+		return err
+	}
+
+	// Check if any runtime config changed
+	runtimeConfigHashKey := "OvnDBClusterRuntimeConfigHash"
+	currentHash := instance.Status.Hash[runtimeConfigHashKey]
+
+	if runtimeConfigHash == currentHash {
+		// No changes detected
+		return nil
+	}
+
+	Log.Info("Runtime configuration changed",
+		"oldHash", currentHash,
+		"newHash", runtimeConfigHash,
+		"ElectionTimer", instance.Spec.ElectionTimer,
+		"InactivityProbe", instance.Spec.InactivityProbe,
+		"LogLevel", instance.Spec.LogLevel)
+
+	// Include all runtime configs for job creation when any changes detected
+	changedConfigs := map[string]interface{}{
+		"ElectionTimer":   instance.Spec.ElectionTimer,
+		"InactivityProbe": instance.Spec.InactivityProbe,
+		"LogLevel":        instance.Spec.LogLevel,
+	}
+
+	// Update hash BEFORE creating jobs to prevent continuous re-creation
+	instance.Status.Hash[runtimeConfigHashKey] = runtimeConfigHash
+
+	// Create runtime-config ConfigMap for the Jobs
+	err = r.ensureRuntimeConfigMap(ctx, h, instance, serviceName)
+	if err != nil {
+		Log.Error(err, "Failed to create runtime-config ConfigMap")
+		return err
+	}
+
+	// Create consolidated configuration jobs
+	jobsDef, err := ovndbcluster.RuntimeConfigJobs(ctx, r.Client, instance, serviceLabels, serviceName, changedConfigs)
+	if err != nil {
+		Log.Error(err, "Failed to create configuration Jobs")
+		return err
+	}
+
+	// Process each job using the job.NewJob pattern - submit ALL jobs first
+	var anyJobInProgress bool
+	for _, jobDef := range jobsDef {
+		configHashKey := "OvnDBClusterConfigHash-" + jobDef.Spec.Template.Spec.NodeName
+		configJob := job.NewJob(
+			jobDef,
+			configHashKey,
+			false,
+			time.Duration(5)*time.Second,
+			runtimeConfigHash,
+		)
+		ctrlResult, err := configJob.DoJob(ctx, h)
+		if err != nil {
+			Log.Error(err, "Failed to execute configuration job")
+			return err
+		}
+		if (ctrlResult != ctrl.Result{}) {
+			Log.Info("Configuration job in progress", "nodeName", jobDef.Spec.Template.Spec.NodeName)
+			anyJobInProgress = true // Don't return early, continue processing remaining jobs
+		}
+	}
+
+	// Return early only after ALL jobs have been submitted
+	if anyJobInProgress {
+		Log.Info("Some configuration jobs still in progress - requeuing")
+		return nil
+	}
+
+	Log.Info("All configuration jobs completed successfully")
+
+	return nil
+}
+
+// ensureRuntimeConfigMap creates the runtime-config ConfigMap needed by configuration Jobs
+func (r *OVNDBClusterReconciler) ensureRuntimeConfigMap(
+	ctx context.Context,
+	h *helper.Helper,
+	instance *ovnv1.OVNDBCluster,
+	serviceName string,
+) error {
+	// Create template parameters for runtime config script
+	templateParameters := make(map[string]any)
+	templateParameters["SERVICE_NAME"] = serviceName
+	templateParameters["DB_TYPE"] = strings.ToLower(instance.Spec.DBType)
+	templateParameters["DB_PORT"] = ovndbcluster.DbPortNB
+	if instance.Spec.DBType == ovnv1.SBDBType {
+		templateParameters["DB_PORT"] = ovndbcluster.DbPortSB
+	}
+	templateParameters["TLS"] = instance.Spec.TLS.Enabled()
+
+	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(serviceName), map[string]string{})
+
+	cms := []util.Template{
+		{
+			Name:      fmt.Sprintf("%s-runtime-config", instance.Name),
+			Namespace: instance.Namespace,
+			Type:      util.TemplateTypeNone,
+			AdditionalTemplate: map[string]string{
+				"runtime-config.sh": "/ovndbcluster/config/runtime-config.sh",
+			},
+			InstanceType:  instance.Kind,
+			Labels:        cmLabels,
+			ConfigOptions: templateParameters,
+		},
+	}
+
+	// Create just the runtime-config ConfigMap
+	return configmap.EnsureConfigMaps(ctx, h, instance, cms, &map[string]env.Setter{})
+}
+
 // generateServiceConfigMaps - create create configmaps which hold service configuration
 func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 	ctx context.Context,
@@ -1125,7 +1274,6 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 
 	templateParameters := make(map[string]any)
 
-	templateParameters["OVN_LOG_LEVEL"] = instance.Spec.LogLevel
 	templateParameters["SERVICE_NAME"] = serviceName
 	templateParameters["NAMESPACE"] = instance.GetNamespace()
 	templateParameters["DB_TYPE"] = strings.ToLower(instance.Spec.DBType)
@@ -1135,15 +1283,13 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 		templateParameters["DB_PORT"] = ovndbcluster.DbPortSB
 		templateParameters["RAFT_PORT"] = ovndbcluster.RaftPortSB
 	}
-	templateParameters["OVN_ELECTION_TIMER"] = instance.Spec.ElectionTimer
-	templateParameters["OVN_INACTIVITY_PROBE"] = instance.Spec.InactivityProbe
-	templateParameters["OVN_PROBE_INTERVAL_TO_ACTIVE"] = instance.Spec.ProbeIntervalToActive
 	templateParameters["TLS"] = instance.Spec.TLS.Enabled()
 	templateParameters["OVNDB_CERT_PATH"] = ovn_common.OVNDbCertPath
 	templateParameters["OVNDB_KEY_PATH"] = ovn_common.OVNDbKeyPath
 	templateParameters["OVNDB_CACERT_PATH"] = ovn_common.OVNDbCaCertPath
 	templateParameters["OVN_METRICS_CERT_PATH"] = ovn_common.OVNMetricsCertPath
 	templateParameters["OVN_METRICS_KEY_PATH"] = ovn_common.OVNMetricsKeyPath
+	templateParameters["OVN_RUNDIR"] = "/etc/ovn"
 
 	cms := []util.Template{
 		// ScriptsConfigMap
