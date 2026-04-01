@@ -755,6 +755,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
 		instance.Status.Conditions.MarkTrue(condition.ExposeServiceReadyCondition, condition.ExposeServiceReadyMessage)
 		internalDbAddress := []string{}
+		internalDbAddressRbacFullAccess := []string{}
 		var svcPort int32
 		scheme := "tcp"
 		if instance.Spec.TLS.Enabled() {
@@ -770,6 +771,12 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 			// TODO: Watch operator.openshift.io resource once cluster domain is customizable
 			clusterDomain := clusterdns.GetDNSClusterDomain()
 			internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, clusterDomain, svcPort))
+
+			// if TLS is enabled and DBType is SB, RBAC for ovn-controller is used, so additionally
+			// set the internalDbAddressRbacFullAccess has to be set
+			if instance.Spec.TLS.Enabled() && instance.Spec.DBType == ovnv1.SBDBType {
+				internalDbAddressRbacFullAccess = append(internalDbAddressRbacFullAccess, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, clusterDomain, ovndbcluster.DbPortSBRBACFullAccess))
+			}
 		}
 
 		// Note setting this to the singular headless service address (e.g ssl:ovsdbserver-sb...) "works" but will not
@@ -779,6 +786,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 
 		// Set DB Address
 		instance.Status.InternalDBAddress = strings.Join(internalDbAddress, ",")
+		instance.Status.InternalDBAddressRbacFullAccess = strings.Join(internalDbAddressRbacFullAccess, ",")
 		if instance.Spec.DBType == ovnv1.SBDBType && (instance.Spec.NetworkAttachment != "" || instance.Spec.Override.Service != nil) {
 			// This config map will populate the sb db address to edpm, can't use the nb
 			// If there's no networkAttachments the configMap is not needed

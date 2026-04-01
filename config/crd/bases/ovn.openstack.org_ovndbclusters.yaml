@@ -430,6 +430,12 @@ spec:
                 description: InternalDBAddress - DB IP address used by other Pods
                   in the cluster
                 type: string
+              internalDbAddressRbacFullAccess:
+                description: |-
+                  InternalDBAddressRbacFullAccess - DB IP address used by other Pods which
+                  requires full access to the SB db, like e.g. Northd. This is used only
+                  when OVN RBAC for ovn-controllers is used (TLS enabled)
+                type: string
               lastAppliedTopology:
                 description: LastAppliedTopology - the last applied Topology
                 properties:

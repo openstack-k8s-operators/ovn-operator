@@ -170,6 +170,11 @@ type OVNDBClusterStatus struct {
 	// InternalDBAddress - DB IP address used by other Pods in the cluster
 	InternalDBAddress string `json:"internalDbAddress,omitempty"`
 
+	// InternalDBAddressRbacFullAccess - DB IP address used by other Pods which
+	// requires full access to the SB db, like e.g. Northd. This is used only
+	// when OVN RBAC for ovn-controllers is used (TLS enabled)
+	InternalDBAddressRbacFullAccess string `json:"internalDbAddressRbacFullAccess,omitempty"`
+
 	// NetworkAttachments status of the deployment pods
 	NetworkAttachments map[string][]string `json:"networkAttachments,omitempty"`
 
@@ -236,6 +241,23 @@ func (instance OVNDBCluster) GetInternalEndpoint() (string, error) {
 		return "", fmt.Errorf("internal DBEndpoint not ready yet for %s", instance.Spec.DBType)
 	}
 	return instance.Status.InternalDBAddress, nil
+}
+
+// GetInternalEndpointRbacFullAccess - return the DNS name that openshift coreDNS can resolve
+func (instance OVNDBCluster) GetInternalEndpointRbacFullAccess() (string, error) {
+	if !instance.Spec.TLS.Enabled() {
+		// if TLS is disabled, this is the same as internalDbAddress
+		return instance.GetInternalEndpoint()
+	}
+	if instance.Spec.DBType != SBDBType {
+		// if DBType is not SB, this is the same as internalDbAddress
+		return instance.GetInternalEndpoint()
+	}
+
+	if instance.Status.InternalDBAddressRbacFullAccess == "" {
+		return "", fmt.Errorf("internal DBEndpoint not ready yet for %s", instance.Spec.DBType)
+	}
+	return instance.Status.InternalDBAddressRbacFullAccess, nil
 }
 
 // GetExternalEndpoint - return the DNS that openstack dnsmasq can resolve

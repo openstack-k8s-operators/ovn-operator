@@ -107,6 +107,27 @@ func getItems(list client.ObjectList) []client.Object {
 	return items
 }
 
+// GetOVNNorthd - return OVNNorthd in the given namespace
+func GetOVNNorthd(
+	ctx context.Context,
+	h *helper.Helper,
+	namespace string,
+) (*OVNNorthd, error) {
+	ovnNorthdList := &OVNNorthdList{}
+	listOpts := []client.ListOption{
+		client.InNamespace(namespace),
+	}
+	err := h.GetClient().List(ctx, ovnNorthdList, listOpts...)
+	if err != nil {
+		return nil, err
+	}
+	if len(ovnNorthdList.Items) > 0 {
+		return &ovnNorthdList.Items[0], nil
+	}
+
+	return nil, nil
+}
+
 // OVNCRNamespaceMapFunc // Generic function to watch any OVN CR
 func OVNCRNamespaceMapFunc(crs client.ObjectList, reader client.Reader) handler.MapFunc {
 	return func(ctx context.Context, obj client.Object) []reconcile.Request {

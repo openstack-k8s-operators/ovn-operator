@@ -37,3 +37,15 @@ commands:
       ../../common/scripts/check_cluster_status.sh nb 3
   - script: |
       ../../common/scripts/check_cluster_status.sh sb 3
+  # Verify internalDbAddressRbacFullAccess is NOT set on SB OVNDBCluster (no TLS = no RBAC)
+  - script: |
+      template='{{.status.internalDbAddressRbacFullAccess}}{{"\n"}}'
+      dbUri=$(oc get -n $NAMESPACE OVNDBCluster ovndbcluster-sb-sample -o go-template="$template")
+      if [[ -n "$dbUri" && "$dbUri" != "<no value>" ]]; then
+        echo "internalDbAddressRbacFullAccess should not be set without TLS but got: ${dbUri}"
+        exit 1
+      fi
+  # Verify northd uses regular port 6642 for SB (no RBAC without TLS)
+  - script: |
+      northd_args=$(oc get statefulset -n $NAMESPACE ovn-northd -o jsonpath='{.spec.template.spec.containers[0].args}')
+      echo "$northd_args" | grep -q -e "--ovnsb-db=.*:6642" || { echo "northd --ovnsb-db does not use port 6642"; exit 1; }

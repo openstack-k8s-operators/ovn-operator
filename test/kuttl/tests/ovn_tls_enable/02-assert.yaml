@@ -71,3 +71,26 @@ commands:
         echo "Certificate CN (${cert_cn}) does not match expected UUID5 (${expected_id}) for node ${node_name}"
         exit 1
       fi
+  # Verify internalDbAddressRbacFullAccess is set on SB OVNDBCluster with port 16642
+  - script: |
+      template='{{.status.internalDbAddressRbacFullAccess}}{{"\n"}}'
+      dbUri=$(oc get -n $NAMESPACE OVNDBCluster ovndbcluster-sb-sample -o go-template="$template")
+      if [[ -z "$dbUri" ]]; then
+        echo "internalDbAddressRbacFullAccess is not set on SB OVNDBCluster"
+        exit 1
+      fi
+      echo "$dbUri" | grep -q "ssl:" || { echo "internalDbAddressRbacFullAccess does not use ssl scheme"; exit 1; }
+      echo "$dbUri" | grep -q ":16642" || { echo "internalDbAddressRbacFullAccess does not use port 16642"; exit 1; }
+  # Verify internalDbAddressRbacFullAccess is NOT set on NB OVNDBCluster
+  - script: |
+      template='{{.status.internalDbAddressRbacFullAccess}}{{"\n"}}'
+      dbUri=$(oc get -n $NAMESPACE OVNDBCluster ovndbcluster-nb-sample -o go-template="$template")
+      if [[ -n "$dbUri" && "$dbUri" != "<no value>" ]]; then
+        echo "internalDbAddressRbacFullAccess should not be set on NB OVNDBCluster but got: ${dbUri}"
+        exit 1
+      fi
+  # Verify northd uses port 16642 for SB and port 6641 for NB
+  - script: |
+      northd_args=$(oc get statefulset -n $NAMESPACE ovn-northd -o jsonpath='{.spec.template.spec.containers[0].args}')
+      echo "$northd_args" | grep -q -e "--ovnsb-db=.*:16642" || { echo "northd --ovnsb-db does not use port 16642"; exit 1; }
+      echo "$northd_args" | grep -q -e "--ovnnb-db=.*:6641" || { echo "northd --ovnnb-db does not use port 6641"; exit 1; }

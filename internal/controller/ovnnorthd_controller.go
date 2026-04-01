@@ -642,7 +642,17 @@ func getInternalEndpoint(
 	if err != nil {
 		return "", err
 	}
-	internalEndpoint, err := cluster.GetInternalEndpoint()
+	internalEndpoint := ""
+	if instance.Spec.TLS.Enabled() && dbType == ovnv1.SBDBType {
+		// When TLS is enabled, OVN is configured to use RBAC and in that case
+		// the "regular" internal endpoint is provides limited access to the SB
+		// for ovn-controllers. Northd howerver needs endpoint with full access
+		// to the SB db
+		internalEndpoint, err = cluster.GetInternalEndpointRbacFullAccess()
+	} else {
+		internalEndpoint, err = cluster.GetInternalEndpoint()
+	}
+
 	if err != nil {
 		return "", err
 	}

@@ -912,6 +912,9 @@ var _ = Describe("OVNController controller", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
+			ovnNorthdName := ovn.CreateOVNNorthd(nil, namespace, GetDefaultOVNNorthdSpec())
+			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
+			ovn.SimulateOVNNorthdReady(ovnNorthdName)
 			instance := CreateOVNController(namespace, GetTLSOVNControllerSpec())
 			DeferCleanup(th.DeleteInstance, instance)
 

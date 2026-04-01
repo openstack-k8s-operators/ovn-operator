@@ -130,6 +130,7 @@ func (th *TestHelper) SimulateOVNNorthdReady(name types.NamespacedName) {
 	gomega.Eventually(func(g gomega.Gomega) {
 		service := th.GetOVNNorthd(name)
 		service.Status.ObservedGeneration = service.Generation
+		service.Status.ReadyCount = 1
 		service.Status.Conditions.MarkTrue(condition.ReadyCondition, "Ready")
 		g.Expect(th.K8sClient.Status().Update(th.Ctx, service)).To(gomega.Succeed())
 	}, th.Timeout, th.Interval).Should(gomega.Succeed())

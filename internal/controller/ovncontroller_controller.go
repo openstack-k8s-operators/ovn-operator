@@ -267,6 +267,7 @@ func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
 		Watches(&ovnv1.OVNDBCluster{}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNCRNamespaceMapFunc(crs, mgr.GetClient()))).
+		Watches(&ovnv1.OVNNorthd{}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNCRNamespaceMapFunc(crs, mgr.GetClient()))).
 		Watches(
 			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSrc),
@@ -639,6 +640,26 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 			condition.TopologyReadyErrorMessage,
 			err.Error()))
 		return ctrl.Result{}, fmt.Errorf("waiting for Topology requirements: %w", err)
+	}
+
+	// When TLS is enabled, RBAC is used for ovn-controller connections to the SB
+	// database. The RBAC permission rules are populated by ovn-northd, so we must
+	// wait for northd to be ready before deploying ovn-controller to avoid RBAC
+	// permission errors during startup.
+	if instance.Spec.TLS.Enabled() {
+		northd, err := ovnv1.GetOVNNorthd(ctx, helper, instance.Namespace)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to look up OVNNorthd: %w", err)
+		}
+		if northd == nil || northd.Status.ReadyCount == 0 {
+			Log.Info("OVNNorthd is not ready yet, waiting before deploying OVNController to avoid RBAC errors")
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.DeploymentReadyCondition,
+				condition.RequestedReason,
+				condition.SeverityInfo,
+				condition.DeploymentReadyRunningMessage))
+			return ctrl.Result{RequeueAfter: time.Duration(5) * time.Second}, nil
+		}
 	}
 
 	// Define a new DaemonSet object for OVNController

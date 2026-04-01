@@ -80,17 +80,27 @@ func GetDefaultOVNDBClusterSpec() ovnv1.OVNDBClusterSpec {
 	}
 }
 
-func GetTLSOVNDBClusterSpec() ovnv1.OVNDBClusterSpec {
+func getTLSOVNDBClusterSpecWithTLSSecrets(caBundleSecretName, certSecretName string) ovnv1.OVNDBClusterSpec {
 	spec := GetDefaultOVNDBClusterSpec()
 	spec.TLS = tls.SimpleService{
 		Ca: tls.Ca{
-			CaBundleSecretName: CABundleSecretName,
+			CaBundleSecretName: caBundleSecretName,
 		},
 		GenericService: tls.GenericService{
-			SecretName: ptr.To(OvnDbCertSecretName),
+			SecretName: ptr.To(certSecretName),
 		},
 	}
 	return spec
+}
+
+func GetTLSOVNDBClusterSpec() ovnv1.OVNDBClusterSpec {
+	return getTLSOVNDBClusterSpecWithTLSSecrets(CABundleSecretName, OvnDbCertSecretName)
+}
+
+// ovnDBClusterTestTLSSecrets names the K8s secrets used by OVNDBCluster TLS (nil means no TLS).
+type ovnDBClusterTestTLSSecrets struct {
+	CaBundle string
+	Cert     string
 }
 
 func CreateOVNDBCluster(namespace string, spec ovnv1.OVNDBClusterSpec) client.Object {
@@ -113,9 +123,32 @@ func ScaleDBCluster(name types.NamespacedName, replicas int32) {
 
 // CreateOVNDBClusters Creates NB and SB OVNDBClusters
 func CreateOVNDBClusters(namespace string, nad map[string][]string, replicas int32) []types.NamespacedName {
+	return createOVNDBClusters(namespace, nad, replicas, nil)
+}
+
+// CreateTLSOVNDBClusters Creates NB and SB OVNDBClusters with TLS
+func CreateTLSOVNDBClusters(namespace string, nad map[string][]string, replicas int32) []types.NamespacedName {
+	return createOVNDBClusters(namespace, nad, replicas, &ovnDBClusterTestTLSSecrets{
+		CaBundle: CABundleSecretName,
+		Cert:     OvnDbCertSecretName,
+	})
+}
+
+// CreateTLSOVNDBClustersUsingSecrets Creates NB and SB OVNDBClusters with TLS using the given secret names.
+func CreateTLSOVNDBClustersUsingSecrets(namespace string, nad map[string][]string, replicas int32, caBundleSecret, certSecret string) []types.NamespacedName {
+	return createOVNDBClusters(namespace, nad, replicas, &ovnDBClusterTestTLSSecrets{
+		CaBundle: caBundleSecret,
+		Cert:     certSecret,
+	})
+}
+
+func createOVNDBClusters(namespace string, nad map[string][]string, replicas int32, tlsSecrets *ovnDBClusterTestTLSSecrets) []types.NamespacedName {
 	dbs := []types.NamespacedName{}
 	for _, db := range []string{ovnv1.NBDBType, ovnv1.SBDBType} {
 		spec := GetDefaultOVNDBClusterSpec()
+		if tlsSecrets != nil {
+			spec = getTLSOVNDBClusterSpecWithTLSSecrets(tlsSecrets.CaBundle, tlsSecrets.Cert)
+		}
 		stringNad := ""
 		// OVNDBCluster doesn't allow multiple NADs, hence map len
 		// must be <= 1
@@ -157,7 +190,11 @@ func CreateOVNDBClusters(namespace string, nad map[string][]string, replicas int
 			endpoint := ""
 			// Check External endpoint when NAD is set
 			if len(nad) == 0 {
-				endpoint, _ = ovndbcluster.GetInternalEndpoint()
+				if tlsSecrets != nil && db == ovnv1.SBDBType {
+					endpoint, _ = ovndbcluster.GetInternalEndpointRbacFullAccess()
+				} else {
+					endpoint, _ = ovndbcluster.GetInternalEndpoint()
+				}
 			} else {
 				endpoint, _ = ovndbcluster.GetExternalEndpoint()
 			}

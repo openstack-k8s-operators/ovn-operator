@@ -263,7 +263,18 @@ var _ = Describe("OVNNorthd controller", func() {
 		var ovnNorthdName types.NamespacedName
 
 		BeforeEach(func() {
-			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
+			// OVNDBCluster TLS needs these secrets before its StatefulSet exists; use names
+			// distinct from northd's CABundleSecretName / OvnDbCertSecretName so missing-secret specs stay valid.
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      OvnDBClusterFuncTLSCaBundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDBClusterFuncTLSCertSecretName,
+				Namespace: namespace,
+			}))
+			dbs := CreateTLSOVNDBClustersUsingSecrets(namespace, map[string][]string{}, 1,
+				OvnDBClusterFuncTLSCaBundleSecretName, OvnDBClusterFuncTLSCertSecretName)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
 			spec := GetTLSOVNNorthdSpec()
 			ovnNorthdName = ovn.CreateOVNNorthd(nil, namespace, spec)
@@ -309,7 +320,7 @@ var _ = Describe("OVNNorthd controller", func() {
 			)
 		})
 
-		It("creates a StatefulSet with TLS certs attached", func() {
+		It("creates a StatefulSet with TLS certs attached and DB endpoints set", func() {
 			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
 				Name:      CABundleSecretName,
 				Namespace: namespace,
@@ -345,6 +356,8 @@ var _ = Describe("OVNNorthd controller", func() {
 				ContainElement(ContainSubstring("--private-key=")),
 				ContainElement(ContainSubstring("--certificate=")),
 				ContainElement(ContainSubstring("--ca-cert=")),
+				ContainElement(ContainSubstring("--ovnnb-db=ssl:ovsdbserver-nb-0."+namespace+".svc.cluster.local:6641")),
+				ContainElement(ContainSubstring("--ovnsb-db=ssl:ovsdbserver-sb-0."+namespace+".svc.cluster.local:16642")),
 			))
 
 			// Verify metrics container exists and has correct configuration
