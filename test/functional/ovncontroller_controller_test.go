@@ -31,6 +31,7 @@ import (
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovn_common "github.com/openstack-k8s-operators/ovn-operator/internal/common"
+	ovn_ovncontroller "github.com/openstack-k8s-operators/ovn-operator/internal/ovncontroller"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -1047,8 +1048,8 @@ var _ = Describe("OVNController controller", func() {
 
 			// check cli args
 			Expect(svcC.Command).To(And(
-				ContainElement(ContainSubstring(fmt.Sprintf("--private-key=%s", ovn_common.OVNDbKeyPath))),
-				ContainElement(ContainSubstring(fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath))),
+				ContainElement(ContainSubstring(fmt.Sprintf("--private-key=%s", ovn_ovncontroller.OVNControllerKeyPath))),
+				ContainElement(ContainSubstring(fmt.Sprintf("--certificate=%s", ovn_ovncontroller.OVNControllerCertPath))),
 				ContainElement(ContainSubstring(fmt.Sprintf("--ca-cert=%s", ovn_common.OVNDbCaCertPath))),
 			))
 

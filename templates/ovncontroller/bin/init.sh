@@ -21,5 +21,17 @@ wait_for_ovsdb_server
 # From now on, we should exit immediatelly when any command exits with non-zero status
 set -ex
 
+# Set deterministic UUID5 system-id derived from hostname for RBAC compatibility.
+# The system-id must match the certificate CN for OVN RBAC ownership checks.
+if [ -n "${OVNHostName}" ]; then
+    SYSTEM_ID=$(hostname_to_uuid "${OVNHostName}")
+    ovs-vsctl set open . external-ids:system-id=${SYSTEM_ID}
+fi
+
 configure_external_ids
 configure_physical_networks
+
+# Generate per-node RBAC certificate if the RBAC PKI CA is available
+if [ -n "${OVN_RBAC_CA_CERT}" ] && [ -f "${OVN_RBAC_CA_CERT}" ]; then
+    generate_rbac_certificate "${SYSTEM_ID}"
+fi

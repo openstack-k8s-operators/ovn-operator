@@ -59,9 +59,19 @@ func CreateOVNDaemonSet(
 			mounts = append(mounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
 		}
 
+		// When TLS is enabled, RBAC is used for the SB database connection.
+		// ovn-controller must use a per-node certificate (CN=node_name) generated
+		// by the config job and stored in /etc/openvswitch/ (HostPath).
+		// The CA cert for verifying the SB server remains the same.
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      "etc-ovs",
+			MountPath: OVNControllerCertDir,
+			ReadOnly:  false,
+		})
+
 		cmd = append(cmd, []string{
-			fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath),
-			fmt.Sprintf("--private-key=%s", ovn_common.OVNDbKeyPath),
+			fmt.Sprintf("--certificate=%s", OVNControllerCertPath),
+			fmt.Sprintf("--private-key=%s", OVNControllerKeyPath),
 			fmt.Sprintf("--ca-cert=%s", ovn_common.OVNDbCaCertPath),
 		}...)
 	}
@@ -239,6 +249,10 @@ func CreateOVSDaemonSet(
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 
+	initEnvVars := map[string]env.Setter{}
+	initEnvVars["CONFIG_HASH"] = env.SetValue(configHash)
+	initEnvVars["OVNHostName"] = env.DownwardAPI("spec.nodeName")
+
 	initContainers := []corev1.Container{
 		{
 			Name:    "ovsdb-server-init",
@@ -252,7 +266,7 @@ func CreateOVSDaemonSet(
 				RunAsUser:  &runAsUser,
 				Privileged: &privileged,
 			},
-			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			Env:          env.MergeEnvs([]corev1.EnvVar{}, initEnvVars),
 			VolumeMounts: GetOVSDbVolumeMounts(),
 		},
 	}

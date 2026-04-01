@@ -19,6 +19,8 @@ import (
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovn_common "github.com/openstack-k8s-operators/ovn-operator/internal/common"
+	ovndbcluster "github.com/openstack-k8s-operators/ovn-operator/internal/ovndbcluster"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -67,6 +69,38 @@ func ConfigJob(
 	envVars["OVNLogLevel"] = env.SetValue(instance.Spec.OVNLogLevel)
 	envVars["OVSLogLevel"] = env.SetValue(instance.Spec.OVSLogLevel)
 
+	// Prepare volumes and mounts for config job
+	volumes := GetOVNControllerVolumes(instance.Name, instance.Namespace, true)
+	volumeMounts := GetOVNControllerVolumeMounts(true)
+
+	// When TLS is enabled, mount the RBAC PKI CA secret so the config job
+	// can generate and sign per-node ovn-controller certificates.
+	if instance.Spec.TLS.Enabled() {
+		volumes = append(volumes, corev1.Volume{
+			Name: "ovn-rbac-pki-ca",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: ovndbcluster.OVNRbacPkiCaSecret,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "ovn-rbac-pki-ca",
+			MountPath: ovn_common.OVNRbacPkiCaMountPath,
+			ReadOnly:  true,
+		})
+		// Also mount etc-ovs to persist the generated certificates
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "etc-ovs",
+			MountPath: OVNControllerCertDir,
+			ReadOnly:  false,
+		})
+
+		envVars["OVNControllerCertDir"] = env.SetValue(OVNControllerCertDir)
+		envVars["OVN_RBAC_CA_CERT"] = env.SetValue(ovn_common.OVNRbacPkiCaCertPath)
+		envVars["OVN_RBAC_CA_KEY"] = env.SetValue(ovn_common.OVNRbacPkiCaKeyPath)
+	}
+
 	for _, ovnPod := range ovnPods.Items {
 		commands := []string{
 			"/usr/local/bin/container-scripts/init.sh",
@@ -101,11 +135,11 @@ func ConfigJob(
 										Privileged: &privileged,
 									},
 									Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-									VolumeMounts: GetOVNControllerVolumeMounts(true),
+									VolumeMounts: volumeMounts,
 									Resources:    instance.Spec.Resources,
 								},
 							},
-							Volumes:  GetOVNControllerVolumes(instance.Name, instance.Namespace, true),
+							Volumes:  volumes,
 							NodeName: ovnPod.Spec.NodeName,
 							// ^ NodeSelector not required
 						},

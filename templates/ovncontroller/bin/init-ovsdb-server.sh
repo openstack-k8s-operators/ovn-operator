@@ -29,8 +29,15 @@ if [ -f ${DB_FILE} ]; then
     ovsdb-tool compact ${DB_FILE}
 fi
 
-# Initialize or upgrade database if needed
-CTL_ARGS="--system-id=random --no-ovs-vswitchd"
+# Initialize or upgrade database if needed.
+# Use deterministic UUID5 (derived from hostname) as system-id for OVN RBAC.
+# The system-id must match the certificate CN for RBAC ownership checks.
+if [ -n "${OVNHostName}" ]; then
+    SYSTEM_ID=$(hostname_to_uuid "${OVNHostName}")
+    CTL_ARGS="--system-id=${SYSTEM_ID} --no-ovs-vswitchd"
+else
+    CTL_ARGS="--system-id=random --no-ovs-vswitchd"
+fi
 /usr/share/openvswitch/scripts/ovs-ctl start $CTL_ARGS
 /usr/share/openvswitch/scripts/ovs-ctl stop $CTL_ARGS
 

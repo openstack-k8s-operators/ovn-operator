@@ -22,6 +22,7 @@ OVNAvailabilityZones=${OVNAvailabilityZones:-""}
 EnableChassisAsGateway=${EnableChassisAsGateway:-true}
 PhysicalNetworks=${PhysicalNetworks:-""}
 OVNHostName=${OVNHostName:-""}
+OVNControllerCertDir=${OVNControllerCertDir:-"/etc/openvswitch"}
 DB_FILE=/etc/openvswitch/conf.db
 
 ovs_dir=/var/lib/openvswitch
@@ -151,4 +152,70 @@ function wait_for_db_creation {
         echo "${DB_FILE} does not exist yet or is empty. Waiting..."
         sleep 1
     done
+}
+
+function hostname_to_uuid {
+    python3 -c "import uuid,sys; print(uuid.uuid5(uuid.NAMESPACE_DNS, sys.argv[1]))" "$1"
+}
+
+# Generate per-node RBAC certificate signed by the OVN RBAC PKI CA.
+# The certificate CN is set to the chassis system-id (UUID5 derived from
+# hostname) which must match the OVN chassis system-id for RBAC ownership
+# checks to work.
+# Certificates are stored in /etc/openvswitch/ which is persisted via HostPath.
+function generate_rbac_certificate {
+    local system_id="$1"
+    local cert_dir="${OVNControllerCertDir}"
+    local cert_file="${cert_dir}/ovn-controller-cert.pem"
+    local key_file="${cert_dir}/ovn-controller-privkey.pem"
+    local ca_cert="${OVN_RBAC_CA_CERT}"
+    local ca_key="${OVN_RBAC_CA_KEY}"
+
+    if [ -z "${system_id}" ]; then
+        echo "ERROR: system_id is not provided, cannot generate RBAC certificate"
+        return 1
+    fi
+
+    # Check if CA cert and key are available
+    if [ ! -f "${ca_cert}" ] || [ ! -f "${ca_key}" ]; then
+        echo "OVN RBAC PKI CA not available, skipping certificate generation"
+        return 0
+    fi
+
+    # If certificate already exists and has the correct CN, skip regeneration
+    if [ -f "${cert_file}" ]; then
+        existing_cn=$(openssl x509 -in "${cert_file}" -noout -subject 2>/dev/null | sed -n 's/.*CN *= *\([^ ,]*\).*/\1/p')
+        if [ "${existing_cn}" = "${system_id}" ]; then
+            echo "RBAC certificate for ${system_id} already exists, skipping generation"
+            return 0
+        fi
+        echo "RBAC certificate CN mismatch (${existing_cn} != ${system_id}), regenerating"
+    fi
+
+    echo "Generating RBAC certificate for chassis ${system_id}"
+
+    # Generate private key
+    openssl genrsa -out "${key_file}" 2048
+
+    # Generate CSR with CN=system_id (UUID5)
+    openssl req -new -key "${key_file}" \
+        -out "${cert_dir}/ovn-controller.csr" \
+        -subj "/CN=${system_id}"
+
+    # Sign the certificate with the CA.
+    # Use -CAserial with a writable path since the CA secret mount is read-only.
+    openssl x509 -req \
+        -in "${cert_dir}/ovn-controller.csr" \
+        -CA "${ca_cert}" \
+        -CAkey "${ca_key}" \
+        -CAserial "${cert_dir}/ovn-rbac-ca.srl" \
+        -CAcreateserial \
+        -out "${cert_file}" \
+        -days 3650 \
+        -sha256
+
+    # Clean up CSR and serial file
+    rm -f "${cert_dir}/ovn-controller.csr" "${cert_dir}/ovn-rbac-ca.srl"
+
+    echo "RBAC certificate generated successfully for ${system_id}"
 }

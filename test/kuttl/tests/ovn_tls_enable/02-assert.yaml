@@ -47,3 +47,27 @@ commands:
   # Verify SB service has RBAC full-access port (16642)
   - script: |
       oc get service -n $NAMESPACE ovsdbserver-sb-0 -o jsonpath='{.spec.ports[*].port}' | grep -q "16642"
+  # Verify system-id is a deterministic UUID5 derived from node name (required for RBAC)
+  - script: |
+      controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller -o name|head -1)
+      system_id=$(oc rsh -n $NAMESPACE ${controller_pod} ovs-vsctl get open . external-ids:system-id | tr -d '"')
+      node_name=$(oc get -n $NAMESPACE ${controller_pod} -o jsonpath='{.spec.nodeName}')
+      expected_id=$(python3 -c "import uuid,sys; print(uuid.uuid5(uuid.NAMESPACE_DNS, sys.argv[1]))" "${node_name}")
+      if [ "${system_id}" != "${expected_id}" ]; then
+        echo "system-id (${system_id}) does not match expected UUID5 (${expected_id}) for node ${node_name}"
+        exit 1
+      fi
+  # Verify per-node RBAC certificate exists and CN matches system-id (UUID5)
+  - script: |
+      controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller -o name|head -1)
+      node_name=$(oc get -n $NAMESPACE ${controller_pod} -o jsonpath='{.spec.nodeName}')
+      expected_id=$(python3 -c "import uuid,sys; print(uuid.uuid5(uuid.NAMESPACE_DNS, sys.argv[1]))" "${node_name}")
+      cert_cn=$(oc rsh -n $NAMESPACE ${controller_pod} openssl x509 -in /etc/openvswitch/ovn-controller-cert.pem -noout -subject 2>/dev/null | sed -n 's/.*CN *= *\([^ ,]*\).*/\1/p')
+      if [ -z "${cert_cn}" ]; then
+        echo "Per-node RBAC certificate not found at /etc/openvswitch/ovn-controller-cert.pem"
+        exit 1
+      fi
+      if [ "${cert_cn}" != "${expected_id}" ]; then
+        echo "Certificate CN (${cert_cn}) does not match expected UUID5 (${expected_id}) for node ${node_name}"
+        exit 1
+      fi
