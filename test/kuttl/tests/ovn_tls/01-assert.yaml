@@ -90,3 +90,16 @@ commands:
       if [[ -n "$matches" ]]; then
         exit 1
       fi
+  # Verify cert-manager RBAC PKI CA resources are created for SB with TLS
+  - script: |
+      # Check self-signed issuer exists
+      oc get issuer -n $NAMESPACE ovn-rbac-selfsigned-issuer
+  - script: |
+      # Check CA certificate exists and is a CA
+      oc get certificate -n $NAMESPACE ovn-rbac-pki-ca -o jsonpath='{.spec.isCA}' | grep -q "true"
+  - script: |
+      # Check CA issuer exists and references the correct secret
+      oc get issuer -n $NAMESPACE ovn-rbac-ca-issuer -o jsonpath='{.spec.ca.secretName}' | grep -q "ovn-rbac-pki-ca"
+  # Verify SB service has RBAC full-access port (16642)
+  - script: |
+      oc get service -n $NAMESPACE ovsdbserver-sb-0 -o jsonpath='{.spec.ports[*].port}' | grep -q "16642"

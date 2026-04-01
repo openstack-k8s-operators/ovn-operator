@@ -42,6 +42,7 @@ import (
 
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	certmgrv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	infranetworkv1 "github.com/openstack-k8s-operators/infra-operator/apis/network/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -78,6 +79,9 @@ var (
 const (
 	CABundleSecretName  = "combined-ca-bundle" //nolint:gosec // G101: Not actual credentials, just secret name constants
 	OvnDbCertSecretName = "ovndb-tls-cert"     //nolint:gosec // G101: Not actual credentials, just secret name constants
+	// OVNDBCluster TLS secrets for OVNNorthd TLS functional tests (distinct from northd's CABundleSecretName / OvnDbCertSecretName).
+	OvnDBClusterFuncTLSCaBundleSecretName = "ovndbcluster-func-tls-ca-bundle" //nolint:gosec // G101: test fixture name only
+	OvnDBClusterFuncTLSCertSecretName     = "ovndbcluster-func-tls-cert"      //nolint:gosec // G101: test fixture name only
 )
 
 func TestAPIs(t *testing.T) {
@@ -105,6 +109,14 @@ var _ = BeforeSuite(func() {
 		"github.com/openstack-k8s-operators/infra-operator/apis", "../../go.mod", "bases/topology.openstack.org_topologies.yaml")
 	Expect(err).ShouldNot(HaveOccurred())
 
+	certManagerCertsCRD, err := test.GetOpenShiftCRDDir(
+		"cert-manager/v1/certificates.cert-manager.io-crd.yaml", "../../go.mod")
+	Expect(err).ShouldNot(HaveOccurred())
+
+	certManagerIssuersCRD, err := test.GetOpenShiftCRDDir(
+		"cert-manager/v1/issuers.cert-manager.io-crd.yaml", "../../go.mod")
+	Expect(err).ShouldNot(HaveOccurred())
+
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		// Increase this to 60 or 120 seconds for the single-core run
@@ -120,6 +132,8 @@ var _ = BeforeSuite(func() {
 				networkv1CRD,
 				infranetworkv1CRD,
 				infratopologyv1CRD,
+				certManagerCertsCRD,
+				certManagerIssuersCRD,
 			},
 		},
 		ErrorIfCRDPathMissing: true,
@@ -158,6 +172,8 @@ var _ = BeforeSuite(func() {
 	err = infranetworkv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = topologyv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = certmgrv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	//+kubebuilder:scaffold:scheme
 

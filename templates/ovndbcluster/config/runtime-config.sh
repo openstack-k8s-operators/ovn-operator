@@ -75,12 +75,14 @@ if echo "$CONFIG_FLAGS" | grep -q "INACTIVITY_PROBE"; then
         echo "Configuring inactivity probe to ${INACTIVITY_PROBE}ms on pod-0..."
 
         # Simple approach - connect directly to running database (OVN_RUNDIR already set)
-        if ovn-${DB_TYPE}ctl --no-leader-only set connection . inactivity_probe="$INACTIVITY_PROBE"; then
-            echo "✓ Successfully configured inactivity probe"
-        else
-            echo "✗ Failed to configure inactivity probe"
-            exit 1
-        fi
+        for connection_id in $(ovn-${DB_TYPE}ctl --no-leader-only -f csv --no-headings --columns=_uuid list connection); do
+            if ovn-${DB_TYPE}ctl --no-leader-only set connection $connection_id inactivity_probe="$INACTIVITY_PROBE"; then
+                echo "✓ Successfully configured inactivity probe for connection ${connection_id}"
+            else
+                echo "✗ Failed to configure inactivity probe for connection ${connection_id}"
+                exit 1
+            fi
+        done
     else
         echo "⚠ Skipping inactivity probe configuration (not pod-0)"
     fi

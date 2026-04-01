@@ -14,6 +14,15 @@ const (
 	// OVNMetricsKeyPath is the path to the metrics private key file
 	OVNMetricsKeyPath string = "/etc/pki/tls/private/ovnmetrics.key"
 
+	// OVNRbacPkiCaMountPath is the mount path for the OVN RBAC PKI CA secret volume
+	OVNRbacPkiCaMountPath string = "/etc/pki/ovn-rbac-ca"
+	// OVNRbacPkiCaCertPath is the path where the OVN RBAC PKI CA certificate
+	// is mounted inside the container
+	OVNRbacPkiCaCertPath string = OVNRbacPkiCaMountPath + "/tls.crt"
+	// OVNRbacPkiCaKeyPath is the path where the OVN RBAC PKI CA private key
+	// is mounted inside the container
+	OVNRbacPkiCaKeyPath string = OVNRbacPkiCaMountPath + "/tls.key"
+
 	// MetricsPort is the port used for metrics
 	MetricsPort int32 = 1981
 )

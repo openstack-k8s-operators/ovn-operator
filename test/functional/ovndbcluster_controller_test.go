@@ -27,15 +27,18 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/service"
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
 
+	certmgrv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovn_common "github.com/openstack-k8s-operators/ovn-operator/internal/common"
+	"github.com/openstack-k8s-operators/ovn-operator/internal/ovndbcluster"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -1338,6 +1341,34 @@ var _ = Describe("OVNDBCluster controller", func() {
 			th.AssertVolumeMountExists("ovsdbserver-sb-tls-certs", "tls.crt", svcC.VolumeMounts)
 			th.AssertVolumeMountExists("ovsdbserver-sb-tls-certs", "ca.crt", svcC.VolumeMounts)
 
+			// check RBAC PKI CA volume and mount for SB with TLS
+			th.AssertVolumeExists("ovn-rbac-pki-ca", ss.Spec.Template.Spec.Volumes)
+			th.AssertVolumeMountExists("ovn-rbac-pki-ca", "", svcC.VolumeMounts)
+
+			// Verify the RBAC PKI CA volume references the correct secret
+			var rbacVolume *corev1.Volume
+			for i, v := range ss.Spec.Template.Spec.Volumes {
+				if v.Name == "ovn-rbac-pki-ca" {
+					rbacVolume = &ss.Spec.Template.Spec.Volumes[i]
+					break
+				}
+			}
+			Expect(rbacVolume).NotTo(BeNil())
+			Expect(rbacVolume.VolumeSource.Secret).NotTo(BeNil())
+			Expect(rbacVolume.VolumeSource.Secret.SecretName).To(Equal(ovndbcluster.OVNRbacPkiCaSecret))
+
+			// Verify the RBAC PKI CA volume mount path
+			var rbacMount *corev1.VolumeMount
+			for i, vm := range svcC.VolumeMounts {
+				if vm.Name == "ovn-rbac-pki-ca" {
+					rbacMount = &svcC.VolumeMounts[i]
+					break
+				}
+			}
+			Expect(rbacMount).NotTo(BeNil())
+			Expect(rbacMount.MountPath).To(Equal(ovn_common.OVNRbacPkiCaMountPath))
+			Expect(rbacMount.ReadOnly).To(BeTrue())
+
 			// check DB url schema
 			Eventually(func(g Gomega) {
 				OVNDBCluster := GetOVNDBCluster(OVNDBClusterName)
@@ -1363,12 +1394,114 @@ var _ = Describe("OVNDBCluster controller", func() {
 				ContainSubstring("-cluster-remote-proto=ssl"),
 			))
 
+			// check SB setup script creates combined CA bundle for RBAC
+			Expect(th.GetConfigMap(scriptsCM).Data["setup.sh"]).Should(
+				ContainSubstring(ovn_common.OVNRbacPkiCaCertPath))
+
 			th.ExpectCondition(
 				OVNDBClusterName,
 				ConditionGetterFunc(OVNDBClusterConditionGetter),
 				condition.ReadyCondition,
 				corev1.ConditionTrue,
 			)
+		})
+
+		It("creates cert-manager resources for RBAC PKI CA on SB with TLS", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(statefulSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionTrue,
+			)
+
+			// Verify self-signed issuer is created
+			selfSignedIssuer := &certmgrv1.Issuer{}
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+					Name:      "ovn-rbac-selfsigned-issuer",
+					Namespace: namespace,
+				}, selfSignedIssuer)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+			Expect(selfSignedIssuer.Spec.SelfSigned).NotTo(BeNil())
+
+			// Verify CA certificate is created
+			caCert := &certmgrv1.Certificate{}
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+					Name:      ovndbcluster.OVNRbacPkiCaSecret,
+					Namespace: namespace,
+				}, caCert)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+			Expect(caCert.Spec.IsCA).To(BeTrue())
+			Expect(caCert.Spec.CommonName).To(Equal("OVN RBAC CA"))
+			Expect(caCert.Spec.SecretName).To(Equal(ovndbcluster.OVNRbacPkiCaSecret))
+			Expect(caCert.Spec.IssuerRef.Name).To(Equal("ovn-rbac-selfsigned-issuer"))
+
+			// Verify CA issuer is created
+			caIssuer := &certmgrv1.Issuer{}
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+					Name:      "ovn-rbac-ca-issuer",
+					Namespace: namespace,
+				}, caIssuer)).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
+			Expect(caIssuer.Spec.CA).NotTo(BeNil())
+			Expect(caIssuer.Spec.CA.SecretName).To(Equal(ovndbcluster.OVNRbacPkiCaSecret))
+		})
+
+		It("creates services with RBAC full-access port for SB with TLS", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(statefulSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			// Verify services have the RBAC full-access port (16642)
+			Eventually(func(g Gomega) {
+				serviceList := GetServicesListWithLabel(namespace, map[string]string{"type": "cluster"})
+				g.Expect(serviceList.Items).ToNot(BeEmpty())
+				for _, svc := range serviceList.Items {
+					var hasRbacPort bool
+					for _, port := range svc.Spec.Ports {
+						if port.Port == ovndbcluster.DbPortSBRBACFullAccess {
+							hasRbacPort = true
+							g.Expect(port.Name).To(ContainSubstring("rbac-full-access"))
+							break
+						}
+					}
+					g.Expect(hasRbacPort).To(BeTrue(),
+						fmt.Sprintf("Service %s should have RBAC full-access port %d",
+							svc.Name, ovndbcluster.DbPortSBRBACFullAccess))
+				}
+			}, timeout, interval).Should(Succeed())
 		})
 
 		It("reconfigures the pods when CA bundle changes", func() {
@@ -1460,6 +1593,129 @@ var _ = Describe("OVNDBCluster controller", func() {
 				)
 				g.Expect(newHash).NotTo(BeEmpty())
 				g.Expect(newHash).NotTo(Equal(originalHash))
+			}, timeout, interval).Should(Succeed())
+		})
+
+	})
+
+	When("OVNDBCluster NB is created with TLS", func() {
+		var OVNDBClusterName types.NamespacedName
+		BeforeEach(func() {
+			spec := GetTLSOVNDBClusterSpec()
+			spec.DBType = ovnv1.NBDBType
+			instance := CreateOVNDBCluster(namespace, spec)
+			OVNDBClusterName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+			DeferCleanup(th.DeleteInstance, instance)
+		})
+
+		It("does not create RBAC PKI CA volume in StatefulSet for NB", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-nb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(statefulSetName, map[string][]string{})
+
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionTrue,
+			)
+
+			ss := th.GetStatefulSet(statefulSetName)
+
+			// Verify TLS volumes exist
+			th.AssertVolumeExists(CABundleSecretName, ss.Spec.Template.Spec.Volumes)
+			th.AssertVolumeExists("ovsdbserver-nb-tls-certs", ss.Spec.Template.Spec.Volumes)
+
+			// Verify RBAC PKI CA volume does NOT exist for NB
+			for _, v := range ss.Spec.Template.Spec.Volumes {
+				Expect(v.Name).NotTo(Equal("ovn-rbac-pki-ca"),
+					"NB StatefulSet should not have ovn-rbac-pki-ca volume")
+			}
+
+			svcC := ss.Spec.Template.Spec.Containers[0]
+			for _, vm := range svcC.VolumeMounts {
+				Expect(vm.Name).NotTo(Equal("ovn-rbac-pki-ca"),
+					"NB StatefulSet should not have ovn-rbac-pki-ca volume mount")
+			}
+		})
+
+		It("does not create cert-manager RBAC PKI CA resources for NB", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-nb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(statefulSetName, map[string][]string{})
+
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				condition.ReadyCondition,
+				corev1.ConditionTrue,
+			)
+
+			// Verify cert-manager RBAC resources are NOT created for NB
+			issuerList := &certmgrv1.IssuerList{}
+			Expect(k8sClient.List(ctx, issuerList, client.InNamespace(namespace))).Should(Succeed())
+			for _, issuer := range issuerList.Items {
+				Expect(issuer.Name).NotTo(Equal("ovn-rbac-selfsigned-issuer"),
+					"NB should not create RBAC self-signed issuer")
+				Expect(issuer.Name).NotTo(Equal("ovn-rbac-ca-issuer"),
+					"NB should not create RBAC CA issuer")
+			}
+
+			certList := &certmgrv1.CertificateList{}
+			Expect(k8sClient.List(ctx, certList, client.InNamespace(namespace))).Should(Succeed())
+			for _, cert := range certList.Items {
+				Expect(cert.Name).NotTo(Equal(ovndbcluster.OVNRbacPkiCaSecret),
+					"NB should not create RBAC PKI CA certificate")
+			}
+		})
+
+		It("does not add RBAC full-access port to services for NB", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-nb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(statefulSetName, map[string][]string{})
+
+			Eventually(func(g Gomega) {
+				serviceList := GetServicesListWithLabel(namespace, map[string]string{"type": "cluster"})
+				g.Expect(serviceList.Items).ToNot(BeEmpty())
+				for _, svc := range serviceList.Items {
+					for _, port := range svc.Spec.Ports {
+						g.Expect(port.Port).NotTo(Equal(ovndbcluster.DbPortSBRBACFullAccess),
+							fmt.Sprintf("NB service %s should not have RBAC full-access port", svc.Name))
+					}
+				}
 			}, timeout, interval).Should(Succeed())
 		})
 

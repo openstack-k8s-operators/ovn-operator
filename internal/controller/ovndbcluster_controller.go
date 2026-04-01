@@ -101,13 +101,15 @@ func (r *OVNDBClusterReconciler) GetLogger(ctx context.Context) logr.Logger {
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
 //+kubebuilder:rbac:groups=k8s.cni.cncf.io,resources=network-attachment-definitions,verbs=get;list;watch
 //+kubebuilder:rbac:groups=network.openstack.org,resources=dnsdata,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=cert-manager.io,resources=issuers,verbs=get;list;watch;create;update;patch
+//+kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch
 
 // service account, role, rolebinding
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;update;patch
 // service account permissions that are needed to grant permission to the above
-// +kubebuilder:rbac:groups="security.openshift.io",resourceNames=restricted-v2,resources=securitycontextconstraints,verbs=use
+// +kubebuilder:rbac:groups="security.openshift.io",resourceNames=restricted-v2;privileged,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:groups="",resources=pods,verbs=create;delete;get;list;patch;update;watch
 // +kubebuilder:rbac:groups=topology.openstack.org,resources=topologies,verbs=get;list;watch;update
 
@@ -632,6 +634,19 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 			condition.TopologyReadyErrorMessage,
 			err.Error()))
 		return ctrl.Result{}, fmt.Errorf("waiting for Topology requirements: %w", err)
+	}
+
+	// When TLS is enabled on the SB database, ensure the OVN RBAC PKI CA
+	// cert-manager resources exist (self-signed issuer, CA certificate, CA issuer)
+	// BEFORE the StatefulSet is created. The StatefulSet mounts the CA secret,
+	// so the secret must exist before pods can start.
+	if instance.Spec.TLS.Enabled() && instance.Spec.DBType == ovnv1.SBDBType {
+		ctrlResult, err := ovndbcluster.EnsureRbacPkiCA(ctx, helper, instance.Namespace, serviceLabels)
+		if err != nil {
+			return ctrlResult, err
+		} else if (ctrlResult != ctrl.Result{}) {
+			return ctrlResult, nil
+		}
 	}
 
 	stsSpec, err := ovndbcluster.StatefulSet(instance, inputHash,
@@ -1287,6 +1302,7 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 	templateParameters["OVNDB_CERT_PATH"] = ovn_common.OVNDbCertPath
 	templateParameters["OVNDB_KEY_PATH"] = ovn_common.OVNDbKeyPath
 	templateParameters["OVNDB_CACERT_PATH"] = ovn_common.OVNDbCaCertPath
+	templateParameters["OVN_RBAC_CACERT_PATH"] = ovn_common.OVNRbacPkiCaCertPath
 	templateParameters["OVN_METRICS_CERT_PATH"] = ovn_common.OVNMetricsCertPath
 	templateParameters["OVN_METRICS_KEY_PATH"] = ovn_common.OVNMetricsKeyPath
 	templateParameters["OVN_RUNDIR"] = "/etc/ovn"

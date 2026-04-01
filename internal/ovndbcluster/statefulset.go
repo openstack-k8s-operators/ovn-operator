@@ -133,6 +133,24 @@ func StatefulSet(
 		}
 		volumes = append(volumes, svc.CreateVolume(serviceName))
 		volumeMounts = append(volumeMounts, svc.CreateVolumeMounts(serviceName)...)
+
+		// For SB database with RBAC, mount the RBAC PKI CA cert so it can be
+		// used in set-ssl to verify ovn-controller client certificates.
+		if instance.Spec.DBType == ovnv1.SBDBType {
+			volumes = append(volumes, corev1.Volume{
+				Name: "ovn-rbac-pki-ca",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: OVNRbacPkiCaSecret,
+					},
+				},
+			})
+			volumeMounts = append(volumeMounts, corev1.VolumeMount{
+				Name:      "ovn-rbac-pki-ca",
+				MountPath: ovn_common.OVNRbacPkiCaMountPath,
+				ReadOnly:  true,
+			})
+		}
 	}
 
 	// NOTE(ihar) ovndb pods leave the raft cluster on delete; it's important

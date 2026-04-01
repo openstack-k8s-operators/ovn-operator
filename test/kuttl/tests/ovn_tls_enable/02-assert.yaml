@@ -37,3 +37,13 @@ commands:
       ../../common/scripts/check_cluster_status.sh nb 3 ssl
   - script: |
       ../../common/scripts/check_cluster_status.sh sb 3 ssl
+  # Verify cert-manager RBAC PKI CA resources are created for SB with TLS
+  - script: |
+      oc get issuer -n $NAMESPACE ovn-rbac-selfsigned-issuer
+  - script: |
+      oc get certificate -n $NAMESPACE ovn-rbac-pki-ca -o jsonpath='{.spec.isCA}' | grep -q "true"
+  - script: |
+      oc get issuer -n $NAMESPACE ovn-rbac-ca-issuer -o jsonpath='{.spec.ca.secretName}' | grep -q "ovn-rbac-pki-ca"
+  # Verify SB service has RBAC full-access port (16642)
+  - script: |
+      oc get service -n $NAMESPACE ovsdbserver-sb-0 -o jsonpath='{.spec.ports[*].port}' | grep -q "16642"

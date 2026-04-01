@@ -37,6 +37,13 @@ func Service(
 			Protocol: corev1.ProtocolTCP,
 		},
 	}
+	if instance.Spec.TLS.Enabled() && instance.Spec.DBType == ovnv1.SBDBType {
+		ports = append(ports, corev1.ServicePort{
+			Name:     dbPortName + "-rbac-full-access",
+			Port:     DbPortSBRBACFullAccess,
+			Protocol: corev1.ProtocolTCP,
+		})
+	}
 
 	// Add metrics port if metrics are enabled and exporter image is specified
 	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
