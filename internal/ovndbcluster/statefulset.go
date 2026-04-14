@@ -106,7 +106,7 @@ func StatefulSet(
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 	// TODO: Make confs customizable
-	envVars["OVN_RUNDIR"] = env.SetValue("/tmp")
+	envVars["OVN_RUNDIR"] = env.SetValue("/etc/ovn")
 	// we have to set LOGDIR even though we don't want to log to file. This is
 	// because ovsdb-server will still attempt to write a line into the file
 	// before seizing file logging, and the default log file location is not
@@ -170,12 +170,13 @@ func StatefulSet(
 	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
 		metricsVolumeMounts := []corev1.VolumeMount{
 			{
-				Name:      "ovsdb-rundir",
-				MountPath: "/tmp",
-			},
-			{
 				Name:      "config",
 				MountPath: "/etc/config",
+				ReadOnly:  true,
+			},
+			{
+				Name:      instance.Name + PVCSuffixEtcOVN,
+				MountPath: "/etc/ovn",
 				ReadOnly:  true,
 			},
 		}

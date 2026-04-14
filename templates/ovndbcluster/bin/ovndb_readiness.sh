@@ -23,7 +23,7 @@ error_exit() {
 }
 
 # Set socket path based on database type from functions
-SOCKET_PATH="/tmp/ovn${DB_TYPE}_db.ctl"
+SOCKET_PATH="${OVN_RUNDIR}/ovn${DB_TYPE}_db.ctl"
 
 # Set database name based on type
 DB_NAME="OVN_Northbound"

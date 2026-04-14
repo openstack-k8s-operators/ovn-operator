@@ -24,12 +24,12 @@ fi
 # There is nothing special about -0 pod, except that it's always guaranteed to
 # exist, assuming any replicas are ordered.
 if [[ "$(hostname)" != "{{ .SERVICE_NAME }}-0" ]]; then
-    ovs-appctl -t /tmp/ovn${DB_TYPE}_db.ctl cluster/leave ${DB_NAME}
+    ovs-appctl -t ${OVN_RUNDIR}/ovn${DB_TYPE}_db.ctl cluster/leave ${DB_NAME}
 
     # wait for when the leader confirms we left the cluster
     while true; do
         # TODO: is there a better way to detect the cluster left state?..
-        STATUS=$(ovs-appctl -t /tmp/ovn${DB_TYPE}_db.ctl cluster/status ${DB_NAME} | grep Status: | awk -e '{print $2}')
+        STATUS=$(ovs-appctl -t ${OVN_RUNDIR}/ovn${DB_TYPE}_db.ctl cluster/status ${DB_NAME} | grep Status: | awk -e '{print $2}')
         if [ -z "$STATUS" -o "x$STATUS" = "xleft cluster" ]; then
             break
         fi
