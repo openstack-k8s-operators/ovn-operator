@@ -67,8 +67,9 @@ type OVNNorthdSpecCore struct {
 	NodeSelector *map[string]string `json:"nodeSelector,omitempty"`
 
 	// +kubebuilder:validation:Optional
+    // +kubebuilder:validation:Enum=off;emer;err;warn;info;dbg
 	// +kubebuilder:default=info
-	// LogLevel - Set log level info, dbg, emer etc
+	// LogLevel - Set log level off, emer, err, warn, info or dbg. Default is info.
 	LogLevel string `json:"logLevel,omitempty"`
 
 	// +kubebuilder:validation:Optional

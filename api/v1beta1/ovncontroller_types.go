@@ -95,13 +95,15 @@ type OVNControllerSpecCore struct {
 	NetworkAttachment string `json:"networkAttachment"`
 
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=off;emer;err;warn;info;dbg
 	// +kubebuilder:default=info
-	// OVNLogLevel - Set log level off, emer, err, warn, info, or dbg. Default is info.
+	// OVNLogLevel - Set log level off, emer, err, warn, info or dbg. Default is info.
 	OVNLogLevel string `json:"ovnLogLevel,omitempty"`
 
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=off;emer;err;warn;info;dbg
 	// +kubebuilder:default=info
-	// OVSLogLevel - Set log level off, emer, err, warn, info, or dbg. Default is info.
+	// OVSLogLevel - Set log level off, emer, err, warn, info or dbg. Default is info.
 	OVSLogLevel string `json:"ovsLogLevel,omitempty"`
 
 	// +kubebuilder:validation:Optional
