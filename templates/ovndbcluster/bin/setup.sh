@@ -47,10 +47,10 @@ fi
 # extra_args after --
 set /usr/share/ovn/scripts/ovn-ctl --no-monitor
 
-set "$@" --db-${DB_TYPE}-election-timer={{ .OVN_ELECTION_TIMER }}
+# Election timer (hardcoded initial value; runtime changes handled by operator)
+set "$@" --db-${DB_TYPE}-election-timer=10000
 set "$@" --db-${DB_TYPE}-cluster-local-addr=$(hostname).{{ .SERVICE_NAME }}.${NAMESPACE}.svc.cluster.local
 set "$@" --db-${DB_TYPE}-cluster-local-port=${RAFT_PORT}
-set "$@" --db-${DB_TYPE}-probe-interval-to-active={{ .OVN_PROBE_INTERVAL_TO_ACTIVE }}
 set "$@" --db-${DB_TYPE}-addr=${DB_ADDR}
 set "$@" --db-${DB_TYPE}-port=${DB_PORT}
 {{- if .TLS }}
@@ -65,8 +65,8 @@ set "$@" --db-${DB_TYPE}-cluster-local-proto=tcp
 set "$@" --db-${DB_TYPE}-cluster-remote-proto=tcp
 {{- end }}
 
-# log to console
-set "$@" --ovn-${DB_TYPE}-log=-vconsole:{{ .OVN_LOG_LEVEL }}
+# log to console (hardcoded initial log level; runtime changes handled by operator)
+set "$@" --ovn-${DB_TYPE}-log=-vconsole:info
 
 # if server attempts to log to file, ignore
 #
@@ -74,6 +74,9 @@ set "$@" --ovn-${DB_TYPE}-log=-vconsole:{{ .OVN_LOG_LEVEL }}
 # create a log file -> this argument makes sure it doesn't polute OVN_LOGDIR
 # with a nearly empty log file
 set "$@" --ovn-${DB_TYPE}-logfile=/dev/null
+
+# Clean up stale runtime files that may persist in PVC across pod restarts
+cleanup_stale_runtime_files
 
 # If db file is empty, remove it; otherwise service won't start.
 # See https://issues.redhat.com/browse/FDP-689 for more details.
@@ -123,8 +126,11 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
 {{- else }}
     ${CTLCMD} del-ssl
 {{- end }}
+    CURRENT_PROBE="$(${CTLCMD} get connection . inactivity_probe || echo [])"
+    if [ "$CURRENT_PROBE" = "[]" ]; then
+        CURRENT_PROBE=60000
+    fi
     ${CTLCMD} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
-
     # OVN does not support setting inactivity-probe through --remote cli arg so
     # we have to set it after database is up.
     #
@@ -138,8 +144,8 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
     # TODO: Consider migrating inactivity probe setting  to config files when
     # we update to ovs 3.3. See --config-file in ovsdb-server(1) for more
     # details.
-    while [ "$(${CTLCMD} get connection . inactivity_probe)" != "{{ .OVN_INACTIVITY_PROBE }}" ]; do
-        ${CTLCMD} --inactivity-probe={{ .OVN_INACTIVITY_PROBE }} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
+    while [ "$(${CTLCMD} get connection . inactivity_probe)" != "${CURRENT_PROBE}" ]; do
+        ${CTLCMD} --inactivity-probe="${CURRENT_PROBE}" set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
     done
     ${CTLCMD} list connection
 

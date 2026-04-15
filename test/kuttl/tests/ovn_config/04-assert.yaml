@@ -1,0 +1,65 @@
+#
+# Check for:
+#
+# - Election timer, inactivity probe, and log level configured correctly in NB and SB databases
+
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 300
+commands:
+    - script: |
+        # Wait for config Jobs to complete
+        # Give some time for jobs to be created after the patch
+        sleep 10
+        oc wait --for=condition=complete --timeout=120s job -n $NAMESPACE --field-selector metadata.name!='' --all 2>/dev/null || true
+
+        # Check NB election timer
+        nb_pod=$(oc get pod -n $NAMESPACE -l service=ovsdbserver-nb -o name|head -1)
+        election_timer_nb=$(oc rsh -n $NAMESPACE ${nb_pod} ovs-appctl -t /etc/ovn/ovnnb_db.ctl cluster/status OVN_Northbound | grep "Election timer" | awk '{print $3}' || echo "")
+        if [ "$election_timer_nb" != "15000" ]; then
+          echo "Expected NB election timer 15000, got: $election_timer_nb"
+          exit 1
+        fi
+
+        # Check SB election timer
+        sb_pod=$(oc get pod -n $NAMESPACE -l service=ovsdbserver-sb -o name|head -1)
+        election_timer_sb=$(oc rsh -n $NAMESPACE ${sb_pod} ovs-appctl -t /etc/ovn/ovnsb_db.ctl cluster/status OVN_Southbound | grep "Election timer" | awk '{print $3}' || echo "")
+        if [ "$election_timer_sb" != "20000" ]; then
+          echo "Expected SB election timer 20000, got: $election_timer_sb"
+          exit 1
+        fi
+
+        # Check NB inactivity probe (use pod-0 for connection settings)
+        nb_pod0=$(oc get pod -n $NAMESPACE -l service=ovsdbserver-nb -o name | grep '\-0' | head -1)
+        inactivity_probe_nb=$(oc rsh -n $NAMESPACE ${nb_pod0} ovn-nbctl --no-leader-only get connection . inactivity_probe || echo "")
+        if [ "$inactivity_probe_nb" != "45000" ]; then
+          echo "Expected NB inactivity probe 45000, got: $inactivity_probe_nb"
+          exit 1
+        fi
+
+        # Check SB inactivity probe (use pod-0 for connection settings)
+        sb_pod0=$(oc get pod -n $NAMESPACE -l service=ovsdbserver-sb -o name | grep '\-0' | head -1)
+        inactivity_probe_sb=$(oc rsh -n $NAMESPACE ${sb_pod0} ovn-sbctl --no-leader-only get connection . inactivity_probe || echo "")
+        if [ "$inactivity_probe_sb" != "50000" ]; then
+          echo "Expected SB inactivity probe 50000, got: $inactivity_probe_sb"
+          exit 1
+        fi
+
+        # Check NB log level - should be WARN (uppercase)
+        log_level_nb=$(oc rsh -n $NAMESPACE ${nb_pod} ovn-appctl -t /etc/ovn/ovnnb_db.ctl vlog/list | tail -1 | awk '{print $2}' || echo "")
+        if [ "$log_level_nb" != "WARN" ]; then
+          echo "Expected NB log level 'WARN', got: $log_level_nb"
+          oc rsh -n $NAMESPACE ${nb_pod} ovn-appctl -t /etc/ovn/ovnnb_db.ctl vlog/list | tail -1
+          exit 1
+        fi
+
+        # Check SB log level - should be WARN (uppercase)
+        log_level_sb=$(oc rsh -n $NAMESPACE ${sb_pod} ovn-appctl -t /etc/ovn/ovnsb_db.ctl vlog/list | tail -1 | awk '{print $2}' || echo "")
+        if [ "$log_level_sb" != "WARN" ]; then
+          echo "Expected SB log level 'WARN', got: $log_level_sb"
+          oc rsh -n $NAMESPACE ${sb_pod} ovn-appctl -t /etc/ovn/ovnsb_db.ctl vlog/list | tail -1
+          exit 1
+        fi
+
+        echo "All configuration values (election timer, inactivity probe, log level) verified successfully"
+        exit 0

@@ -100,6 +100,8 @@ type OVNDBClusterSpecCore struct {
 
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=60000
+	// DEPRECATED: ProbeIntervalToActive is only relevant for active/standby ovsdb configurations.
+	// This parameter is not used in RAFT clustered deployments and will be ignored.
 	// Active probe interval from standby to active ovsdb-server remote
 	ProbeIntervalToActive int32 `json:"probeIntervalToActive"`
 
