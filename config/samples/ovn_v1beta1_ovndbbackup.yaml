@@ -1,0 +1,9 @@
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBBackup
+metadata:
+  name: ovndbbackup-nb-sample
+spec:
+  databaseInstance: ovndbcluster-nb
+  schedule: "@daily"
+  storageRequest: "10G"
+  retention: "168h"

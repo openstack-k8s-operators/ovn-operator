@@ -30,6 +30,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /mutate-ovn-openstack-org-v1beta1-ovndbbackup
+  failurePolicy: Fail
+  name: movndbbackup-v1beta1.kb.io
+  rules:
+  - apiGroups:
+    - ovn.openstack.org
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - ovndbbackups
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /mutate-ovn-openstack-org-v1beta1-ovndbcluster
   failurePolicy: Fail
   name: movndbcluster-v1beta1.kb.io
@@ -43,6 +63,26 @@ webhooks:
     - UPDATE
     resources:
     - ovndbclusters
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-ovn-openstack-org-v1beta1-ovndbrestore
+  failurePolicy: Fail
+  name: movndbrestore-v1beta1.kb.io
+  rules:
+  - apiGroups:
+    - ovn.openstack.org
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - ovndbrestores
   sideEffects: None
 - admissionReviewVersions:
   - v1
@@ -96,6 +136,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /validate-ovn-openstack-org-v1beta1-ovndbbackup
+  failurePolicy: Fail
+  name: vovndbbackup-v1beta1.kb.io
+  rules:
+  - apiGroups:
+    - ovn.openstack.org
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - ovndbbackups
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /validate-ovn-openstack-org-v1beta1-ovndbcluster
   failurePolicy: Fail
   name: vovndbcluster-v1beta1.kb.io
@@ -109,6 +169,26 @@ webhooks:
     - UPDATE
     resources:
     - ovndbclusters
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-ovn-openstack-org-v1beta1-ovndbrestore
+  failurePolicy: Fail
+  name: vovndbrestore-v1beta1.kb.io
+  rules:
+  - apiGroups:
+    - ovn.openstack.org
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - ovndbrestores
   sideEffects: None
 - admissionReviewVersions:
   - v1

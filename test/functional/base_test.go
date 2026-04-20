@@ -248,6 +248,49 @@ func OVNControllerConditionGetter(name types.NamespacedName) condition.Condition
 	return instance.Status.Conditions
 }
 
+func GetDefaultOVNDBBackupSpec() ovnv1.OVNDBBackupSpec {
+	return ovnv1.OVNDBBackupSpec{
+		DatabaseInstance: "ovsdbserver-nb",
+		Schedule:         "@daily",
+		StorageRequest:   "10G",
+		StorageClass:     "local-storage",
+	}
+}
+
+func CreateOVNDBBackup(namespace string, spec ovnv1.OVNDBBackupSpec) client.Object {
+	name := ovn.CreateOVNDBBackup(nil, namespace, spec)
+	return ovn.GetOVNDBBackup(name)
+}
+
+func GetOVNDBBackup(name types.NamespacedName) *ovnv1.OVNDBBackup {
+	return ovn.GetOVNDBBackup(name)
+}
+
+func OVNDBBackupConditionGetter(name types.NamespacedName) condition.Conditions {
+	instance := ovn.GetOVNDBBackup(name)
+	return instance.Status.Conditions
+}
+
+func GetDefaultOVNDBRestoreSpec() ovnv1.OVNDBRestoreSpec {
+	return ovnv1.OVNDBRestoreSpec{
+		BackupSource: "ovndbbackup-nb-sample",
+	}
+}
+
+func CreateOVNDBRestore(namespace string, spec ovnv1.OVNDBRestoreSpec) client.Object {
+	name := ovn.CreateOVNDBRestore(nil, namespace, spec)
+	return ovn.GetOVNDBRestore(name)
+}
+
+func GetOVNDBRestore(name types.NamespacedName) *ovnv1.OVNDBRestore {
+	return ovn.GetOVNDBRestore(name)
+}
+
+func OVNDBRestoreConditionGetter(name types.NamespacedName) condition.Conditions {
+	instance := ovn.GetOVNDBRestore(name)
+	return instance.Status.Conditions
+}
+
 func SimulateDaemonsetNumberReadyWithPods(name types.NamespacedName, networkIPs map[string][]string) {
 	ds := GetDaemonSet(name)
 

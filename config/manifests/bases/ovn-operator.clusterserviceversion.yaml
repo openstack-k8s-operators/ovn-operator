@@ -27,6 +27,11 @@ spec:
         displayName: TLS
         path: tls
       version: v1beta1
+    - description: OVNDBBackup is the Schema for the ovndbbackups API
+      displayName: OVNDBBackup
+      kind: OVNDBBackup
+      name: ovndbbackups.ovn.openstack.org
+      version: v1beta1
     - description: OVNDBCluster is the Schema for the ovndbclusters API
       displayName: OVNDBCluster
       kind: OVNDBCluster
@@ -35,6 +40,11 @@ spec:
       - description: TLS - Parameters related to TLS
         displayName: TLS
         path: tls
+      version: v1beta1
+    - description: OVNDBRestore is the Schema for the ovndbrestores API
+      displayName: OVNDBRestore
+      kind: OVNDBRestore
+      name: ovndbrestores.ovn.openstack.org
       version: v1beta1
     - description: OVNNorthd is the Schema for the ovnnorthds API
       displayName: OVNNorthd

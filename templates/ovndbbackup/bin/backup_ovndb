@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -ex
+
+DB_TYPE="${DB_TYPE}"
+DB_PORT="${DB_PORT}"
+SERVICE_NAME="${SERVICE_NAME}"
+NAMESPACE="${NAMESPACE}"
+BACKUP_DIR="${BACKUP_DIR:-/backup/data}"
+RETENTION="${RETENTION}"
+
+DB_NAME="OVN_Northbound"
+if [[ "${DB_TYPE}" == "sb" ]]; then
+    DB_NAME="OVN_Southbound"
+fi
+
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+BACKUP_FILE="${BACKUP_DIR}/${TIMESTAMP}-ovn${DB_TYPE}_db.backup"
+
+SCHEME="tcp"
+SSL_ARGS=""
+{{- if .TLS }}
+SCHEME="ssl"
+SSL_ARGS="--private-key={{ .OVNDB_KEY_PATH }} --certificate={{ .OVNDB_CERT_PATH }} --ca-cert={{ .OVNDB_CACERT_PATH }}"
+{{- end }}
+
+DB_ENDPOINT="${SCHEME}:${SERVICE_NAME}.${NAMESPACE}.svc.cluster.local:${DB_PORT}"
+
+echo "Starting backup of ${DB_NAME} from ${DB_ENDPOINT}"
+
+SCHEMA_VERSION=$(ovsdb-client get-schema-version ${SSL_ARGS} "${DB_ENDPOINT}" "${DB_NAME}" || echo "unknown")
+echo "Schema version: ${SCHEMA_VERSION}"
+
+mkdir -p "${BACKUP_DIR}"
+ovsdb-client backup ${SSL_ARGS} "${DB_ENDPOINT}" "${DB_NAME}" > "${BACKUP_FILE}"
+
+echo "Backup completed: $(ls -la "${BACKUP_FILE}")"
+
+if [[ -n "${RETENTION}" && "${RETENTION}" != "0" ]]; then
+    echo "Applying retention policy: ${RETENTION} minutes"
+    find "${BACKUP_DIR}" -name "*.backup" -mmin +"${RETENTION}" -delete -print
+fi
+
+echo "Backup finished successfully"

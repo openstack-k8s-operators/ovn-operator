@@ -24,7 +24,10 @@ trap cleanup EXIT
 
 for crd in config/crd/bases/*.yaml; do
     mkdir -p "$(dirname "$TMP_DIR/$crd")"
-    git show "$BASE_REF:$crd" > "$TMP_DIR/$crd"
+    if ! git show "$BASE_REF:$crd" > "$TMP_DIR/$crd" 2>/dev/null; then
+        echo "Skipping $crd (new CRD, not present in $BASE_REF)"
+        continue
+    fi
     $CHECKER check-manifests \
         $CHECKER_ARGS \
         --existing-crd-filename="$TMP_DIR/$crd" \
