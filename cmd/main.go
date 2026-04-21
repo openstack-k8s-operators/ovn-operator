@@ -28,11 +28,13 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -151,6 +153,16 @@ func main() {
 		TLSOpts: webhookTLSOpts,
 	})
 
+	// Can be cleaned up when we no longer need to cleanup legacy
+	// northd deployment resource
+	clientOptions := client.Options{
+		Cache: &client.CacheOptions{
+			DisableFor: []client.Object{
+				&appsv1.Deployment{},
+			},
+		},
+	}
+
 	// Metrics endpoint is enabled in 'config/default/kustomization.yaml'. The Metrics options configure the server.
 	// More info:
 	// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/metrics/server
@@ -211,6 +223,7 @@ func main() {
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
+		Client:                 clientOptions,
 		HealthProbeBindAddress: probeAddr,
 		PprofBindAddress:       pprofBindAddress,
 		LeaderElection:         enableLeaderElection,
