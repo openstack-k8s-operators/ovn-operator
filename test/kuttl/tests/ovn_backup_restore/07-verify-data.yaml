@@ -1,0 +1,12 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      echo "Verifying test data survived the restore..."
+      oc exec -n $NAMESPACE ovsdbserver-nb-0 -- ovn-nbctl ls-list | grep -q kuttl-test-switch
+      if [ $? -ne 0 ]; then
+        echo "FAIL: Test data 'kuttl-test-switch' not found after restore"
+        exit 1
+      fi
+      echo "PASS: Test data preserved after restore"
+      exit 0

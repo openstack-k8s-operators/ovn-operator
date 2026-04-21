@@ -1,0 +1,40 @@
+#
+# Check for:
+#
+# - 3 replicas for NB and SB clusters
+#
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  name: ovndbcluster-nb-sample
+spec:
+  replicas: 3
+status:
+  readyCount: 3
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ovsdbserver-nb
+spec:
+  replicas: 3
+status:
+  readyReplicas: 3
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  name: ovndbcluster-sb-sample
+spec:
+  replicas: 3
+status:
+  readyCount: 3
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ovsdbserver-sb
+spec:
+  replicas: 3
+status:
+  readyReplicas: 3
