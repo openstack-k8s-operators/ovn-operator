@@ -49,6 +49,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // OVNDBRestoreReconciler reconciles a OVNDBRestore object
@@ -412,15 +414,19 @@ func (r *OVNDBRestoreReconciler) phaseScaleDown(
 		return ctrl.Result{RequeueAfter: time.Second * 3}, nil
 	}
 
-	// Delete non-pod-0 PVCs so pods start fresh without stale RAFT state.
-	// Force-delete skipped the preStop hook that normally cleans up DB files.
-	// The StatefulSet will recreate these PVCs when the pods restart.
+	// Delete ALL PVCs so pods start fresh without stale RAFT state.
+	// Pod-0's PVC is also deleted because:
+	// 1. Its data will be overwritten by the backup anyway
+	// 2. With local-storage, pod-0's PVC may be bound to a different node
+	//    than the backup PVC, causing a volume node affinity conflict when
+	//    the restore Job tries to mount both
+	// The PVC will be recreated in phaseRestore before the restore Job.
 	originalReplicas := int32(1)
 	if instance.Status.OriginalReplicas != nil {
 		originalReplicas = *instance.Status.OriginalReplicas
 	}
 	stsName := ovndbbackup.StatefulSetName(cluster)
-	for i := int32(1); i < originalReplicas; i++ {
+	for i := int32(0); i < originalReplicas; i++ {
 		pvcName := fmt.Sprintf("%s%s-%s-%d",
 			cluster.Name, ovndbcluster.PVCSuffixEtcOVN, stsName, i)
 		pvc := &corev1.PersistentVolumeClaim{}
@@ -434,13 +440,13 @@ func (r *OVNDBRestoreReconciler) phaseScaleDown(
 			}
 			return ctrl.Result{}, err
 		}
-		Log.Info("Deleting non-pod-0 PVC", "pvc", pvcName)
+		Log.Info("Deleting PVC", "pvc", pvcName)
 		if err := r.Delete(ctx, pvc); err != nil && !k8s_errors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
 	}
 
-	Log.Info("All pods terminated and non-pod-0 PVCs cleaned up")
+	Log.Info("All pods terminated and PVCs cleaned up")
 	instance.Status.Phase = ovnv1.OVNDBRestorePhaseRestoring
 	return ctrl.Result{Requeue: true}, nil
 }
@@ -464,6 +470,48 @@ func (r *OVNDBRestoreReconciler) phaseRestore(
 	err := r.generateRestoreConfigMaps(ctx, h, instance, cluster, serviceLabels)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to create restore ConfigMap: %w", err)
+	}
+
+	// Ensure pod-0's PVC exists. It was deleted in phaseScaleDown to avoid
+	// volume node affinity conflicts with local-storage: recreating it here
+	// lets WaitForFirstConsumer bind it to a PV on the same node as the
+	// backup PVC.
+	pod0PVCName := ovndbbackup.ClusterPod0PVCName(cluster)
+	pod0PVC := &corev1.PersistentVolumeClaim{}
+	err = r.Get(ctx, types.NamespacedName{Name: pod0PVCName, Namespace: cluster.Namespace}, pod0PVC)
+	if err == nil {
+		if pod0PVC.DeletionTimestamp != nil {
+			Log.Info("Waiting for old pod-0 PVC to be fully deleted", "pvc", pod0PVCName)
+			return ctrl.Result{RequeueAfter: time.Second * 3}, nil
+		}
+	} else if k8s_errors.IsNotFound(err) {
+		storageRequest, parseErr := resource.ParseQuantity(cluster.Spec.StorageRequest)
+		if parseErr != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to parse StorageRequest: %w", parseErr)
+		}
+		pod0PVC = &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      pod0PVCName,
+				Namespace: cluster.Namespace,
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
+				},
+				StorageClassName: &cluster.Spec.StorageClass,
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: storageRequest,
+					},
+				},
+			},
+		}
+		Log.Info("Creating pod-0 PVC for restore", "pvc", pod0PVCName)
+		if err = r.Create(ctx, pod0PVC); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to create pod-0 PVC: %w", err)
+		}
+	} else {
+		return ctrl.Result{}, err
 	}
 
 	// Create or check restore Job
