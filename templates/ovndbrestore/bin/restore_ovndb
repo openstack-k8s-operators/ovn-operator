@@ -5,10 +5,19 @@ DB_TYPE="${DB_TYPE}"
 DB_FILE="/etc/ovn/ovn${DB_TYPE}_db.db"
 BACKUP_DIR="/backup/data"
 
-BACKUP_FILE=$(ls -t "${BACKUP_DIR}"/*-ovn${DB_TYPE}_db.backup 2>/dev/null | head -1)
-if [[ -z "${BACKUP_FILE}" ]]; then
-    echo "ERROR: No backup files found in ${BACKUP_DIR}"
-    exit 1
+if [[ -n "${BACKUP_TIMESTAMP}" ]]; then
+    BACKUP_FILE="${BACKUP_DIR}/${BACKUP_TIMESTAMP}-ovn${DB_TYPE}_db.backup"
+    if [[ ! -f "${BACKUP_FILE}" ]]; then
+        echo "ERROR: Backup file not found: ${BACKUP_FILE}"
+        ls -la "${BACKUP_DIR}"/*-ovn${DB_TYPE}_db.backup 2>/dev/null || echo "No backup files available"
+        exit 1
+    fi
+else
+    BACKUP_FILE=$(ls -t "${BACKUP_DIR}"/*-ovn${DB_TYPE}_db.backup 2>/dev/null | head -1)
+    if [[ -z "${BACKUP_FILE}" ]]; then
+        echo "ERROR: No backup files found in ${BACKUP_DIR}"
+        exit 1
+    fi
 fi
 
 echo "Restoring from: ${BACKUP_FILE}"

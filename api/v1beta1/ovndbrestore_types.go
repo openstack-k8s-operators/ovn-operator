@@ -43,6 +43,13 @@ type OVNDBRestoreSpec struct {
 	// +kubebuilder:validation:Required
 	// BackupSource - Name of the OVNDBBackup CR to restore from
 	BackupSource string `json:"backupSource"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Pattern=`^\d{8}-\d{6}$`
+	// BackupTimestamp - specific backup timestamp to restore (format: YYYYMMDD-HHMMSS).
+	// Must match the timestamp prefix of a backup file on the backup PVC.
+	// If empty, the most recent backup is used.
+	BackupTimestamp string `json:"backupTimestamp,omitempty"`
 }
 
 // OVNDBRestoreStatus defines the observed state of OVNDBRestore

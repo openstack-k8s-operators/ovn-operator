@@ -13,7 +13,7 @@ if [[ "${DB_TYPE}" == "sb" ]]; then
     DB_NAME="OVN_Southbound"
 fi
 
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+TIMESTAMP="${BACKUP_TIMESTAMP:-$(date +%Y%m%d-%H%M%S)}"
 BACKUP_FILE="${BACKUP_DIR}/${TIMESTAMP}-ovn${DB_TYPE}_db.backup"
 
 SCHEME="tcp"

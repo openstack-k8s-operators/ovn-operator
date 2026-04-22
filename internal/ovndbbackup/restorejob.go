@@ -28,6 +28,9 @@ func RestoreJob(
 	envVars := map[string]env.Setter{
 		"DB_TYPE": env.SetValue(strings.ToLower(cluster.Spec.DBType)),
 	}
+	if restore.Spec.BackupTimestamp != "" {
+		envVars["BACKUP_TIMESTAMP"] = env.SetValue(restore.Spec.BackupTimestamp)
+	}
 
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{

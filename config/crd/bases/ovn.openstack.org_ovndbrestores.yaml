@@ -56,6 +56,13 @@ spec:
                 description: BackupSource - Name of the OVNDBBackup CR to restore
                   from
                 type: string
+              backupTimestamp:
+                description: |-
+                  BackupTimestamp - specific backup timestamp to restore (format: YYYYMMDD-HHMMSS).
+                  Must match the timestamp prefix of a backup file on the backup PVC.
+                  If empty, the most recent backup is used.
+                pattern: ^\d{8}-\d{6}$
+                type: string
             required:
             - backupSource
             type: object
