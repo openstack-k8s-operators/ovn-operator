@@ -1,0 +1,6 @@
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBRestore
+metadata:
+  name: ovndbrestore-nb-sample
+spec:
+  backupSource: ovndbbackup-nb-sample

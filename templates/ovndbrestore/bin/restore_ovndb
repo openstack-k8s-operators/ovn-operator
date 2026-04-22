@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -ex
+
+DB_TYPE="${DB_TYPE}"
+DB_FILE="/etc/ovn/ovn${DB_TYPE}_db.db"
+BACKUP_DIR="/backup/data"
+
+if [[ -n "${BACKUP_TIMESTAMP}" ]]; then
+    BACKUP_FILE="${BACKUP_DIR}/${BACKUP_TIMESTAMP}-ovn${DB_TYPE}_db.backup"
+    if [[ ! -f "${BACKUP_FILE}" ]]; then
+        echo "ERROR: Backup file not found: ${BACKUP_FILE}"
+        ls -la "${BACKUP_DIR}"/*-ovn${DB_TYPE}_db.backup 2>/dev/null || echo "No backup files available"
+        exit 1
+    fi
+else
+    BACKUP_FILE=$(ls -t "${BACKUP_DIR}"/*-ovn${DB_TYPE}_db.backup 2>/dev/null | head -1)
+    if [[ -z "${BACKUP_FILE}" ]]; then
+        echo "ERROR: No backup files found in ${BACKUP_DIR}"
+        exit 1
+    fi
+fi
+
+echo "Restoring from: ${BACKUP_FILE}"
+echo "Target DB: ${DB_FILE}"
+
+rm -f "${DB_FILE}"
+
+# Copy the standalone backup as the DB file. When pod-0 starts, ovn-ctl
+# detects the standalone format and converts it to a RAFT cluster using
+# the correct local address from its own startup arguments.
+cp "${BACKUP_FILE}" "${DB_FILE}"
+
+echo "Restore completed successfully"

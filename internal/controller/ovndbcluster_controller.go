@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -639,6 +640,18 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
+	// During a restore, the annotation carries the desired replica count.
+	// This overrides whatever higher-level operators may have set in the spec.
+	if restoreReplicas, restoring := instance.Annotations[ovnv1.RestoreInProgressAnnotation]; restoring {
+		replicas, err := strconv.ParseInt(restoreReplicas, 10, 32)
+		if err == nil {
+			replicaOverride := int32(replicas)
+			stsSpec.Spec.Replicas = &replicaOverride
+			Log.Info("Restore in progress, overriding StatefulSet replicas", "replicas", replicaOverride)
+		}
+	}
+
 	// Define a new Statefulset object
 	sfset := statefulset.NewStatefulSet(stsSpec, time.Duration(5)*time.Second)
 	ctrlResult, err = sfset.CreateOrPatch(ctx, helper)

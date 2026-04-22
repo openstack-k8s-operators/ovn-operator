@@ -8,6 +8,7 @@ rules:
   - ""
   resources:
   - configmaps
+  - persistentvolumeclaims
   - pods
   - secrets
   - services
@@ -53,9 +54,11 @@ rules:
   - list
   - patch
   - update
+  - watch
 - apiGroups:
   - batch
   resources:
+  - cronjobs
   - jobs
   verbs:
   - create
@@ -99,7 +102,9 @@ rules:
   - ovn.openstack.org
   resources:
   - ovncontrollers
+  - ovndbbackups
   - ovndbclusters
+  - ovndbrestores
   - ovnnorthds
   verbs:
   - create
@@ -113,7 +118,9 @@ rules:
   - ovn.openstack.org
   resources:
   - ovncontrollers/finalizers
+  - ovndbbackups/finalizers
   - ovndbclusters/finalizers
+  - ovndbrestores/finalizers
   - ovnnorthds/finalizers
   verbs:
   - patch
@@ -122,6 +129,8 @@ rules:
   - ovn.openstack.org
   resources:
   - ovncontrollers/status
+  - ovndbbackups/status
+  - ovndbrestores/status
   - ovnnorthds/status
   verbs:
   - get

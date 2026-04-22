@@ -1,0 +1,65 @@
+#
+# Check for:
+#
+# No OVNDBBackup CR
+# No OVNDBRestore CR
+# No backup PVC
+# No OVNDBCluster CRs
+# No OVN pods
+#
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBBackup
+metadata:
+  name: ovndbbackup-nb-sample
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBRestore
+metadata:
+  name: ovndbrestore-nb-sample
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  name: ovndbcluster-nb-sample
+---
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNDBCluster
+metadata:
+  name: ovndbcluster-sb-sample
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    service: ovsdbserver-nb
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    service: ovsdbserver-sb
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbbackup-nb-sample-backup
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-nb-sample-etc-ovn-ovsdbserver-nb-0
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-sb-sample-etc-ovn-ovsdbserver-sb-0
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-sb-sample-etc-ovn-ovsdbserver-sb-1
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ovndbcluster-sb-sample-etc-ovn-ovsdbserver-sb-2

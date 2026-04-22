@@ -37,6 +37,11 @@ const (
 	SBDBType      = "SB"
 	ServiceNameSB = "ovsdbserver-sb"
 
+	// RestoreInProgressAnnotation is set on an OVNDBCluster during a restore
+	// to prevent the controller and higher-level operators from overriding
+	// the replica count while the StatefulSet is scaled down.
+	RestoreInProgressAnnotation = "ovn.openstack.org/restore-in-progress"
+
 	// ServiceHeadlessType - Constant to identify Headless services
 	ServiceHeadlessType = "headless"
 	// ServiceClusterType - Constant to identify Cluster services

@@ -1,0 +1,16 @@
+#
+# Check for:
+#
+# - OVNDBBackup CR is Ready
+# - Backup PVC created
+# - Backup CronJob created
+#
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+commands:
+  - script: |
+      oc get ovndbbackup -n $NAMESPACE ovndbbackup-nb-sample -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' | grep -q True
+  - script: |
+      oc get pvc -n $NAMESPACE ovndbbackup-nb-sample-backup
+  - script: |
+      oc get cronjob -n $NAMESPACE ovndbbackup-nb-sample-cronjob

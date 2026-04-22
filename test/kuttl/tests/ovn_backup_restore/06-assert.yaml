@@ -1,0 +1,24 @@
+#
+# Check for:
+#
+# - OVNDBRestore CR reaches Completed phase
+# - OVNDBCluster is back to 3 replicas and healthy
+#
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 300
+commands:
+  - script: |
+      phase=$(oc get ovndbrestore -n $NAMESPACE ovndbrestore-nb-sample -o jsonpath='{.status.phase}')
+      if [ "$phase" != "Completed" ]; then
+        echo "Restore phase is '$phase', expected 'Completed'"
+        exit 1
+      fi
+      echo "Restore phase: Completed"
+  - script: |
+      ready=$(oc get ovndbcluster -n $NAMESPACE ovndbcluster-nb-sample -o jsonpath='{.status.readyCount}')
+      if [ "$ready" != "3" ]; then
+        echo "OVNDBCluster readyCount is '$ready', expected '3'"
+        exit 1
+      fi
+      echo "OVNDBCluster NB readyCount: 3"

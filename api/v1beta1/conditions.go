@@ -24,6 +24,21 @@ import (
 const (
 	// ExternalConfigReadyCondition indicates when the external config (e.g. ovncontroller-config ConfigMap) is ready
 	ExternalConfigReadyCondition condition.Type = "External Config Ready"
+
+	// OVNDBClusterReadyCondition indicates when the referenced OVNDBCluster exists and is available
+	OVNDBClusterReadyCondition condition.Type = "OVNDBClusterReady"
+
+	// PersistentVolumeClaimReadyCondition indicates when the backup PVC is ready
+	PersistentVolumeClaimReadyCondition condition.Type = "PersistentVolumeClaimReady"
+
+	// CronJobReadyCondition indicates when the backup CronJob is ready
+	CronJobReadyCondition condition.Type = "CronJobReady"
+
+	// OVNDBBackupReadyCondition indicates when the referenced OVNDBBackup is ready (used by restore)
+	OVNDBBackupReadyCondition condition.Type = "OVNDBBackupReady"
+
+	// RestoreJobReadyCondition indicates when the restore Job has completed
+	RestoreJobReadyCondition condition.Type = "RestoreJobReady"
 )
 
 // Common messages used by API objects.
@@ -33,4 +48,49 @@ const (
 
 	// ExternalConfigErrorMessage is the error message format for ExternalConfigReadyCondition
 	ExternalConfigErrorMessage = "External config generation error: %s"
+
+	// OVNDBClusterReadyInitMessage
+	OVNDBClusterReadyInitMessage = "OVNDBCluster not yet available"
+
+	// OVNDBClusterReadyMessage
+	OVNDBClusterReadyMessage = "OVNDBCluster is available"
+
+	// OVNDBClusterReadyErrorMessage
+	OVNDBClusterReadyErrorMessage = "OVNDBCluster error occurred %s"
+
+	// PersistentVolumeClaimReadyInitMessage
+	PersistentVolumeClaimReadyInitMessage = "PersistentVolumeClaim not yet created"
+
+	// PersistentVolumeClaimReadyMessage
+	PersistentVolumeClaimReadyMessage = "PersistentVolumeClaim created"
+
+	// PersistentVolumeClaimReadyErrorMessage
+	PersistentVolumeClaimReadyErrorMessage = "PersistentVolumeClaim error occurred %s"
+
+	// CronJobReadyInitMessage
+	CronJobReadyInitMessage = "CronJob not yet created"
+
+	// CronJobReadyMessage
+	CronJobReadyMessage = "CronJob created"
+
+	// CronJobReadyErrorMessage
+	CronJobReadyErrorMessage = "CronJob error occurred %s"
+
+	// OVNDBBackupReadyInitMessage
+	OVNDBBackupReadyInitMessage = "OVNDBBackup not yet available"
+
+	// OVNDBBackupReadyMessage
+	OVNDBBackupReadyMessage = "OVNDBBackup is available"
+
+	// OVNDBBackupReadyErrorMessage
+	OVNDBBackupReadyErrorMessage = "OVNDBBackup error occurred %s"
+
+	// RestoreJobReadyInitMessage
+	RestoreJobReadyInitMessage = "Restore not yet started"
+
+	// RestoreJobReadyMessage
+	RestoreJobReadyMessage = "Restore completed"
+
+	// RestoreJobReadyErrorMessage
+	RestoreJobReadyErrorMessage = "Restore error occurred %s"
 )

@@ -214,6 +214,21 @@ var _ = BeforeSuite(func() {
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
+	err = (&controllers.OVNDBBackupReconciler{
+		Client:  k8sManager.GetClient(),
+		Scheme:  k8sManager.GetScheme(),
+		Kclient: kclient,
+	}).SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
+	err = (&controllers.OVNDBRestoreReconciler{
+		Client:     k8sManager.GetClient(),
+		Scheme:     k8sManager.GetScheme(),
+		Kclient:    kclient,
+		RestConfig: cfg,
+	}).SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
 	// Acquire environmental defaults and initialize operator defaults with them
 	ovnv1.SetupDefaults()
 
@@ -224,6 +239,12 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	err = webhooksv1.SetupOVNControllerWebhookWithManager(k8sManager)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = webhooksv1.SetupOVNDBBackupWebhookWithManager(k8sManager)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = webhooksv1.SetupOVNDBRestoreWebhookWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
 
 	go func() {

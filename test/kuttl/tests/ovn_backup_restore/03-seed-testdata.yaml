@@ -1,0 +1,6 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      oc exec -n $NAMESPACE ovsdbserver-nb-0 -- ovn-nbctl ls-add kuttl-test-switch
+      oc exec -n $NAMESPACE ovsdbserver-nb-0 -- ovn-nbctl ls-list | grep -q kuttl-test-switch
