@@ -438,6 +438,11 @@ spec:
                 description: InternalDBAddress - DB IP address used by other Pods
                   in the cluster
                 type: string
+              internalDbAddressRbacFullAccess:
+                description: |-
+                  InternalDBAddressRbacFullAccess - DB IP address for full-access (non-RBAC)
+                  connections, used by ovn-northd when RBAC is enabled on SB DB
+                type: string
               lastAppliedTopology:
                 description: LastAppliedTopology - the last applied Topology
                 properties:

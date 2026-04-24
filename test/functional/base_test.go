@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	certmgrv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	. "github.com/onsi/gomega" //revive:disable:dot-imports
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -68,6 +69,16 @@ func GetOVNNorthd(name types.NamespacedName) *ovnv1.OVNNorthd {
 func OVNNorthdConditionGetter(name types.NamespacedName) condition.Conditions {
 	instance := ovn.GetOVNNorthd(name)
 	return instance.Status.Conditions
+}
+
+func CreateReadyOVNNorthd(namespace string, spec ovnv1.OVNNorthdSpec) types.NamespacedName {
+	name := ovn.CreateOVNNorthd(nil, namespace, spec)
+	statefulSetName := types.NamespacedName{
+		Namespace: namespace,
+		Name:      "ovn-northd",
+	}
+	th.SimulateStatefulSetReplicaReady(statefulSetName)
+	return name
 }
 
 func GetDefaultOVNDBClusterSpec() ovnv1.OVNDBClusterSpec {
@@ -179,6 +190,73 @@ func DeleteOVNDBClusters(names []types.NamespacedName) {
 	}
 }
 
+// CreateTLSOVNDBClusters Creates NB and SB OVNDBClusters with TLS enabled.
+// Caller must create TLS secrets (CABundleSecretName, OvnDbCertSecretName) first.
+func CreateTLSOVNDBClusters(namespace string, nad map[string][]string, replicas int32) []types.NamespacedName {
+	dbs := []types.NamespacedName{}
+	for _, db := range []string{ovnv1.NBDBType, ovnv1.SBDBType} {
+		spec := GetTLSOVNDBClusterSpec()
+		stringNad := ""
+		Expect(len(nad)).Should(BeNumerically("<=", 1))
+		for k := range nad {
+			if strings.Contains(k, "/") {
+				stringNad = strings.Split(k, "/")[1]
+			}
+		}
+		if len(nad) != 0 {
+			Expect(stringNad).ToNot(Equal(""))
+		}
+		spec.DBType = db
+		spec.NetworkAttachment = stringNad
+		spec.Replicas = &replicas
+		instance := CreateOVNDBCluster(namespace, spec)
+		instanceName := types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+
+		dbName := "nb"
+		if db == ovnv1.SBDBType {
+			dbName = "sb"
+		}
+		statefulSetName := types.NamespacedName{
+			Namespace: instance.GetNamespace(),
+			Name:      "ovsdbserver-" + dbName,
+		}
+		th.SimulateStatefulSetReplicaReadyWithPods(
+			statefulSetName,
+			nad,
+		)
+		Eventually(func(g Gomega) {
+			ovndbcluster := ovn.GetOVNDBCluster(instanceName)
+			endpoint := ""
+			if len(nad) == 0 {
+				endpoint, _ = ovndbcluster.GetInternalEndpoint()
+			} else {
+				endpoint, _ = ovndbcluster.GetExternalEndpoint()
+			}
+			g.Expect(endpoint).ToNot(BeEmpty())
+		}).Should(Succeed())
+
+		if db == ovnv1.SBDBType {
+			Eventually(func(g Gomega) {
+				ovndbcluster := ovn.GetOVNDBCluster(instanceName)
+				g.Expect(ovndbcluster.Status.InternalDBAddressRbacFullAccess).ToNot(BeEmpty())
+			}).Should(Succeed())
+		}
+
+		dbs = append(dbs, instanceName)
+	}
+
+	logger.Info("TLS OVNDBClusters created", "OVNDBCluster", dbs)
+	return dbs
+}
+
+func GetCertManagerCert(name types.NamespacedName) *certmgrv1.Certificate {
+	cert := &certmgrv1.Certificate{}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, name, cert)).Should(Succeed())
+	}, timeout, interval).Should(Succeed())
+	return cert
+}
+
 // GetOVNDBCluster Get OVNDBCluster
 func GetOVNDBCluster(name types.NamespacedName) *ovnv1.OVNDBCluster {
 	return ovn.GetOVNDBCluster(name)
@@ -227,6 +305,16 @@ func GetTLSOVNControllerSpec() ovnv1.OVNControllerSpec {
 		},
 	}
 	return spec
+}
+
+func GetTLSRbacOVNControllerSpec() ovnv1.OVNControllerSpec {
+	spec := GetTLSOVNControllerSpec()
+	spec.OvnIssuerName = OvnIssuerName
+	return spec
+}
+
+func GetTLSRbacOVNDBClusterSpec() ovnv1.OVNDBClusterSpec {
+	return GetTLSOVNDBClusterSpec()
 }
 
 func CreateOVNController(namespace string, spec ovnv1.OVNControllerSpec) client.Object {

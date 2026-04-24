@@ -133,6 +133,7 @@ func StatefulSet(
 		}
 		volumes = append(volumes, svc.CreateVolume(serviceName))
 		volumeMounts = append(volumeMounts, svc.CreateVolumeMounts(serviceName)...)
+
 	}
 
 	// NOTE(ihar) ovndb pods leave the raft cluster on delete; it's important

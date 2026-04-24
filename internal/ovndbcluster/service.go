@@ -38,6 +38,15 @@ func Service(
 		},
 	}
 
+	// Add full-access (non-RBAC) port for SB when TLS is enabled
+	if instance.Spec.DBType == ovnv1.SBDBType && instance.Spec.TLS.Enabled() {
+		ports = append(ports, corev1.ServicePort{
+			Name:     dbPortName + "-full-access",
+			Port:     DbPortSBRBACFullAccess,
+			Protocol: corev1.ProtocolTCP,
+		})
+	}
+
 	// Add metrics port if metrics are enabled and exporter image is specified
 	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
 		ports = append(ports, corev1.ServicePort{
