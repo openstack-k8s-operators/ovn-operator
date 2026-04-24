@@ -19,6 +19,7 @@ import (
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
+	ovn_common "github.com/openstack-k8s-operators/ovn-operator/internal/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -26,13 +27,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ConfigJob - prepare job to configure ovn-controller
+// ConfigJob - prepare job to configure ovn-controller.
+// nodeSystemIDs maps node names to their pre-computed system-id UUIDs.
+// When non-empty, the per-node RBAC cert Secret is mounted and SYSTEM_ID is
+// passed as an environment variable.
 func ConfigJob(
 	ctx context.Context,
 	k8sClient client.Client,
 	instance *ovnv1.OVNController,
 	sbCluster *ovnv1.OVNDBCluster,
 	labels map[string]string,
+	nodeSystemIDs map[string]string,
 ) ([]*batchv1.Job, error) {
 
 	var jobs []*batchv1.Job
@@ -42,7 +47,7 @@ func ConfigJob(
 	// configuration job automatically right after it will be finished
 	jobTTLAfterFinished := int32(0)
 
-	ovnPods, err := getOVNControllerPods(
+	ovnPods, err := GetOVNControllerPods(
 		ctx,
 		k8sClient,
 		instance,
@@ -74,6 +79,40 @@ func ConfigJob(
 			"/usr/local/bin/additional-scripts/configure-ovn.sh",
 		}
 
+		volumes := GetOVNControllerVolumes(instance.Name, instance.Namespace, true)
+		volumeMounts := GetOVNControllerVolumeMounts(true)
+
+		// Per-job env vars start from a copy of the shared ones
+		jobEnvVars := make(map[string]env.Setter, len(envVars))
+		for k, v := range envVars {
+			jobEnvVars[k] = v
+		}
+
+		nodeName := ovnPod.Spec.NodeName
+		if systemID, ok := nodeSystemIDs[nodeName]; ok {
+			jobEnvVars["SYSTEM_ID"] = env.SetValue(systemID)
+
+			certSecretName := RbacCertName(nodeName)
+			volumes = append(volumes, corev1.Volume{
+				Name: "ovn-rbac-cert",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: certSecretName,
+					},
+				},
+			})
+			volumeMounts = append(volumeMounts, corev1.VolumeMount{
+				Name:      "ovn-rbac-cert",
+				MountPath: ovn_common.OVNRbacCertMountPath,
+				ReadOnly:  true,
+			})
+			volumeMounts = append(volumeMounts, corev1.VolumeMount{
+				Name:      "etc-ovs",
+				MountPath: "/etc/openvswitch",
+				ReadOnly:  false,
+			})
+		}
+
 		jobs = append(
 			jobs,
 			&batchv1.Job{
@@ -100,14 +139,13 @@ func ConfigJob(
 										RunAsUser:  &runAsUser,
 										Privileged: &privileged,
 									},
-									Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-									VolumeMounts: GetOVNControllerVolumeMounts(true),
+									Env:          env.MergeEnvs([]corev1.EnvVar{}, jobEnvVars),
+									VolumeMounts: volumeMounts,
 									Resources:    instance.Spec.Resources,
 								},
 							},
-							Volumes:  GetOVNControllerVolumes(instance.Name, instance.Namespace, true),
-							NodeName: ovnPod.Spec.NodeName,
-							// ^ NodeSelector not required
+							Volumes:  volumes,
+							NodeName: nodeName,
 						},
 					},
 				},

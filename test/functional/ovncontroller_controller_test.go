@@ -26,11 +26,13 @@ import (
 	//revive:disable-next-line:dot-imports
 	. "github.com/openstack-k8s-operators/lib-common/modules/common/test/helpers"
 
+	certmgrv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovn_common "github.com/openstack-k8s-operators/ovn-operator/internal/common"
+	"github.com/openstack-k8s-operators/ovn-operator/internal/ovncontroller"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -911,6 +913,8 @@ var _ = Describe("OVNController controller", func() {
 		BeforeEach(func() {
 			dbs := CreateOVNDBClusters(namespace, map[string][]string{}, 1)
 			DeferCleanup(DeleteOVNDBClusters, dbs)
+			northdName := CreateReadyOVNNorthd(namespace, GetDefaultOVNNorthdSpec())
+			DeferCleanup(th.DeleteInstance, GetOVNNorthd(northdName))
 			instance := CreateOVNController(namespace, GetTLSOVNControllerSpec())
 			DeferCleanup(th.DeleteInstance, instance)
 
@@ -1045,10 +1049,13 @@ var _ = Describe("OVNController controller", func() {
 			th.AssertVolumeMountExists("ovn-controller-tls-certs", "tls.crt", svcC.VolumeMounts)
 			th.AssertVolumeMountExists("ovn-controller-tls-certs", "ca.crt", svcC.VolumeMounts)
 
-			// check cli args
+			// check etc-ovs volume mount for RBAC certs
+			th.AssertVolumeMountExists("etc-ovs", "", svcC.VolumeMounts)
+
+			// check cli args use RBAC cert paths
 			Expect(svcC.Command).To(And(
-				ContainElement(ContainSubstring(fmt.Sprintf("--private-key=%s", ovn_common.OVNDbKeyPath))),
-				ContainElement(ContainSubstring(fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath))),
+				ContainElement(ContainSubstring(fmt.Sprintf("--private-key=%s", ovn_common.OVNControllerKeyPath))),
+				ContainElement(ContainSubstring(fmt.Sprintf("--certificate=%s", ovn_common.OVNControllerCertPath))),
 				ContainElement(ContainSubstring(fmt.Sprintf("--ca-cert=%s", ovn_common.OVNDbCaCertPath))),
 			))
 
@@ -1161,6 +1168,184 @@ var _ = Describe("OVNController controller", func() {
 				)
 				g.Expect(newHash).NotTo(BeEmpty())
 				g.Expect(newHash).NotTo(Equal(originalHash))
+			}, timeout, interval).Should(Succeed())
+		})
+	})
+
+	When("OVNController is created with TLS and RBAC", func() {
+		var ovnControllerName types.NamespacedName
+		var dbs []types.NamespacedName
+
+		BeforeEach(func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      RbacCACertSecretName,
+				Namespace: namespace,
+			}))
+			dbs = CreateTLSOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+			northdName := CreateReadyOVNNorthd(namespace, GetDefaultOVNNorthdSpec())
+			DeferCleanup(th.DeleteInstance, GetOVNNorthd(northdName))
+
+			instance := CreateOVNController(namespace, GetTLSRbacOVNControllerSpec())
+			ovnControllerName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+			DeferCleanup(th.DeleteInstance, instance)
+		})
+
+		It("creates cert-manager Certificate CRs for each node", func() {
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetName,
+				map[string][]string{},
+			)
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetNameOVS,
+				map[string][]string{},
+			)
+
+			nodeName := daemonSetName.Name
+			certName := ovncontroller.RbacCertName(nodeName)
+			certNN := types.NamespacedName{
+				Name:      certName,
+				Namespace: namespace,
+			}
+
+			cert := GetCertManagerCert(certNN)
+			expectedSystemID := ovncontroller.ComputeSystemID(nodeName)
+			Expect(cert.Spec.CommonName).To(Equal(expectedSystemID))
+			Expect(cert.Spec.IssuerRef.Name).To(Equal(RbacIssuerName))
+			Expect(cert.Spec.IssuerRef.Kind).To(Equal("Issuer"))
+			Expect(cert.Spec.Usages).To(ContainElement(certmgrv1.UsageClientAuth))
+		})
+
+		It("creates config jobs with RBAC cert volumes and SYSTEM_ID env var", func() {
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetName,
+				map[string][]string{},
+			)
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetNameOVS,
+				map[string][]string{},
+			)
+
+			nodeName := daemonSetName.Name
+			certName := ovncontroller.RbacCertName(nodeName)
+
+			// Wait for the Certificate CR to be created, then simulate
+			// cert-manager by creating the cert Secret
+			GetCertManagerCert(types.NamespacedName{
+				Name:      certName,
+				Namespace: namespace,
+			})
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      certName,
+				Namespace: namespace,
+			}))
+
+			// The config job should now be created with RBAC volumes
+			configJobName := types.NamespacedName{
+				Namespace: ovnControllerName.Namespace,
+				Name:      daemonSetName.Name + "-config",
+			}
+			Eventually(func(g Gomega) {
+				job := th.GetJob(configJobName)
+				g.Expect(job).ToNot(BeNil())
+
+				container := job.Spec.Template.Spec.Containers[0]
+
+				// Check SYSTEM_ID env var
+				systemIDValue := ""
+				for _, e := range container.Env {
+					if e.Name == "SYSTEM_ID" {
+						systemIDValue = e.Value
+					}
+				}
+				expectedSystemID := ovncontroller.ComputeSystemID(nodeName)
+				g.Expect(systemIDValue).To(Equal(expectedSystemID))
+
+				// Check RBAC cert volume mount
+				th.AssertVolumeMountExists("ovn-rbac-cert", "", container.VolumeMounts)
+
+				// Check etc-ovs volume mount (writable for cert install)
+				hasEtcOvs := false
+				for _, vm := range container.VolumeMounts {
+					if vm.Name == "etc-ovs" && vm.MountPath == "/etc/openvswitch" {
+						hasEtcOvs = true
+					}
+				}
+				g.Expect(hasEtcOvs).To(BeTrue())
+
+				// Check RBAC cert volume references the cert secret
+				hasRbacVolume := false
+				for _, v := range job.Spec.Template.Spec.Volumes {
+					if v.Name == "ovn-rbac-cert" && v.Secret != nil && v.Secret.SecretName == certName {
+						hasRbacVolume = true
+					}
+				}
+				g.Expect(hasRbacVolume).To(BeTrue())
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("config job is not created without RBAC cert secret", func() {
+			daemonSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetName,
+				map[string][]string{},
+			)
+			daemonSetNameOVS := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			}
+			SimulateDaemonsetNumberReadyWithPods(
+				daemonSetNameOVS,
+				map[string][]string{},
+			)
+
+			nodeName := daemonSetName.Name
+			certName := ovncontroller.RbacCertName(nodeName)
+
+			// Wait for the Certificate CR to be created, confirming
+			// the controller reached the RBAC cert step
+			GetCertManagerCert(types.NamespacedName{
+				Name:      certName,
+				Namespace: namespace,
+			})
+
+			// Without creating the cert secret, the config job should
+			// not appear because the controller is waiting for the cert
+			configJobName := types.NamespacedName{
+				Namespace: ovnControllerName.Namespace,
+				Name:      daemonSetName.Name + "-config",
+			}
+			Consistently(func(g Gomega) {
+				job := &batchv1.Job{}
+				err := k8sClient.Get(ctx, configJobName, job)
+				g.Expect(k8s_errors.IsNotFound(err)).To(BeTrue())
 			}, timeout, interval).Should(Succeed())
 		})
 	})

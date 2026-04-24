@@ -18,11 +18,23 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/google/uuid"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	"golang.org/x/exp/maps"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// ComputeSystemID derives a deterministic UUID5 system-id from a node name,
+// matching the convention used by OVN for chassis identification.
+func ComputeSystemID(nodeName string) string {
+	return uuid.NewSHA1(uuid.NameSpaceDNS, []byte(nodeName)).String()
+}
+
+// RbacCertName returns the cert-manager Certificate CR name for a given node
+func RbacCertName(nodeName string) string {
+	return fmt.Sprintf("ovn-controller-cert-%s", nodeName)
+}
 
 func getPhysicalNetworks(
 	instance *ovnv1.OVNController,
@@ -37,7 +49,8 @@ func getPhysicalNetworks(
 	return strings.Join(nicMappings, " ")
 }
 
-func getOVNControllerPods(
+// GetOVNControllerPods returns list of the pods running ovn-controller
+func GetOVNControllerPods(
 	ctx context.Context,
 	k8sClient client.Client,
 	instance *ovnv1.OVNController,

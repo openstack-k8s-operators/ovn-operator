@@ -146,6 +146,12 @@ type OVNDBClusterSpecCore struct {
 	// +kubebuilder:validation:Optional
 	// MetricsTLS - Parameters related to TLS for metrics sidecar
 	MetricsTLS tls.SimpleService `json:"metricsTLS,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// RbacCACertSecretName - The name of the K8s Secret containing the RBAC
+	// PKI CA certificate (tls.crt). Used by the SB database to verify
+	// ovn-controller client certificates when RBAC is enabled.
+	RbacCACertSecretName string `json:"rbacCACertSecretName,omitempty"`
 }
 
 // OVNDBClusterOverrideSpec to override the generated manifest of several child resources.
@@ -170,6 +176,10 @@ type OVNDBClusterStatus struct {
 
 	// InternalDBAddress - DB IP address used by other Pods in the cluster
 	InternalDBAddress string `json:"internalDbAddress,omitempty"`
+
+	// InternalDBAddressRbacFullAccess - DB IP address for full-access (non-RBAC)
+	// connections, used by ovn-northd when RBAC is enabled on SB DB
+	InternalDBAddressRbacFullAccess string `json:"internalDbAddressRbacFullAccess,omitempty"`
 
 	// NetworkAttachments status of the deployment pods
 	NetworkAttachments map[string][]string `json:"networkAttachments,omitempty"`
@@ -237,6 +247,18 @@ func (instance OVNDBCluster) GetInternalEndpoint() (string, error) {
 		return "", fmt.Errorf("internal DBEndpoint not ready yet for %s", instance.Spec.DBType)
 	}
 	return instance.Status.InternalDBAddress, nil
+}
+
+// GetInternalEndpointRbacFullAccess - return the full-access (non-RBAC) internal endpoint for SB DB.
+// Falls back to GetInternalEndpoint if the DB is not SB or TLS is not enabled.
+func (instance OVNDBCluster) GetInternalEndpointRbacFullAccess() (string, error) {
+	if instance.Spec.DBType != SBDBType || !instance.Spec.TLS.Enabled() {
+		return instance.GetInternalEndpoint()
+	}
+	if instance.Status.InternalDBAddressRbacFullAccess == "" {
+		return "", fmt.Errorf("internal RBAC full-access DBEndpoint not ready yet for %s", instance.Spec.DBType)
+	}
+	return instance.Status.InternalDBAddressRbacFullAccess, nil
 }
 
 // GetExternalEndpoint - return the DNS that openstack dnsmasq can resolve

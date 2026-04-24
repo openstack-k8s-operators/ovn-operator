@@ -74,11 +74,17 @@ if echo "$CONFIG_FLAGS" | grep -q "INACTIVITY_PROBE"; then
     if [[ "$(hostname)" == "${SERVICE_NAME}-0-config-"* ]]; then
         echo "Configuring inactivity probe to ${INACTIVITY_PROBE}ms on pod-0..."
 
-        # Simple approach - connect directly to running database (OVN_RUNDIR already set)
-        if ovn-${DB_TYPE}ctl --no-leader-only set connection . inactivity_probe="$INACTIVITY_PROBE"; then
-            echo "✓ Successfully configured inactivity probe"
-        else
-            echo "✗ Failed to configure inactivity probe"
+        # Set inactivity probe on all connections
+        FAILED=0
+        for CONN_ID in $(ovn-${DB_TYPE}ctl --no-leader-only --format=table --no-headings --columns=_uuid list connection); do
+            if ovn-${DB_TYPE}ctl --no-leader-only set connection ${CONN_ID} inactivity_probe="$INACTIVITY_PROBE"; then
+                echo "✓ Successfully configured inactivity probe on connection ${CONN_ID}"
+            else
+                echo "✗ Failed to configure inactivity probe on connection ${CONN_ID}"
+                FAILED=1
+            fi
+        done
+        if [ "$FAILED" -eq 1 ]; then
             exit 1
         fi
     else
