@@ -26,13 +26,6 @@ function wait_for_ovsdb_tool {
     done
 }
 
-function wait_for_ovsdb_client {
-    while pgrep -a ovsdb-client; do
-        echo "ovsdb-client still working. Waiting..."
-        sleep 1
-    done
-}
-
 function check_and_convert_db {
     local db_socket="${OVN_RUNDIR}/ovn${DB_TYPE}_db.sock"
     local db_schema="/usr/share/ovn/ovn-${DB_TYPE}.ovsschema"
@@ -52,8 +45,15 @@ function check_and_convert_db {
     if test X"`ovsdb-client needs-conversion unix:$db_socket "$db_schema"`" = Xyes; then
         echo "Database conversion needed for ${DB_TYPE} database, performing conversion..."
 
-        # Set trap to wait for ovsdb-client to finish conversion
-        trap wait_for_ovsdb_client EXIT
+        local db_name="OVN_Northbound"
+        if [[ "${DB_TYPE}" == "sb" ]]; then
+            db_name="OVN_Southbound"
+        fi
+        local db_version
+        db_version=$(ovsdb-client get-schema-version "unix:$db_socket" "$db_name")
+        local backup_file="${DB_FILE%.db}-backup-v${db_version}.db"
+        echo "Backing up ${db_name} v${db_version} to ${backup_file}..."
+        ovsdb-client backup "unix:$db_socket" "$db_name" > "$backup_file"
 
         if ovsdb-client convert unix:$db_socket "$db_schema"; then
             echo "Database conversion completed successfully for ${DB_TYPE} database"
@@ -62,10 +62,6 @@ function check_and_convert_db {
             trap - EXIT
             return 1
         fi
-
-        # Wait for conversion to complete and remove trap
-        wait_for_ovsdb_client
-        trap - EXIT
     fi
 }
 

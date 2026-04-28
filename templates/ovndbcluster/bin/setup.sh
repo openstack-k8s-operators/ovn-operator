@@ -46,6 +46,7 @@ fi
 # call to ovn-ctl directly instead of start-${DB_TYPE}-db-server to pass
 # extra_args after --
 set /usr/share/ovn/scripts/ovn-ctl --no-monitor
+set "$@" --no-db-cluster-schema-upgrade
 
 # Election timer (hardcoded initial value; runtime changes handled by operator)
 set "$@" --db-${DB_TYPE}-election-timer=10000
@@ -155,7 +156,10 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
 fi
 
 # Check and perform database conversion if needed
-# This can be cleaned up once https://redhat.atlassian.net/browse/FDP-3108 is fixed
+# "Online" db conversion will happen when ovn-ctl starts a clustered DB unless
+# --no-db-cluster-schema-upgrade is passed. Online conversion does no backup,
+# making rollback impossible if something goes wrong during an upgrade and it
+# needs to be reverted
 check_and_convert_db
 
 wait_for_ovsdb_tool
