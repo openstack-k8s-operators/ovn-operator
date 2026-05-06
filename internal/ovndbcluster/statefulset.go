@@ -133,6 +133,30 @@ func StatefulSet(
 		}
 		volumes = append(volumes, svc.CreateVolume(serviceName))
 		volumeMounts = append(volumeMounts, svc.CreateVolumeMounts(serviceName)...)
+
+		// For SB DB, mount the RBAC CA cert so we can build a combined CA bundle
+		if instance.Spec.DBType == ovnv1.SBDBType && instance.Spec.RbacCACertSecretName != "" {
+			volumes = append(volumes, corev1.Volume{
+				Name: "rbac-ca-cert",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: instance.Spec.RbacCACertSecretName,
+						Items: []corev1.KeyToPath{
+							{
+								Key:  "tls.crt",
+								Path: "ovnrbacca.crt",
+							},
+						},
+					},
+				},
+			})
+			volumeMounts = append(volumeMounts, corev1.VolumeMount{
+				Name:      "rbac-ca-cert",
+				MountPath: ovn_common.OVNRbacCACertPath,
+				SubPath:   "ovnrbacca.crt",
+				ReadOnly:  true,
+			})
+		}
 	}
 
 	// NOTE(ihar) ovndb pods leave the raft cluster on delete; it's important

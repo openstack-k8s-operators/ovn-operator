@@ -14,6 +14,7 @@ package ovncontroller
 
 import (
 	"fmt"
+	"strings"
 
 	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
@@ -38,7 +39,7 @@ func CreateOVNDaemonSet(
 	volumes := GetOVNControllerVolumes(instance.Name, instance.Namespace, false)
 	mounts := GetOVNControllerVolumeMounts(false)
 
-	cmd := []string{
+	ovnCmd := []string{
 		"ovn-controller", "--pidfile", "unix:/run/openvswitch/db.sock",
 	}
 
@@ -59,11 +60,30 @@ func CreateOVNDaemonSet(
 			mounts = append(mounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
 		}
 
-		cmd = append(cmd, []string{
-			fmt.Sprintf("--certificate=%s", ovn_common.OVNDbCertPath),
-			fmt.Sprintf("--private-key=%s", ovn_common.OVNDbKeyPath),
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      "etc-ovs",
+			MountPath: "/etc/openvswitch",
+			ReadOnly:  true,
+		})
+		ovnCmd = append(ovnCmd, []string{
+			fmt.Sprintf("--certificate=%s", ovn_common.OVNControllerCertPath),
+			fmt.Sprintf("--private-key=%s", ovn_common.OVNControllerKeyPath),
 			fmt.Sprintf("--ca-cert=%s", ovn_common.OVNDbCaCertPath),
 		}...)
+	}
+
+	// When RBAC is configured, the config job deploys a per-node client
+	// certificate to /etc/openvswitch/ after OVS is ready. Wait for the
+	// cert file before starting ovn-controller so it doesn't connect to
+	// the SB DB without client authentication.
+	var cmd []string
+	if instance.Spec.TLS.Enabled() && instance.Spec.RbacIssuerName != "" {
+		cmd = []string{
+			"/bin/bash", "-c",
+			"source /usr/local/bin/container-scripts/functions && wait_for_rbac_cert && exec " + strings.Join(ovnCmd, " "),
+		}
+	} else {
+		cmd = ovnCmd
 	}
 
 	ovnControllerLivenessProbe := &corev1.Probe{

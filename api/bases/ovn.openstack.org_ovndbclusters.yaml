@@ -274,6 +274,12 @@ spec:
                   Active probe interval from standby to active ovsdb-server remote
                 format: int32
                 type: integer
+              rbacCACertSecretName:
+                description: |-
+                  RbacCACertSecretName - The name of the K8s Secret containing the RBAC
+                  PKI CA certificate (tls.crt). Used by the SB database to verify
+                  ovn-controller client certificates when RBAC is enabled.
+                type: string
               replicas:
                 default: 1
                 description: Replicas of OVN DBCluster to run
@@ -437,6 +443,11 @@ spec:
               internalDbAddress:
                 description: InternalDBAddress - DB IP address used by other Pods
                   in the cluster
+                type: string
+              internalDbAddressRbacFullAccess:
+                description: |-
+                  InternalDBAddressRbacFullAccess - DB IP address for full-access (non-RBAC)
+                  connections, used by ovn-northd when RBAC is enabled on SB DB
                 type: string
               lastAppliedTopology:
                 description: LastAppliedTopology - the last applied Topology

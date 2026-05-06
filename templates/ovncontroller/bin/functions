@@ -50,6 +50,38 @@ function wait_for_ovsdb_server {
     done
 }
 
+function wait_for_rbac_cert {
+    local cert_path="/etc/openvswitch/ovn-controller-cert.pem"
+    local key_path="/etc/openvswitch/ovn-controller-privkey.pem"
+    local ca_path="/etc/pki/tls/certs/ovndbca.crt"
+
+    while [ ! -f "$cert_path" ]; do
+        echo "RBAC certificate not yet available at $cert_path. Waiting..."
+        sleep 2
+    done
+
+    # Wait for ovn-northd to populate RBAC permission tables in the SB DB
+    # before starting ovn-controller; otherwise all SB operations are denied.
+    # Check for actual RBAC_Permission entries (not just RBAC_Role) because
+    # northd may create the role before all permission entries are committed.
+    local ovn_remote
+    while true; do
+        ovn_remote=$(ovs-vsctl --if-exists get open . external-ids:ovn-remote 2>/dev/null | tr -d '"')
+        if [ -n "$ovn_remote" ] && \
+           ovn-sbctl --db="$ovn_remote" \
+                     --timeout=5 \
+                     --certificate="$cert_path" \
+                     --private-key="$key_path" \
+                     --ca-cert="$ca_path" \
+                     --no-leader-only \
+                     find RBAC_Role name=ovn-controller 2>/dev/null | grep -q ovn-controller; then
+            break
+        fi
+        echo "RBAC tables not yet populated by ovn-northd. Waiting..."
+        sleep 2
+    done
+}
+
 # configure external-ids in OVS
 function configure_external_ids {
     ovs-vsctl set open . external-ids:ovn-bridge=${OVNBridge}

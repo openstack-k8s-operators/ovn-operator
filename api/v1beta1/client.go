@@ -72,6 +72,27 @@ func GetOVNController(
 	return nil, nil
 }
 
+// GetOVNNorthd - return OVNNorthd instance in the given namespace
+func GetOVNNorthd(
+	ctx context.Context,
+	h *helper.Helper,
+	namespace string,
+) (*OVNNorthd, error) {
+	ovnNorthdList := &OVNNorthdList{}
+	listOpts := []client.ListOption{
+		client.InNamespace(namespace),
+	}
+	err := h.GetClient().List(ctx, ovnNorthdList, listOpts...)
+	if err != nil {
+		return nil, err
+	}
+	if len(ovnNorthdList.Items) > 0 {
+		return &ovnNorthdList.Items[0], nil
+	}
+
+	return nil, nil
+}
+
 // GetDBClusterByType - return OVNDBCluster for the given dbType
 func GetDBClusterByType(
 	ctx context.Context,

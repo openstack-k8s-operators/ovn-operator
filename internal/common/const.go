@@ -14,6 +14,17 @@ const (
 	// OVNMetricsKeyPath is the path to the metrics private key file
 	OVNMetricsKeyPath string = "/etc/pki/tls/private/ovnmetrics.key"
 
+	// OVNRbacCACertPath is the mount path for the RBAC CA certificate in the SB DB pod
+	OVNRbacCACertPath string = "/etc/pki/tls/certs/ovnrbacca.crt"
+
+	// OVNRbacCertMountPath is the mount path for the per-node RBAC certificate in config jobs
+	OVNRbacCertMountPath string = "/tmp/ovn-rbac-cert"
+
+	// OVNControllerCertPath is the destination path for the RBAC client certificate on the host
+	OVNControllerCertPath string = "/etc/openvswitch/ovn-controller-cert.pem"
+	// OVNControllerKeyPath is the destination path for the RBAC client key on the host
+	OVNControllerKeyPath string = "/etc/openvswitch/ovn-controller-privkey.pem"
+
 	// MetricsPort is the port used for metrics
 	MetricsPort int32 = 1981
 )

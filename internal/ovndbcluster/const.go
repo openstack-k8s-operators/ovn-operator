@@ -9,6 +9,8 @@ const (
 
 	// DbPortSB is the port number for the OVN Southbound database
 	DbPortSB int32 = 6642
+	// DbPortSBRBACFullAccess is the port for full-access (non-RBAC) SB connections (used by ovn-northd)
+	DbPortSBRBACFullAccess int32 = 16642
 	// RaftPortSB is the port number for the OVN Southbound database Raft protocol
 	RaftPortSB int32 = 6644
 )

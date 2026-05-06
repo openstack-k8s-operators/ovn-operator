@@ -17,8 +17,15 @@ set -ex
 source $(dirname $0)/functions
 
 DB_PORT="{{ .DB_PORT }}"
+DB_PORT_FULL_ACCESS="{{ .DB_PORT_FULL_ACCESS }}"
 {{- if .TLS }}
 DB_SCHEME="pssl"
+{{- if index . "OVN_RBAC_CACERT_PATH" }}
+SSL_CA_CERT=/etc/ovn/combined-ca.pem
+cat {{.OVNDB_CACERT_PATH}} {{ index . "OVN_RBAC_CACERT_PATH" }} > ${SSL_CA_CERT}
+{{- else }}
+SSL_CA_CERT={{.OVNDB_CACERT_PATH}}
+{{- end }}
 {{- else }}
 DB_SCHEME="ptcp"
 {{- end }}
@@ -56,7 +63,7 @@ set "$@" --db-${DB_TYPE}-port=${DB_PORT}
 {{- if .TLS }}
 set "$@" --ovn-${DB_TYPE}-db-ssl-key={{.OVNDB_KEY_PATH}}
 set "$@" --ovn-${DB_TYPE}-db-ssl-cert={{.OVNDB_CERT_PATH}}
-set "$@" --ovn-${DB_TYPE}-db-ssl-ca-cert={{.OVNDB_CACERT_PATH}}
+set "$@" --ovn-${DB_TYPE}-db-ssl-ca-cert=${SSL_CA_CERT}
 set "$@" --db-${DB_TYPE}-cluster-local-proto=ssl
 set "$@" --db-${DB_TYPE}-cluster-remote-proto=ssl
 set "$@" --db-${DB_TYPE}-create-insecure-remote=no
@@ -122,15 +129,26 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
     export OVN_${DB_TYPE^^}_DAEMON=$(${CTLCMD} --pidfile --detach)
 
 {{- if .TLS }}
-    ${CTLCMD} set-ssl {{.OVNDB_KEY_PATH}} {{.OVNDB_CERT_PATH}} {{.OVNDB_CACERT_PATH}}
+    ${CTLCMD} set-ssl {{.OVNDB_KEY_PATH}} {{.OVNDB_CERT_PATH}} ${SSL_CA_CERT}
+    if [[ "${DB_TYPE}" == "sb" ]]; then
+        # Use RBAC for the connections of the ovn-controller to SB
+        ${CTLCMD} set-connection role=ovn-controller ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
+        # In this case, Northd needs to have full access to the DB so there need
+        # to be another connection defined for it
+        # TODO(slaweq): port has to be also set in Northd
+        ${CTLCMD} -- --id=@conn_uuid create Connection target="${DB_SCHEME}\:${DB_PORT_FULL_ACCESS}" -- add SB_Global . connections @conn_uuid
+    else
+        # No RBAC for connecting to the Northbound DB so only one connection
+        # defined is fine
+        ${CTLCMD} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
+    fi
+
 {{- else }}
     ${CTLCMD} del-ssl
-{{- end }}
-    CURRENT_PROBE="$(${CTLCMD} get connection . inactivity_probe || echo [])"
-    if [ "$CURRENT_PROBE" = "[]" ]; then
-        CURRENT_PROBE=60000
-    fi
+    # If TLS is disabled, RBAC can't be used, so one connection defined is enough
     ${CTLCMD} set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
+{{- end }}
+
     # OVN does not support setting inactivity-probe through --remote cli arg so
     # we have to set it after database is up.
     #
@@ -144,8 +162,14 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
     # TODO: Consider migrating inactivity probe setting  to config files when
     # we update to ovs 3.3. See --config-file in ovsdb-server(1) for more
     # details.
-    while [ "$(${CTLCMD} get connection . inactivity_probe)" != "${CURRENT_PROBE}" ]; do
-        ${CTLCMD} --inactivity-probe="${CURRENT_PROBE}" set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
+    for connection_id in $(${CTLCMD} -f csv --no-headings --columns=_uuid list connection); do
+        CURRENT_PROBE="$(${CTLCMD} get connection $connection_id inactivity_probe || echo [])"
+        if [ "$CURRENT_PROBE" = "[]" ]; then
+            CURRENT_PROBE=60000
+        fi
+        while [ "$(${CTLCMD} get connection $connection_id inactivity_probe)" != "${CURRENT_PROBE}" ]; do
+            ${CTLCMD} set connection $connection_id inactivity_probe=${CURRENT_PROBE}
+        done
     done
     ${CTLCMD} list connection
 

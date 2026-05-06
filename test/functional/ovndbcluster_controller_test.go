@@ -32,6 +32,7 @@ import (
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	ovnv1 "github.com/openstack-k8s-operators/ovn-operator/api/v1beta1"
 	ovn_common "github.com/openstack-k8s-operators/ovn-operator/internal/common"
+	"github.com/openstack-k8s-operators/ovn-operator/internal/ovndbcluster"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -1256,9 +1257,11 @@ var _ = Describe("OVNDBCluster controller", func() {
 	When("OVNDBCluster is created with TLS", func() {
 		var OVNDBClusterName types.NamespacedName
 		BeforeEach(func() {
-			spec := GetTLSOVNDBClusterSpec()
+			spec := GetTLSRbacOVNDBClusterSpec()
 			spec.NetworkAttachment = "internalapi"
 			spec.DBType = ovnv1.SBDBType
+			metricsEnabled := false
+			spec.MetricsEnabled = &metricsEnabled
 			instance := CreateOVNDBCluster(namespace, spec)
 			OVNDBClusterName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
 			DeferCleanup(th.DeleteInstance, instance)
@@ -1306,13 +1309,17 @@ var _ = Describe("OVNDBCluster controller", func() {
 			)
 		})
 
-		It("creates a Statefulset with TLS certs attached", func() {
+		It("creates a Statefulset with TLS and RBAC certs attached", func() {
 			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
 				Name:      CABundleSecretName,
 				Namespace: namespace,
 			}))
 			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
 				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      RbacCACertSecretName,
 				Namespace: namespace,
 			}))
 
@@ -1337,6 +1344,23 @@ var _ = Describe("OVNDBCluster controller", func() {
 			th.AssertVolumeMountExists("ovsdbserver-sb-tls-certs", "tls.key", svcC.VolumeMounts)
 			th.AssertVolumeMountExists("ovsdbserver-sb-tls-certs", "tls.crt", svcC.VolumeMounts)
 			th.AssertVolumeMountExists("ovsdbserver-sb-tls-certs", "ca.crt", svcC.VolumeMounts)
+
+			// check RBAC CA cert volume and mount
+			hasRbacCaVolume := false
+			for _, v := range ss.Spec.Template.Spec.Volumes {
+				if v.Name == "rbac-ca-cert" && v.Secret != nil && v.Secret.SecretName == RbacCACertSecretName {
+					hasRbacCaVolume = true
+				}
+			}
+			Expect(hasRbacCaVolume).To(BeTrue(), "StatefulSet should have rbac-ca-cert volume")
+
+			hasRbacCaMount := false
+			for _, vm := range svcC.VolumeMounts {
+				if vm.Name == "rbac-ca-cert" && vm.MountPath == ovn_common.OVNRbacCACertPath {
+					hasRbacCaMount = true
+				}
+			}
+			Expect(hasRbacCaMount).To(BeTrue(), "Container should have rbac-ca-cert volume mount")
 
 			// check DB url schema
 			Eventually(func(g Gomega) {
@@ -1378,6 +1402,10 @@ var _ = Describe("OVNDBCluster controller", func() {
 			}))
 			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
 				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      RbacCACertSecretName,
 				Namespace: namespace,
 			}))
 
@@ -1426,6 +1454,10 @@ var _ = Describe("OVNDBCluster controller", func() {
 				Name:      OvnDbCertSecretName,
 				Namespace: namespace,
 			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      RbacCACertSecretName,
+				Namespace: namespace,
+			}))
 
 			statefulSetName := types.NamespacedName{
 				Namespace: namespace,
@@ -1461,6 +1493,115 @@ var _ = Describe("OVNDBCluster controller", func() {
 				g.Expect(newHash).NotTo(BeEmpty())
 				g.Expect(newHash).NotTo(Equal(originalHash))
 			}, timeout, interval).Should(Succeed())
+		})
+
+		It("creates services with full-access port for SB", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      RbacCACertSecretName,
+				Namespace: namespace,
+			}))
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(statefulSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			Eventually(func(g Gomega) {
+				serviceListWithClusterType := GetServicesListWithLabel(namespace, map[string]string{"type": "cluster"})
+				g.Expect(serviceListWithClusterType.Items).ToNot(BeEmpty())
+				svc := serviceListWithClusterType.Items[0]
+
+				hasFullAccessPort := false
+				for _, port := range svc.Spec.Ports {
+					if port.Name == "south-full-access" && port.Port == ovndbcluster.DbPortSBRBACFullAccess {
+						hasFullAccessPort = true
+					}
+				}
+				g.Expect(hasFullAccessPort).To(BeTrue(),
+					"SB service should have full-access port %d", ovndbcluster.DbPortSBRBACFullAccess)
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("sets InternalDBAddressRbacFullAccess in status", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      RbacCACertSecretName,
+				Namespace: namespace,
+			}))
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(statefulSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			Eventually(func(g Gomega) {
+				dbCluster := GetOVNDBCluster(OVNDBClusterName)
+				g.Expect(dbCluster.Status.InternalDBAddressRbacFullAccess).ToNot(BeEmpty())
+				g.Expect(dbCluster.Status.InternalDBAddressRbacFullAccess).To(
+					ContainSubstring(fmt.Sprintf(":%d", ovndbcluster.DbPortSBRBACFullAccess)))
+				g.Expect(dbCluster.Status.InternalDBAddressRbacFullAccess).To(HavePrefix("ssl:"))
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("creates scripts ConfigMap with RBAC parameters", func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      RbacCACertSecretName,
+				Namespace: namespace,
+			}))
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-sb",
+			}
+			th.SimulateStatefulSetReplicaReadyWithPods(statefulSetName,
+				map[string][]string{namespace + "/internalapi": {"10.0.0.1"}},
+			)
+
+			scriptsCM := types.NamespacedName{
+				Namespace: OVNDBClusterName.Namespace,
+				Name:      fmt.Sprintf("%s-%s", OVNDBClusterName.Name, "scripts"),
+			}
+			Eventually(func() corev1.ConfigMap {
+				return *th.GetConfigMap(scriptsCM)
+			}, timeout, interval).ShouldNot(BeNil())
+
+			Expect(th.GetConfigMap(scriptsCM).Data["setup.sh"]).Should(
+				ContainSubstring(fmt.Sprintf("DB_PORT_FULL_ACCESS=\"%d\"", ovndbcluster.DbPortSBRBACFullAccess)))
+
+			Expect(th.GetConfigMap(scriptsCM).Data["setup.sh"]).Should(
+				ContainSubstring(ovn_common.OVNRbacCACertPath))
+
+			Expect(th.GetConfigMap(scriptsCM).Data["setup.sh"]).Should(
+				ContainSubstring("role=ovn-controller"))
 		})
 
 	})

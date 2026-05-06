@@ -740,6 +740,7 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
 		instance.Status.Conditions.MarkTrue(condition.ExposeServiceReadyCondition, condition.ExposeServiceReadyMessage)
 		internalDbAddress := []string{}
+		internalDbAddressRbacFullAccess := []string{}
 		var svcPort int32
 		scheme := "tcp"
 		if instance.Spec.TLS.Enabled() {
@@ -755,6 +756,9 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 			// TODO: Watch operator.openshift.io resource once cluster domain is customizable
 			clusterDomain := clusterdns.GetDNSClusterDomain()
 			internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, clusterDomain, svcPort))
+			if instance.Spec.DBType == ovnv1.SBDBType && instance.Spec.TLS.Enabled() {
+				internalDbAddressRbacFullAccess = append(internalDbAddressRbacFullAccess, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, clusterDomain, ovndbcluster.DbPortSBRBACFullAccess))
+			}
 		}
 
 		// Note setting this to the singular headless service address (e.g ssl:ovsdbserver-sb...) "works" but will not
@@ -764,6 +768,9 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 
 		// Set DB Address
 		instance.Status.InternalDBAddress = strings.Join(internalDbAddress, ",")
+		if len(internalDbAddressRbacFullAccess) > 0 {
+			instance.Status.InternalDBAddressRbacFullAccess = strings.Join(internalDbAddressRbacFullAccess, ",")
+		}
 		if instance.Spec.DBType == ovnv1.SBDBType && (instance.Spec.NetworkAttachment != "" || instance.Spec.Override.Service != nil) {
 			// This config map will populate the sb db address to edpm, can't use the nb
 			// If there's no networkAttachments the configMap is not needed
@@ -1290,6 +1297,14 @@ func (r *OVNDBClusterReconciler) generateServiceConfigMaps(
 	templateParameters["OVN_METRICS_CERT_PATH"] = ovn_common.OVNMetricsCertPath
 	templateParameters["OVN_METRICS_KEY_PATH"] = ovn_common.OVNMetricsKeyPath
 	templateParameters["OVN_RUNDIR"] = "/etc/ovn"
+	if instance.Spec.DBType == ovnv1.SBDBType && instance.Spec.RbacCACertSecretName != "" {
+		templateParameters["OVN_RBAC_CACERT_PATH"] = ovn_common.OVNRbacCACertPath
+	}
+	if instance.Spec.DBType == ovnv1.SBDBType && instance.Spec.TLS.Enabled() {
+		templateParameters["DB_PORT_FULL_ACCESS"] = ovndbcluster.DbPortSBRBACFullAccess
+	} else {
+		templateParameters["DB_PORT_FULL_ACCESS"] = templateParameters["DB_PORT"]
+	}
 
 	cms := []util.Template{
 		// ScriptsConfigMap

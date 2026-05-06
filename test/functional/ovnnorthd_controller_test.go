@@ -462,6 +462,65 @@ var _ = Describe("OVNNorthd controller", func() {
 		})
 	})
 
+	When("OVNNorthd is created with TLS-enabled DBClusters", func() {
+		var ovnNorthdName types.NamespacedName
+
+		BeforeEach(func() {
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCABundleSecret(types.NamespacedName{
+				Name:      CABundleSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      OvnDbCertSecretName,
+				Namespace: namespace,
+			}))
+			DeferCleanup(k8sClient.Delete, ctx, th.CreateCertSecret(types.NamespacedName{
+				Name:      RbacCACertSecretName,
+				Namespace: namespace,
+			}))
+			dbs := CreateTLSOVNDBClusters(namespace, map[string][]string{}, 1)
+			DeferCleanup(DeleteOVNDBClusters, dbs)
+
+			spec := GetTLSOVNNorthdSpec()
+			ovnNorthdName = ovn.CreateOVNNorthd(nil, namespace, spec)
+			DeferCleanup(ovn.DeleteOVNNorthd, ovnNorthdName)
+		})
+
+		It("uses full-access SB address with port 16642", func() {
+			stsName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-northd",
+			}
+
+			Eventually(func(g Gomega) {
+				sts := th.GetStatefulSet(stsName)
+				args := sts.Spec.Template.Spec.Containers[0].Args
+
+				// NB should use ssl scheme with standard port 6641
+				hasNBArg := false
+				for _, arg := range args {
+					if len(arg) > 10 && arg[:10] == "--ovnnb-db" {
+						g.Expect(arg).To(ContainSubstring("ssl:"))
+						g.Expect(arg).To(ContainSubstring(":6641"))
+						hasNBArg = true
+					}
+				}
+				g.Expect(hasNBArg).To(BeTrue(), "should have --ovnnb-db arg")
+
+				// SB should use ssl scheme with full-access port 16642
+				hasSBArg := false
+				for _, arg := range args {
+					if len(arg) > 10 && arg[:10] == "--ovnsb-db" {
+						g.Expect(arg).To(ContainSubstring("ssl:"))
+						g.Expect(arg).To(ContainSubstring(":16642"))
+						hasSBArg = true
+					}
+				}
+				g.Expect(hasSBArg).To(BeTrue(), "should have --ovnsb-db arg with full-access port")
+			}, timeout, interval).Should(Succeed())
+		})
+	})
+
 	When("OVNNorthd is created with default metrics settings", func() {
 		var ovnNorthdName types.NamespacedName
 
