@@ -124,6 +124,13 @@ type OVNControllerSpecCore struct {
 	// +kubebuilder:validation:Optional
 	// MetricsTLS - Parameters related to TLS for metrics daemonset
 	MetricsTLS tls.SimpleService `json:"metricsTLS,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// OvnIssuerName - The name of the cert-manager Issuer used to sign
+	// per-node ovn-controller certificates. When set, the controller
+	// creates cert-manager Certificate resources for each node with
+	// CN matching the chassis system-id for OVN RBAC.
+	OvnIssuerName string `json:"ovnIssuerName,omitempty"`
 }
 
 // OVNControllerStatus defines the observed state of OVNController

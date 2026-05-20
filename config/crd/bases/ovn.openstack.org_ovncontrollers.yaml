@@ -150,6 +150,13 @@ spec:
                 description: Image used for the ovn-controller container (will be
                   set to environmental default if empty)
                 type: string
+              ovnIssuerName:
+                description: |-
+                  OvnIssuerName - The name of the cert-manager Issuer used to sign
+                  per-node ovn-controller certificates. When set, the controller
+                  creates cert-manager Certificate resources for each node with
+                  CN matching the chassis system-id for OVN RBAC.
+                type: string
               ovnLogLevel:
                 default: info
                 description: OVNLogLevel - Set log level off, emer, err, warn, info

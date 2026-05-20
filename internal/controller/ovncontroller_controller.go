@@ -37,7 +37,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	certmgrv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
+	certmanager "github.com/openstack-k8s-operators/lib-common/modules/certmanager"
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/configmap"
@@ -96,6 +98,9 @@ func (r *OVNControllerReconciler) GetClient() client.Client {
 // +kubebuilder:rbac:groups="security.openshift.io",resourceNames=anyuid;privileged,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:groups="",resources=pods,verbs=create;delete;get;list;patch;update;watch
 // +kubebuilder:rbac:groups=topology.openstack.org,resources=topologies,verbs=get;list;watch;update
+// cert-manager permissions for per-node RBAC certificates
+// +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cert-manager.io,resources=issuers,verbs=get;list;watch
 
 // Reconcile reconciles the OVNController CR to deploy OVN controller pods
 func (r *OVNControllerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, _err error) {
@@ -266,7 +271,9 @@ func (r *OVNControllerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
+		Owns(&certmgrv1.Certificate{}).
 		Watches(&ovnv1.OVNDBCluster{}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNCRNamespaceMapFunc(crs, mgr.GetClient()))).
+		Watches(&ovnv1.OVNNorthd{}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNCRNamespaceMapFunc(crs, mgr.GetClient()))).
 		Watches(
 			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSrc),
@@ -641,6 +648,26 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		return ctrl.Result{}, fmt.Errorf("waiting for Topology requirements: %w", err)
 	}
 
+	// When TLS is enabled, RBAC is enforced on the SB database. The RBAC
+	// permission tables are populated by ovn-northd, so ovn-controller must
+	// not start until northd is running; otherwise all SB operations are
+	// denied with "permission error".
+	if instance.Spec.TLS.Enabled() {
+		northd, err := ovnv1.GetOVNNorthd(ctx, helper, instance.Namespace)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to look up OVNNorthd: %w", err)
+		}
+		if northd == nil || northd.Status.ReadyCount == 0 {
+			Log.Info("OVNNorthd is not ready yet, waiting before deploying OVNController...")
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.DeploymentReadyCondition,
+				condition.RequestedReason,
+				condition.SeverityInfo,
+				condition.DeploymentReadyRunningMessage))
+			return ctrl.Result{RequeueAfter: time.Duration(5) * time.Second}, nil
+		}
+	}
+
 	// Define a new DaemonSet object for OVNController
 	dset := daemonset.NewDaemonSet(
 		ovncontroller.CreateOVNDaemonSet(instance, inputHash, ovnServiceLabels, topology),
@@ -848,12 +875,70 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 
 	// create OVN Config Job - start
-	// Waits for OVS pods to run the configJob which basically will set config into OVS database
-	if instance.Status.OVSNumberReady != instance.Status.DesiredNumberScheduled {
-		Log.Info("OVS DaemonSet not ready yet. Configuration job cannot be started.")
-		return ctrl.Result{Requeue: true}, nil
+
+	// Create per-node RBAC certificates if configured
+	nodeSystemIDs := map[string]string{}
+	if instance.Spec.OvnIssuerName != "" {
+		ovnPods, podErr := ovncontroller.GetOVNControllerPods(ctx, r.Client, instance)
+		if podErr != nil {
+			return ctrl.Result{}, podErr
+		}
+
+		issuer := &certmgrv1.Issuer{}
+		if err := helper.GetClient().Get(ctx, types.NamespacedName{
+			Name:      instance.Spec.OvnIssuerName,
+			Namespace: instance.Namespace,
+		}, issuer); err != nil {
+			return ctrl.Result{}, fmt.Errorf("error getting issuer %s/%s - %w", instance.Spec.OvnIssuerName, instance.Namespace, err)
+		}
+
+		durationString := certmanager.CertDefaultDuration
+		if d, ok := issuer.Annotations[certmanager.CertDurationAnnotation]; ok && d != "" {
+			durationString = d
+		}
+		duration, err := time.ParseDuration(durationString)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("error parsing certificate duration %s - %w", durationString, err)
+		}
+
+		var renewBefore *time.Duration
+		if r, ok := issuer.Annotations[certmanager.CertRenewBeforeAnnotation]; ok && r != "" {
+			rb, err := time.ParseDuration(r)
+			if err != nil {
+				return ctrl.Result{}, fmt.Errorf("error parsing certificate renewBefore %s - %w", r, err)
+			}
+			renewBefore = &rb
+		}
+
+		for _, pod := range ovnPods.Items {
+			nodeName := pod.Spec.NodeName
+			if nodeName == "" {
+				continue
+			}
+			systemID := ovncontroller.ComputeSystemID(nodeName)
+			certName := ovncontroller.RbacCertName(nodeName)
+			nodeSystemIDs[nodeName] = systemID
+
+			_, certResult, certErr := certmanager.EnsureCert(ctx, helper, certmanager.CertificateRequest{
+				IssuerName:  instance.Spec.OvnIssuerName,
+				CertName:    certName,
+				CommonName:  &systemID,
+				Labels:      ovnServiceLabels,
+				Usages:      []certmgrv1.KeyUsage{certmgrv1.UsageClientAuth, certmgrv1.UsageDigitalSignature},
+				Duration:    &duration,
+				RenewBefore: renewBefore,
+			}, instance)
+			if certErr != nil {
+				return certResult, certErr
+			}
+			if (certResult != ctrl.Result{}) {
+				Log.Info("Waiting for RBAC certificate", "node", nodeName, "cert", certName)
+				return certResult, nil
+			}
+		}
 	}
-	jobsDef, err := ovncontroller.ConfigJob(ctx, r.Client, instance, sbCluster, ovnServiceLabels)
+
+	jobsDef, err := ovncontroller.ConfigJob(ctx, r.Client, instance, sbCluster, ovnServiceLabels, nodeSystemIDs)
 	if err != nil {
 		Log.Error(err, "Failed to create OVN controller configuration Job")
 		return ctrl.Result{}, err

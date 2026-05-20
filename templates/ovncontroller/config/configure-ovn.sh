@@ -37,7 +37,9 @@ function configure_log_level {
     done
 
     ctl_path=$(find /var/run/ovn/ -maxdepth 1 -name "ovn-controller.*.ctl")
-    ovn-appctl -t "$ctl_path" vlog/set ${OVNLogLevel}
+    if [ -n "$ctl_path" ]; then
+        ovn-appctl -t "$ctl_path" vlog/set ${OVNLogLevel}
+    fi
 }
 
 

@@ -642,7 +642,7 @@ func getInternalEndpoint(
 	if err != nil {
 		return "", err
 	}
-	internalEndpoint, err := cluster.GetInternalEndpoint()
+	internalEndpoint, err := cluster.GetInternalEndpointRbacFullAccess()
 	if err != nil {
 		return "", err
 	}
