@@ -7,10 +7,10 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
 	github.com/onsi/ginkgo/v2 v2.28.2
-	github.com/onsi/gomega v1.40.0
-	github.com/openstack-k8s-operators/infra-operator/apis v0.6.1-0.20260508091801-73f228e6af31
-	github.com/openstack-k8s-operators/lib-common/modules/common v0.6.1-0.20260506154724-30a976ba8ef0
-	github.com/openstack-k8s-operators/lib-common/modules/test v0.6.1-0.20260506154724-30a976ba8ef0
+	github.com/onsi/gomega v1.41.0
+	github.com/openstack-k8s-operators/infra-operator/apis v0.6.1-0.20260521141938-b817d49cac5c
+	github.com/openstack-k8s-operators/lib-common/modules/common v0.6.1-0.20260518125357-72bdd580c587
+	github.com/openstack-k8s-operators/lib-common/modules/test v0.6.1-0.20260518125357-72bdd580c587
 	github.com/openstack-k8s-operators/ovn-operator/api v0.0.0-20230418071801-b5843d9e05fb
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
 	k8s.io/api v0.31.14
@@ -64,7 +64,7 @@ require (
 	github.com/prometheus/common v0.65.0 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/spf13/cobra v1.9.1 // indirect
-	github.com/spf13/pflag v1.0.7 // indirect
+	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
@@ -84,9 +84,9 @@ require (
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.40.0 // indirect
-	golang.org/x/term v0.39.0 // indirect
-	golang.org/x/text v0.33.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/term v0.40.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	golang.org/x/tools v0.41.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
