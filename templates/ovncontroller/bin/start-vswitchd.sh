@@ -21,8 +21,15 @@ wait_for_ovsdb_server
 # wait_for_ovsdb_server interrim check would make the script exit.
 set -ex
 
-# Configure encap IP.
-OVNEncapIP=$(ip -o addr show dev {{ .OVNEncapNIC }} scope global | awk '{print $4}' | cut -d/ -f1)
+# Configure encap IP - prefer IPv4, fallback to IPv6 if needed, take first address only.
+OVNEncapIP=$(ip -o -4 addr show dev {{ .OVNEncapNIC }} scope global | awk '{print $4}' | cut -d/ -f1 | head -n1)
+if [ -z "$OVNEncapIP" ]; then
+    OVNEncapIP=$(ip -o -6 addr show dev {{ .OVNEncapNIC }} scope global | awk '{print $4}' | cut -d/ -f1 | head -n1)
+fi
+if [ -z "$OVNEncapIP" ]; then
+    echo "ERROR: Could not find any global IP address on interface {{ .OVNEncapNIC }}"
+    exit 1
+fi
 ovs-vsctl --no-wait set open . external-ids:ovn-encap-ip=${OVNEncapIP}
 
 # Before starting vswitchd, block it from flushing existing datapath flows.
