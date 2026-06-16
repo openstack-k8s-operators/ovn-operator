@@ -837,7 +837,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 				corev1.ConditionFalse,
 				condition.ErrorReason,
 				"NetworkAttachments error occurred "+
-					"not all pods have interfaces with ips as configured in NetworkAttachments: internalapi",
+					"invalid status IP address from pod ovsdbserver-sb-0 in network internalapi, IP is empty",
 			)
 		})
 		It("reports that an IP is missing", func() {
@@ -877,7 +877,7 @@ var _ = Describe("OVNDBCluster controller", func() {
 				corev1.ConditionFalse,
 				condition.ErrorReason,
 				"NetworkAttachments error occurred "+
-					"not all pods have interfaces with ips as configured in NetworkAttachments: internalapi",
+					"invalid status IP address from pod ovsdbserver-sb-0 in network internalapi, IP is empty",
 			)
 		})
 		It("reports NetworkAttachmentsReady if the Pods got the proper annotations", func() {
