@@ -659,24 +659,29 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		return ctrlResult, nil
 	}
 
+	// create Statefulset - end
+	// Handle service init
+	ctrlResult, err = r.reconcileServices(ctx, instance, helper, serviceLabels, serviceName)
+	if err != nil {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.ExposeServiceReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.ExposeServiceReadyErrorMessage,
+			err.Error()))
+		return ctrlResult, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.ExposeServiceReadyCondition,
+			condition.RequestedReason,
+			condition.SeverityInfo,
+			condition.ExposeServiceReadyRunningMessage))
+		return ctrlResult, err
+	}
+
 	stateful := sfset.GetStatefulSet()
 	if stateful.Generation == stateful.Status.ObservedGeneration {
 		instance.Status.ReadyCount = stateful.Status.ReadyReplicas
-	}
-
-	// Only run runtime config when all pods are ready and no rolling update in progress
-	if instance.Status.ReadyCount == *instance.Spec.Replicas &&
-		stateful.Status.UpdatedReplicas == *instance.Spec.Replicas {
-		err = r.reconcileRuntimeConfig(ctx, helper, instance, serviceLabels, serviceName)
-		if err != nil {
-			instance.Status.Conditions.Set(condition.FalseCondition(
-				condition.ServiceConfigReadyCondition,
-				condition.ErrorReason,
-				condition.SeverityWarning,
-				condition.ServiceConfigReadyErrorMessage,
-				err.Error()))
-			return ctrl.Result{}, err
-		}
 	}
 
 	// verify if network attachment matches expectations
@@ -700,26 +705,6 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 		return ctrlResult, nil
 	}
 
-	// create Statefulset - end
-	// Handle service init
-	ctrlResult, err = r.reconcileServices(ctx, instance, helper, serviceLabels, serviceName)
-	if err != nil {
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			condition.ExposeServiceReadyCondition,
-			condition.ErrorReason,
-			condition.SeverityWarning,
-			condition.ExposeServiceReadyErrorMessage,
-			err.Error()))
-		return ctrlResult, err
-	} else if (ctrlResult != ctrl.Result{}) {
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			condition.ExposeServiceReadyCondition,
-			condition.RequestedReason,
-			condition.SeverityInfo,
-			condition.ExposeServiceReadyRunningMessage))
-		return ctrlResult, err
-	}
-
 	svcList, err := service.GetServicesListWithLabel(
 		ctx,
 		helper,
@@ -734,6 +719,21 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 			condition.ExposeServiceReadyErrorMessage,
 			err.Error()))
 		return ctrl.Result{}, err
+	}
+
+	// Only run runtime config when all pods are ready and no rolling update in progress
+	if instance.Status.ReadyCount == *instance.Spec.Replicas &&
+		stateful.Status.UpdatedReplicas == *instance.Spec.Replicas {
+		err = r.reconcileRuntimeConfig(ctx, helper, instance, serviceLabels, serviceName)
+		if err != nil {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.ServiceConfigReadyCondition,
+				condition.ErrorReason,
+				condition.SeverityWarning,
+				condition.ServiceConfigReadyErrorMessage,
+				err.Error()))
+			return ctrl.Result{}, err
+		}
 	}
 
 	if statefulset.IsReady(stateful) && len(svcList.Items) > 0 {
@@ -797,7 +797,9 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 	return ctrl.Result{}, nil
 }
 
-func getPodIPInNetwork(ovnPod corev1.Pod, namespace string, networkAttachment string) (string, error) {
+func getPodIPInNetwork(ovnPod corev1.Pod, instance *ovnv1.OVNDBCluster) (string, error) {
+	namespace := instance.Namespace
+	networkAttachment := instance.Spec.NetworkAttachment
 	netStat, err := nad.GetNetworkStatusFromAnnotation(ovnPod.Annotations)
 	if err != nil {
 		err = fmt.Errorf("error while getting the Network Status for pod %s: %w", ovnPod.Name, err)
@@ -812,6 +814,12 @@ func getPodIPInNetwork(ovnPod corev1.Pod, namespace string, networkAttachment st
 	}
 	// If this is reached it means that no IP was found, construct error and return
 	err = fmt.Errorf("%w IP address from pod %s in network %s, IP is empty", util.ErrInvalidStatus, ovnPod.Name, networkAttachment)
+	instance.Status.Conditions.Set(condition.FalseCondition(
+		condition.NetworkAttachmentsReadyCondition,
+		condition.ErrorReason,
+		condition.SeverityWarning,
+		condition.NetworkAttachmentsReadyErrorMessage,
+		err.Error()))
 	return "", err
 }
 
@@ -1005,11 +1013,11 @@ func (r *OVNDBClusterReconciler) reconcileServices(
 				return ctrl.Result{}, err
 			}
 
-			dnsIP, err := getPodIPInNetwork(ovnPod, instance.Namespace, instance.Spec.NetworkAttachment)
-			dnsIPsList = append(dnsIPsList, dnsIP)
+			dnsIP, err := getPodIPInNetwork(ovnPod, instance)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
+			dnsIPsList = append(dnsIPsList, dnsIP)
 		}
 		// DNSData info is called every reconcile loop to ensure that even if a pod gets
 		// restarted and it's IP has changed, the DNSData CR will have the correct info.
