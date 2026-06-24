@@ -31,7 +31,7 @@ import (
 
 const (
 	// ServiceCommand -
-	ServiceCommand = "/usr/bin/ovn-northd"
+	ServiceCommand = "/usr/local/bin/container-scripts/setup.sh"
 )
 
 // StatefulSet func
