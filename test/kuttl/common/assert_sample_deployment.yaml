@@ -138,7 +138,7 @@ spec:
             weight: 100
       containers:
       - command:
-        - /usr/bin/ovn-northd
+        - /usr/local/bin/container-scripts/setup.sh
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:

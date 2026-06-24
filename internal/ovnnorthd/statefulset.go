@@ -31,7 +31,11 @@ import (
 
 const (
 	// ServiceCommand -
-	ServiceCommand = "/usr/bin/ovn-northd"
+	// TODO(otherwiseguy) Revert to /usr/bin/ovn-northd and remove setup.sh script
+	// once we are sure tag to tag_request migration no longer needed for a release
+	// i.e migration is already done in old running release and is the minimum required
+	// to move to the next release
+	ServiceCommand = "/usr/local/bin/container-scripts/setup.sh"
 )
 
 // StatefulSet func
