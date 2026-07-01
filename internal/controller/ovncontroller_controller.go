@@ -714,22 +714,11 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 	instance.Status.Conditions.MarkTrue(condition.NetworkAttachmentsReadyCondition, condition.NetworkAttachmentsReadyMessage)
 
-	// Check if all DaemonSets are ready
-	allReady := instance.Status.NumberReady == instance.Status.DesiredNumberScheduled &&
-		instance.Status.OVSNumberReady == instance.Status.DesiredNumberScheduled
-
-	// If metrics are enabled, also check metrics DaemonSet
-	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
-		allReady = allReady && instance.Status.MetricsNumberReady == instance.Status.DesiredNumberScheduled
-	}
-
-	if allReady {
-		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
-	}
 	// create DaemonSet - end
 
 	// Create metrics DaemonSet - start
 	// Create metrics DaemonSet if metrics are enabled and exporter image is specified
+	var metricsdset *daemonset.DaemonSet
 	if instance.Spec.ExporterImage != "" && (instance.Spec.MetricsEnabled == nil || *instance.Spec.MetricsEnabled) {
 
 		cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(ovnv1.ServiceNameOVNController), map[string]string{})
@@ -765,7 +754,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		}
 
 		// Define a new DaemonSet object for OVNController metrics using metrics-specific hash
-		metricsdset := daemonset.NewDaemonSet(
+		metricsdset = daemonset.NewDaemonSet(
 			ovncontroller.CreateMetricsDaemonSet(instance, metricsInputHash, metricsLabels, topology),
 			time.Duration(5)*time.Second,
 		)
@@ -840,6 +829,30 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		instance.Status.MetricsNumberReady = 0
 	}
 	// create metrics DaemonSet - end
+
+	// Check if all DaemonSets are ready AND rollout complete
+	ovnDSReady := r.isDaemonSetRolloutComplete(dset.GetDaemonSet())
+	ovsDSReady := r.isDaemonSetRolloutComplete(ovsdset.GetDaemonSet())
+
+	var metricsReady = true
+	if metricsdset != nil {
+		metricsReady = r.isDaemonSetRolloutComplete(metricsdset.GetDaemonSet())
+	}
+
+	allReady := ovnDSReady && ovsDSReady && metricsReady
+
+	if allReady {
+		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
+	} else {
+		// Log specific readiness states for debugging
+		Log.Info("DaemonSet rollout in progress",
+			"ovnReady", ovnDSReady,
+			"ovsReady", ovsDSReady,
+			"metricsReady", metricsReady)
+		instance.Status.Conditions.MarkFalse(condition.DeploymentReadyCondition,
+			condition.RequestedReason, condition.SeverityInfo,
+			"DaemonSet rollout in progress")
+	}
 
 	sbCluster, err := ovnv1.GetDBClusterByType(ctx, helper, instance.Namespace, map[string]string{}, ovnv1.SBDBType)
 	if err != nil {
@@ -1009,6 +1022,36 @@ func (r *OVNControllerReconciler) createMetricsHashOfInputHashes(
 		Log.Info(fmt.Sprintf("Metrics input maps hash %s - %s", "MetricsInputHashName", hash))
 	}
 	return hash, nil
+}
+
+// isDaemonSetRolloutComplete checks if a DaemonSet rollout is complete and all pods are ready
+func (r *OVNControllerReconciler) isDaemonSetRolloutComplete(ds appsv1.DaemonSet) bool {
+	// Check if generation is observed (ensures we're looking at current spec)
+	if ds.Status.ObservedGeneration < ds.Generation {
+		return false
+	}
+
+	// If nothing is desired to be scheduled, consider rollout complete
+	if ds.Status.DesiredNumberScheduled == 0 {
+		return true
+	}
+
+	// Check if all pods are ready
+	if ds.Status.NumberReady != ds.Status.DesiredNumberScheduled {
+		return false
+	}
+
+	// CRITICAL: Check if all pods are updated to new version
+	if ds.Status.UpdatedNumberScheduled != ds.Status.DesiredNumberScheduled {
+		return false
+	}
+
+	// Check if there are any unavailable pods
+	if ds.Status.NumberUnavailable > 0 {
+		return false
+	}
+
+	return true
 }
 
 // deleteResourceIfExists deletes a Kubernetes resource if it exists, ignoring NotFound errors
