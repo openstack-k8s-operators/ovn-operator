@@ -204,8 +204,10 @@ func ListDaemonsets(namespace string) *appsv1.DaemonSetList {
 func SimulateDaemonsetNumberReady(name types.NamespacedName) {
 	Eventually(func(g Gomega) {
 		ds := GetDaemonSet(name)
+		ds.Status.ObservedGeneration = ds.Generation
 		ds.Status.NumberReady = 1
 		ds.Status.DesiredNumberScheduled = 1
+		ds.Status.UpdatedNumberScheduled = 1
 		g.Expect(k8sClient.Status().Update(ctx, ds)).To(Succeed())
 
 	}, timeout, interval).Should(Succeed())
@@ -287,8 +289,10 @@ func SimulateDaemonsetNumberReadyWithPods(name types.NamespacedName, networkIPs 
 
 	Eventually(func(g Gomega) {
 		ds := GetDaemonSet(name)
+		ds.Status.ObservedGeneration = ds.Generation
 		ds.Status.NumberReady = 1
 		ds.Status.DesiredNumberScheduled = 1
+		ds.Status.UpdatedNumberScheduled = 1
 		g.Expect(k8sClient.Status().Update(ctx, ds)).To(Succeed())
 
 	}, timeout, interval).Should(Succeed())
