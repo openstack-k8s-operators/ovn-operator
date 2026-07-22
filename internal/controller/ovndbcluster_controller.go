@@ -49,6 +49,7 @@ import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/job"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/labels"
 	nad "github.com/openstack-k8s-operators/lib-common/modules/common/networkattachment"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/pdb"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/service"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/statefulset"
@@ -59,8 +60,10 @@ import (
 	"github.com/openstack-k8s-operators/ovn-operator/internal/ovndbcluster"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // OVNDBClusterReconciler reconciles a OVNDBCluster object
@@ -108,6 +111,7 @@ func (r *OVNDBClusterReconciler) GetLogger(ctx context.Context) logr.Logger {
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;update;patch
 // service account permissions that are needed to grant permission to the above
 // +kubebuilder:rbac:groups="security.openshift.io",resourceNames=restricted-v2,resources=securitycontextconstraints,verbs=use
+// +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=topology.openstack.org,resources=topologies,verbs=get;list;watch;update
 
 // Reconcile - OVN DBCluster
@@ -161,6 +165,7 @@ func (r *OVNDBClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		condition.UnknownCondition(condition.RoleReadyCondition, condition.InitReason, condition.RoleReadyInitMessage),
 		condition.UnknownCondition(condition.RoleBindingReadyCondition, condition.InitReason, condition.RoleBindingReadyInitMessage),
 		condition.UnknownCondition(condition.TLSInputReadyCondition, condition.InitReason, condition.InputReadyInitMessage),
+		condition.UnknownCondition(condition.PDBReadyCondition, condition.InitReason, condition.PDBReadyInitMessage),
 		condition.UnknownCondition(ovnv1.ExternalConfigReadyCondition, condition.InitReason, ovnv1.ExternalConfigInitMessage),
 	)
 
@@ -280,6 +285,7 @@ func (r *OVNDBClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
 		Owns(&infranetworkv1.DNSData{}).
+		Owns(&policyv1.PodDisruptionBudget{}).
 		Watches(&ovnv1.OVNController{}, handler.EnqueueRequestsFromMapFunc(ovnv1.OVNCRNamespaceMapFunc(crs, mgr.GetClient()))).
 		Watches(
 			&corev1.Secret{},
@@ -652,6 +658,37 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 			condition.DeploymentReadyRunningMessage))
 		return ctrlResult, nil
 	}
+
+	//
+	// PodDisruptionBudget
+	//
+	if instance.Spec.Replicas != nil && *instance.Spec.Replicas > 1 {
+		pdbSpec := pdb.MaxUnavailablePodDisruptionBudget(
+			serviceName,
+			instance.Namespace,
+			intstr.FromInt(1),
+			serviceLabels,
+		)
+		pdbInstance := pdb.NewPDB(pdbSpec, 5*time.Second)
+
+		ctrlResult, err := pdbInstance.CreateOrPatch(ctx, helper)
+		if err != nil {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.PDBReadyCondition,
+				condition.ErrorReason,
+				condition.SeverityWarning,
+				condition.PDBReadyErrorMessage, err.Error()))
+			return ctrl.Result{}, err
+		} else if (ctrlResult != ctrl.Result{}) {
+			return ctrlResult, nil
+		}
+	} else {
+		err := pdb.DeletePDBWithName(ctx, helper, serviceName, instance.Namespace)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to delete PDB: %w", err)
+		}
+	}
+	instance.Status.Conditions.MarkTrue(condition.PDBReadyCondition, condition.PDBReadyMessage)
 
 	// create Statefulset - end
 	// Handle service init

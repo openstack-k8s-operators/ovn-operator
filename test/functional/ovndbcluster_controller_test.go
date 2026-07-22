@@ -34,6 +34,8 @@ import (
 	ovn_common "github.com/openstack-k8s-operators/ovn-operator/internal/common"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -1463,6 +1465,121 @@ var _ = Describe("OVNDBCluster controller", func() {
 			}, timeout, interval).Should(Succeed())
 		})
 
+	})
+
+	When("A OVNDBCluster instance is created with replicas > 1", func() {
+		var OVNDBClusterName types.NamespacedName
+		var statefulSetName types.NamespacedName
+
+		BeforeEach(func() {
+			spec := GetDefaultOVNDBClusterSpec()
+			replicas := int32(3)
+			spec.Replicas = &replicas
+			instance := CreateOVNDBCluster(namespace, spec)
+			OVNDBClusterName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+			DeferCleanup(th.DeleteInstance, instance)
+
+			statefulSetName = types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-nb",
+			}
+			th.SimulateStatefulSetReplicaReady(statefulSetName)
+		})
+
+		It("should create a PodDisruptionBudget", func() {
+			pdbName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-nb",
+			}
+			Eventually(func(g Gomega) {
+				pdb := th.GetPodDisruptionBudget(pdbName)
+				g.Expect(pdb.Spec.MaxUnavailable.IntValue()).To(Equal(1))
+				g.Expect(pdb.Spec.Selector.MatchLabels).To(HaveKeyWithValue("service", "ovsdbserver-nb"))
+			}, timeout, interval).Should(Succeed())
+
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				condition.PDBReadyCondition,
+				corev1.ConditionTrue,
+			)
+		})
+
+		It("should delete the PDB when scaled down to 1", func() {
+			pdbName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-nb",
+			}
+			th.AssertPodDisruptionBudgetExists(pdbName)
+
+			ScaleDBCluster(OVNDBClusterName, 1)
+
+			Eventually(func(g Gomega) {
+				pdb := &policyv1.PodDisruptionBudget{}
+				err := k8sClient.Get(ctx, pdbName, pdb)
+				g.Expect(k8s_errors.IsNotFound(err)).To(BeTrue())
+			}, timeout, interval).Should(Succeed())
+
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				condition.PDBReadyCondition,
+				corev1.ConditionTrue,
+			)
+		})
+	})
+
+	When("A OVNDBCluster instance is created with 1 replica", func() {
+		var OVNDBClusterName types.NamespacedName
+
+		BeforeEach(func() {
+			instance := CreateOVNDBCluster(namespace, GetDefaultOVNDBClusterSpec())
+			OVNDBClusterName = types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}
+			DeferCleanup(th.DeleteInstance, instance)
+
+			statefulSetName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-nb",
+			}
+			th.SimulateStatefulSetReplicaReady(statefulSetName)
+		})
+
+		It("should not create a PodDisruptionBudget", func() {
+			pdbName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-nb",
+			}
+			th.AssertPodDisruptionBudgetDoesNotExist(pdbName)
+
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				condition.PDBReadyCondition,
+				corev1.ConditionTrue,
+			)
+		})
+
+		It("should create a PDB when scaled up to 3", func() {
+			pdbName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovsdbserver-nb",
+			}
+			th.AssertPodDisruptionBudgetDoesNotExist(pdbName)
+
+			ScaleDBCluster(OVNDBClusterName, 3)
+
+			Eventually(func(g Gomega) {
+				pdb := th.GetPodDisruptionBudget(pdbName)
+				g.Expect(pdb.Spec.MaxUnavailable.IntValue()).To(Equal(1))
+			}, timeout, interval).Should(Succeed())
+
+			th.ExpectCondition(
+				OVNDBClusterName,
+				ConditionGetterFunc(OVNDBClusterConditionGetter),
+				condition.PDBReadyCondition,
+				corev1.ConditionTrue,
+			)
+		})
 	})
 
 	When("OVNDB is created with topologyref", func() {
