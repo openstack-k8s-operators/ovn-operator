@@ -3,7 +3,7 @@ module github.com/openstack-k8s-operators/ovn-operator/api
 go 1.26.3
 
 require (
-	github.com/go-logr/logr v1.4.3
+	github.com/go-logr/logr v1.4.4
 	github.com/google/uuid v1.6.0
 	github.com/onsi/gomega v1.42.1
 	github.com/openstack-k8s-operators/infra-operator/apis v0.6.1-0.20260718084237-5df87de62106
