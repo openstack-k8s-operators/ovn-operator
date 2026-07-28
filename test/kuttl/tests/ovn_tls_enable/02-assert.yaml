@@ -37,3 +37,20 @@ commands:
       ../../common/scripts/check_cluster_status.sh nb 3 ssl
   - script: |
       ../../common/scripts/check_cluster_status.sh sb 3 ssl
+  # Check ovn-controller-ovs pods were NOT restarted/recreated by enabling TLS.
+  # Compare the current pods (name + uid) against the snapshot taken in step 02
+  # before the TLS rollout; a changed uid means the pod was recreated.
+  - script: |
+      snapshot=/tmp/ovn-controller-ovs-snapshot-$NAMESPACE.txt
+      if [[ ! -f "$snapshot" ]]; then
+        echo "Snapshot $snapshot not found"
+        exit 1
+      fi
+      current=$(oc get pods -n $NAMESPACE -l service=ovn-controller-ovs -o json | \
+        jq -r '.items[] | "\(.metadata.name) \(.metadata.uid)"' | sort)
+      if [[ "$current" != "$(cat $snapshot)" ]]; then
+        echo "ovn-controller-ovs pods were restarted/recreated after enabling TLS"
+        echo "--- before ---"; cat "$snapshot"
+        echo "--- after ---"; echo "$current"
+        exit 1
+      fi
