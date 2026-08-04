@@ -160,6 +160,36 @@ var _ = Describe("OVNController controller", func() {
 			Expect(ds.Spec.Template.Spec.Containers[1].ReadinessProbe).ShouldNot(BeNil())
 		})
 
+		It("should configure hardened privileged security contexts on DaemonSets", func() {
+			ds := GetDaemonSet(types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller",
+			})
+			expectPrivilegedDaemonSetPodSecurityContext(ds.Spec.Template.Spec.SecurityContext)
+			expectPrivilegedHostPathSecurityContext(
+				ds.Spec.Template.Spec.Containers[0].SecurityContext,
+				true,
+			)
+
+			ds = GetDaemonSet(types.NamespacedName{
+				Namespace: namespace,
+				Name:      "ovn-controller-ovs",
+			})
+			expectPrivilegedDaemonSetPodSecurityContext(ds.Spec.Template.Spec.SecurityContext)
+			expectPrivilegedHostPathSecurityContext(
+				ds.Spec.Template.Spec.InitContainers[0].SecurityContext,
+				true,
+			)
+			expectPrivilegedHostPathSecurityContext(
+				ds.Spec.Template.Spec.Containers[0].SecurityContext,
+				true,
+			)
+			expectPrivilegedHostPathSecurityContext(
+				ds.Spec.Template.Spec.Containers[1].SecurityContext,
+				true,
+			)
+		})
+
 		When("OVNDBCluster instances are available without networkAttachments", func() {
 			var scriptsCM types.NamespacedName
 			var dbs []types.NamespacedName
@@ -268,6 +298,13 @@ var _ = Describe("OVNController controller", func() {
 				Eventually(func() batchv1.Job {
 					return *th.GetJob(configJob)
 				}, timeout, interval).ShouldNot(BeNil())
+
+				job := th.GetJob(configJob)
+				expectPrivilegedDaemonSetPodSecurityContext(job.Spec.Template.Spec.SecurityContext)
+				expectPrivilegedHostPathSecurityContext(
+					job.Spec.Template.Spec.Containers[0].SecurityContext,
+					false,
+				)
 			})
 
 			It("should not create a config job", func() {
@@ -1477,6 +1514,11 @@ var _ = Describe("OVNController controller", func() {
 			Expect(ds.Spec.Template.Spec.Containers).To(HaveLen(1))
 			Expect(ds.Spec.Template.Spec.Containers[0].Name).To(Equal("openstack-network-exporter"))
 			Expect(ds.Spec.Template.Spec.Containers[0].Image).To(Equal("quay.io/openstack-k8s-operators/openstack-network-exporter:current-podified"))
+			expectPrivilegedDaemonSetPodSecurityContext(ds.Spec.Template.Spec.SecurityContext)
+			expectPrivilegedHostPathSecurityContext(
+				ds.Spec.Template.Spec.Containers[0].SecurityContext,
+				true,
+			)
 		})
 
 		It("should create a metrics Service", func() {

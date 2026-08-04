@@ -386,6 +386,40 @@ func GetServicesListWithLabel(namespace string, labelSelectorMap ...map[string]s
 	return serviceList
 }
 
+func expectPrivilegedDaemonSetPodSecurityContext(podSecurityContext *corev1.PodSecurityContext) {
+	Expect(podSecurityContext).NotTo(BeNil())
+	Expect(podSecurityContext.SeccompProfile).NotTo(BeNil())
+	Expect(podSecurityContext.SeccompProfile.Type).To(Equal(corev1.SeccompProfileTypeRuntimeDefault))
+}
+
+func expectPrivilegedHostPathSecurityContext(
+	securityContext *corev1.SecurityContext,
+	withOVSCapabilities bool,
+) {
+	Expect(securityContext).NotTo(BeNil())
+	Expect(securityContext.AllowPrivilegeEscalation).NotTo(BeNil())
+	Expect(*securityContext.AllowPrivilegeEscalation).To(BeTrue())
+	Expect(securityContext.ReadOnlyRootFilesystem).NotTo(BeNil())
+	Expect(*securityContext.ReadOnlyRootFilesystem).To(BeFalse())
+	Expect(securityContext.Privileged).NotTo(BeNil())
+	Expect(*securityContext.Privileged).To(BeTrue())
+	Expect(securityContext.RunAsUser).NotTo(BeNil())
+	Expect(*securityContext.RunAsUser).To(Equal(int64(0)))
+	Expect(securityContext.SeccompProfile).NotTo(BeNil())
+	Expect(securityContext.SeccompProfile.Type).To(Equal(corev1.SeccompProfileTypeRuntimeDefault))
+
+	if withOVSCapabilities {
+		Expect(securityContext.Capabilities).NotTo(BeNil())
+		Expect(securityContext.Capabilities.Add).To(ContainElements(
+			corev1.Capability("NET_ADMIN"),
+			corev1.Capability("SYS_ADMIN"),
+			corev1.Capability("SYS_NICE"),
+		))
+	} else {
+		Expect(securityContext.Capabilities).To(BeNil())
+	}
+}
+
 // Topology functions
 
 // GetSampleDaemonSetTopologySpec - A sample (and opinionated) Topology Spec used to

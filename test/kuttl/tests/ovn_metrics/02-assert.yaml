@@ -2,7 +2,33 @@
 # Check for:
 #
 # - Exported metrics
+# - Metrics DaemonSet security context
 
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ovn-controller-metrics
+spec:
+  template:
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: openstack-network-exporter
+        securityContext:
+          allowPrivilegeEscalation: true
+          capabilities:
+            add:
+            - NET_ADMIN
+            - SYS_ADMIN
+            - SYS_NICE
+          privileged: true
+          readOnlyRootFilesystem: false
+          runAsUser: 0
+          seccompProfile:
+            type: RuntimeDefault
+---
 apiVersion: kuttl.dev/v1beta1
 kind: TestAssert
 timeout: 60

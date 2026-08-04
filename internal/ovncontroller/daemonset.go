@@ -92,9 +92,6 @@ func CreateOVNDaemonSet(
 		},
 	}
 
-	runAsUser := int64(0)
-	privileged := true
-
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 
@@ -109,19 +106,12 @@ func CreateOVNDaemonSet(
 					},
 				},
 			},
-			Image: instance.Spec.OvnContainerImage,
-			SecurityContext: &corev1.SecurityContext{
-				Capabilities: &corev1.Capabilities{
-					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
-					Drop: []corev1.Capability{},
-				},
-				RunAsUser:  &runAsUser,
-				Privileged: &privileged,
-			},
-			Env:            env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts:   mounts,
-			ReadinessProbe: ovnControllerReadinessProbe,
-			LivenessProbe:  ovnControllerLivenessProbe,
+			Image:           instance.Spec.OvnContainerImage,
+			SecurityContext: getPrivilegedHostPathSecurityContext(privilegedOVSCapabilities),
+			Env:             env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			VolumeMounts:    mounts,
+			ReadinessProbe:  ovnControllerReadinessProbe,
+			LivenessProbe:   ovnControllerLivenessProbe,
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
@@ -142,6 +132,7 @@ func CreateOVNDaemonSet(
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
+					SecurityContext:    getPrivilegedDaemonSetPodSecurityContext(),
 					ServiceAccountName: instance.RbacResourceName(),
 					Containers:         containers,
 					Volumes:            volumes,
@@ -233,27 +224,17 @@ func CreateOVSDaemonSet(
 		},
 	}
 
-	runAsUser := int64(0)
-	privileged := true
-
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 
 	initContainers := []corev1.Container{
 		{
-			Name:    "ovsdb-server-init",
-			Command: []string{"/usr/local/bin/container-scripts/init-ovsdb-server.sh"},
-			Image:   instance.Spec.OvsContainerImage,
-			SecurityContext: &corev1.SecurityContext{
-				Capabilities: &corev1.Capabilities{
-					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
-					Drop: []corev1.Capability{},
-				},
-				RunAsUser:  &runAsUser,
-				Privileged: &privileged,
-			},
-			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts: GetOVSDbVolumeMounts(),
+			Name:            "ovsdb-server-init",
+			Command:         []string{"/usr/local/bin/container-scripts/init-ovsdb-server.sh"},
+			Image:           instance.Spec.OvsContainerImage,
+			SecurityContext: getPrivilegedHostPathSecurityContext(privilegedOVSCapabilities),
+			Env:             env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			VolumeMounts:    GetOVSDbVolumeMounts(),
 		},
 	}
 
@@ -269,17 +250,10 @@ func CreateOVSDaemonSet(
 					},
 				},
 			},
-			Image: instance.Spec.OvsContainerImage,
-			SecurityContext: &corev1.SecurityContext{
-				Capabilities: &corev1.Capabilities{
-					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
-					Drop: []corev1.Capability{},
-				},
-				RunAsUser:  &runAsUser,
-				Privileged: &privileged,
-			},
-			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts: GetOVSDbVolumeMounts(),
+			Image:           instance.Spec.OvsContainerImage,
+			SecurityContext: getPrivilegedHostPathSecurityContext(privilegedOVSCapabilities),
+			Env:             env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			VolumeMounts:    GetOVSDbVolumeMounts(),
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			LivenessProbe:            ovsDbLivenessProbe,
@@ -296,17 +270,10 @@ func CreateOVSDaemonSet(
 					},
 				},
 			},
-			Image: instance.Spec.OvsContainerImage,
-			SecurityContext: &corev1.SecurityContext{
-				Capabilities: &corev1.Capabilities{
-					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
-					Drop: []corev1.Capability{},
-				},
-				RunAsUser:  &runAsUser,
-				Privileged: &privileged,
-			},
-			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts: GetVswitchdVolumeMounts(),
+			Image:           instance.Spec.OvsContainerImage,
+			SecurityContext: getPrivilegedHostPathSecurityContext(privilegedOVSCapabilities),
+			Env:             env.MergeEnvs([]corev1.EnvVar{}, envVars),
+			VolumeMounts:    GetVswitchdVolumeMounts(),
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			LivenessProbe:            ovsVswitchdLivenessProbe,
@@ -329,6 +296,7 @@ func CreateOVSDaemonSet(
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
+					SecurityContext:    getPrivilegedDaemonSetPodSecurityContext(),
 					ServiceAccountName: instance.RbacResourceName(),
 					InitContainers:     initContainers,
 					Containers:         containers,
@@ -445,22 +413,12 @@ func CreateMetricsDaemonSet(
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 
-	runAsUser := int64(0)
-	privileged := true
-
 	containers := []corev1.Container{
 		{
-			Name:    "openstack-network-exporter",
-			Image:   instance.Spec.ExporterImage,
-			Command: []string{"/app/openstack-network-exporter"},
-			SecurityContext: &corev1.SecurityContext{
-				Capabilities: &corev1.Capabilities{
-					Add:  []corev1.Capability{"NET_ADMIN", "SYS_ADMIN", "SYS_NICE"},
-					Drop: []corev1.Capability{},
-				},
-				RunAsUser:  &runAsUser,
-				Privileged: &privileged,
-			},
+			Name:            "openstack-network-exporter",
+			Image:           instance.Spec.ExporterImage,
+			Command:         []string{"/app/openstack-network-exporter"},
+			SecurityContext: getPrivilegedHostPathSecurityContext(privilegedOVSCapabilities),
 			Env: env.MergeEnvs([]corev1.EnvVar{
 				{
 					Name:  "OPENSTACK_NETWORK_EXPORTER_YAML",
@@ -486,6 +444,7 @@ func CreateMetricsDaemonSet(
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
+					SecurityContext:    getPrivilegedDaemonSetPodSecurityContext(),
 					ServiceAccountName: instance.RbacResourceName(),
 					Containers:         containers,
 					Volumes:            volumes,

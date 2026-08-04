@@ -36,8 +36,6 @@ func ConfigJob(
 ) ([]*batchv1.Job, error) {
 
 	var jobs []*batchv1.Job
-	runAsUser := int64(0)
-	privileged := true
 	// NOTE(slaweq): set TTLSecondsAfterFinished=0 will clean done
 	// configuration job automatically right after it will be finished
 	jobTTLAfterFinished := int32(0)
@@ -86,6 +84,7 @@ func ConfigJob(
 					TTLSecondsAfterFinished: &jobTTLAfterFinished,
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
+							SecurityContext:    getPrivilegedDaemonSetPodSecurityContext(),
 							RestartPolicy:      corev1.RestartPolicyOnFailure,
 							ServiceAccountName: instance.RbacResourceName(),
 							Containers: []corev1.Container{
@@ -95,14 +94,11 @@ func ConfigJob(
 									Command: []string{
 										"/bin/bash", "-c", strings.Join(commands, " "),
 									},
-									Args: []string{},
-									SecurityContext: &corev1.SecurityContext{
-										RunAsUser:  &runAsUser,
-										Privileged: &privileged,
-									},
-									Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-									VolumeMounts: GetOVNControllerVolumeMounts(true),
-									Resources:    instance.Spec.Resources,
+									Args:            []string{},
+									SecurityContext: getPrivilegedHostPathSecurityContext(nil),
+									Env:             env.MergeEnvs([]corev1.EnvVar{}, envVars),
+									VolumeMounts:    GetOVNControllerVolumeMounts(true),
+									Resources:       instance.Spec.Resources,
 								},
 							},
 							Volumes:  GetOVNControllerVolumes(instance.Name, instance.Namespace, true),
