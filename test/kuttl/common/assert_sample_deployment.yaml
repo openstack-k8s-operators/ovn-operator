@@ -17,6 +17,7 @@
 # - ovsdbserver-sb-0 Service
 # - OVNController Daemonset created as many pods as nodes*2
 # - OVNControllerOVS Daemonset created as many pods as nodes*2
+# - Privileged DaemonSet/Pod security contexts (seccomp, readOnlyRootFilesystem)
 # - 1 PVC for OVNDBCluster NB
 # - 1 PVC for OVNDBCluster SB
 
@@ -181,6 +182,26 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: ovn-controller
+spec:
+  template:
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: ovn-controller
+        securityContext:
+          allowPrivilegeEscalation: true
+          capabilities:
+            add:
+            - NET_ADMIN
+            - SYS_ADMIN
+            - SYS_NICE
+          privileged: true
+          readOnlyRootFilesystem: false
+          runAsUser: 0
+          seccompProfile:
+            type: RuntimeDefault
 status:
   numberMisscheduled: 0
 ---
@@ -188,6 +209,53 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: ovn-controller-ovs
+spec:
+  template:
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+      - name: ovsdb-server-init
+        securityContext:
+          allowPrivilegeEscalation: true
+          capabilities:
+            add:
+            - NET_ADMIN
+            - SYS_ADMIN
+            - SYS_NICE
+          privileged: true
+          readOnlyRootFilesystem: false
+          runAsUser: 0
+          seccompProfile:
+            type: RuntimeDefault
+      containers:
+      - name: ovsdb-server
+        securityContext:
+          allowPrivilegeEscalation: true
+          capabilities:
+            add:
+            - NET_ADMIN
+            - SYS_ADMIN
+            - SYS_NICE
+          privileged: true
+          readOnlyRootFilesystem: false
+          runAsUser: 0
+          seccompProfile:
+            type: RuntimeDefault
+      - name: ovs-vswitchd
+        securityContext:
+          allowPrivilegeEscalation: true
+          capabilities:
+            add:
+            - NET_ADMIN
+            - SYS_ADMIN
+            - SYS_NICE
+          privileged: true
+          readOnlyRootFilesystem: false
+          runAsUser: 0
+          seccompProfile:
+            type: RuntimeDefault
 status:
   numberMisscheduled: 0
 ---
@@ -226,6 +294,24 @@ metadata:
   labels:
     service: ovn-controller
   generateName: ovn-controller-
+spec:
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: ovn-controller
+    securityContext:
+      allowPrivilegeEscalation: true
+      capabilities:
+        add:
+        - NET_ADMIN
+        - SYS_ADMIN
+        - SYS_NICE
+      privileged: true
+      readOnlyRootFilesystem: false
+      runAsUser: 0
+      seccompProfile:
+        type: RuntimeDefault
 status:
   phase: Running
   containerStatuses:
@@ -240,6 +326,51 @@ metadata:
   labels:
     service: ovn-controller-ovs
   generateName: ovn-controller-ovs-
+spec:
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  initContainers:
+  - name: ovsdb-server-init
+    securityContext:
+      allowPrivilegeEscalation: true
+      capabilities:
+        add:
+        - NET_ADMIN
+        - SYS_ADMIN
+        - SYS_NICE
+      privileged: true
+      readOnlyRootFilesystem: false
+      runAsUser: 0
+      seccompProfile:
+        type: RuntimeDefault
+  containers:
+  - name: ovsdb-server
+    securityContext:
+      allowPrivilegeEscalation: true
+      capabilities:
+        add:
+        - NET_ADMIN
+        - SYS_ADMIN
+        - SYS_NICE
+      privileged: true
+      readOnlyRootFilesystem: false
+      runAsUser: 0
+      seccompProfile:
+        type: RuntimeDefault
+  - name: ovs-vswitchd
+    securityContext:
+      allowPrivilegeEscalation: true
+      capabilities:
+        add:
+        - NET_ADMIN
+        - SYS_ADMIN
+        - SYS_NICE
+      privileged: true
+      readOnlyRootFilesystem: false
+      runAsUser: 0
+      seccompProfile:
+        type: RuntimeDefault
 status:
   phase: Running
   containerStatuses:
