@@ -1,0 +1,6 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      oc annotate OVNController -n $NAMESPACE ovncontroller-sample \
+        ovn.openstack.org/hardened-ovs-security-context=true --overwrite
