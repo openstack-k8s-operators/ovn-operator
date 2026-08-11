@@ -21,13 +21,20 @@ wait_for_ovsdb_server
 # wait_for_ovsdb_server interrim check would make the script exit.
 set -ex
 
+# Interface name derived from the OVNController NetworkAttachment. The value is
+# loaded via a quoted heredoc so shell metacharacters are treated as part of
+# the interface name rather than executed as commands.
+read -r OVNEncapNIC <<'OVN_ENCAP_NIC_EOF'
+{{ .OVNEncapNIC }}
+OVN_ENCAP_NIC_EOF
+
 # Configure encap IP - prefer IPv4, fallback to IPv6 if needed, take first address only.
-OVNEncapIP=$(ip -o -4 addr show dev {{ .OVNEncapNIC }} scope global | awk '{print $4}' | cut -d/ -f1 | head -n1)
+OVNEncapIP=$(ip -o -4 addr show dev "$OVNEncapNIC" scope global | awk '{print $4}' | cut -d/ -f1 | head -n1)
 if [ -z "$OVNEncapIP" ]; then
-    OVNEncapIP=$(ip -o -6 addr show dev {{ .OVNEncapNIC }} scope global | awk '{print $4}' | cut -d/ -f1 | head -n1)
+    OVNEncapIP=$(ip -o -6 addr show dev "$OVNEncapNIC" scope global | awk '{print $4}' | cut -d/ -f1 | head -n1)
 fi
 if [ -z "$OVNEncapIP" ]; then
-    echo "ERROR: Could not find any global IP address on interface {{ .OVNEncapNIC }}"
+    echo "ERROR: Could not find any global IP address on interface ${OVNEncapNIC}"
     exit 1
 fi
 ovs-vsctl --no-wait set open . external-ids:ovn-encap-ip=${OVNEncapIP}

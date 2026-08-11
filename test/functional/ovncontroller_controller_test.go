@@ -81,7 +81,10 @@ var _ = Describe("OVNController controller", func() {
 			}, timeout, interval).ShouldNot(BeNil())
 
 			Expect(th.GetConfigMap(scriptsCM).Data["start-vswitchd.sh"]).Should(
-				ContainSubstring("addr show dev eth0"))
+				SatisfyAll(
+					ContainSubstring("eth0"),
+					ContainSubstring(`addr show dev "$OVNEncapNIC"`),
+				))
 
 			th.ExpectCondition(
 				OVNControllerName,
@@ -250,7 +253,10 @@ var _ = Describe("OVNController controller", func() {
 				}, timeout, interval).ShouldNot(BeNil())
 
 				Expect(th.GetConfigMap(scriptsCM).Data["start-vswitchd.sh"]).Should(
-					ContainSubstring("addr show dev eth0"))
+					SatisfyAll(
+						ContainSubstring("eth0"),
+						ContainSubstring(`addr show dev "$OVNEncapNIC"`),
+					))
 
 				th.ExpectCondition(
 					OVNControllerName,
@@ -542,7 +548,10 @@ var _ = Describe("OVNController controller", func() {
 
 			ovncontroller := GetOVNController(OVNControllerName)
 			Expect(th.GetConfigMap(scriptsCM).Data["start-vswitchd.sh"]).Should(
-				ContainSubstring("addr show dev %s", ovncontroller.Spec.NetworkAttachment))
+				SatisfyAll(
+					ContainSubstring(ovncontroller.Spec.NetworkAttachment),
+					ContainSubstring(`addr show dev "$OVNEncapNIC"`),
+				))
 		})
 
 	})
