@@ -199,6 +199,8 @@ type OVSExternalIDs struct {
 
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default="br-int"
+	// +kubebuilder:validation:MaxLength=15
+	// +kubebuilder:validation:Pattern=`^[^/\\\s]+$`
 	OvnBridge string `json:"ovn-bridge,omitempty"`
 
 	// +kubebuilder:validation:Optional
@@ -217,6 +219,8 @@ type OVSExternalIDs struct {
 
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default={}
+	// +kubebuilder:validation:items:MaxLength=255
+	// +kubebuilder:validation:items:Pattern=`^[^:,\s]+$`
 	OvnAvailabilityZones []string `json:"availability-zones,omitempty"`
 
 	// DEPRECATED: To be removed in the next API version

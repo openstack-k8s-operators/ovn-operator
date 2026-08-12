@@ -30,7 +30,7 @@ if [ -z "$OVNEncapIP" ]; then
     echo "ERROR: Could not find any global IP address on interface {{ .OVNEncapNIC }}"
     exit 1
 fi
-ovs-vsctl --no-wait set open . external-ids:ovn-encap-ip=${OVNEncapIP}
+ovs-vsctl --no-wait set open . "external-ids:ovn-encap-ip=${OVNEncapIP}"
 
 # Before starting vswitchd, block it from flushing existing datapath flows.
 ovs-vsctl --no-wait set open_vswitch . other_config:flow-restore-wait=true

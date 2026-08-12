@@ -85,6 +85,8 @@ spec:
                   availability-zones:
                     default: []
                     items:
+                      maxLength: 255
+                      pattern: ^[^:,\s]+$
                       type: string
                     type: array
                   enable-chassis-as-gateway:
@@ -95,6 +97,8 @@ spec:
                     type: boolean
                   ovn-bridge:
                     default: br-int
+                    maxLength: 15
+                    pattern: ^[^/\\\s]+$
                     type: string
                   ovn-encap-tos:
                     default: "0"

@@ -26,8 +26,8 @@ OVSLogLevel={{.OVSLogLevel}}
 OVNLogLevel={{.OVNLogLevel}}
 
 function configure_ovn_external_ids {
-    ovs-vsctl set open . external-ids:ovn-encap-tos=${OVNEncapTos}
-    ovs-vsctl set open . external-ids:ovn-remote-probe-interval="${OVNRemoteProbeInterval}"
+    ovs-vsctl set open . "external-ids:ovn-encap-tos=${OVNEncapTos}"
+    ovs-vsctl set open . "external-ids:ovn-remote-probe-interval=${OVNRemoteProbeInterval}"
 }
 
 function configure_log_level {
