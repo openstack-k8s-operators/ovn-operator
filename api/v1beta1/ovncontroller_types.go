@@ -46,6 +46,10 @@ const (
 	ServiceNameOVS = "ovn-controller-ovs"
 	// ServiceNameOVNControllerMetrics - ovn-controller-metrics service name
 	ServiceNameOVNControllerMetrics = "ovn-controller-metrics"
+
+	// OVNHardenedOVSSecurityContextLabel gates hardened security contexts on the
+	// ovn-controller-ovs DaemonSet. When absent or false, legacy contexts are used.
+	OVNHardenedOVSSecurityContextLabel = "ovn.openstack.org/hardened-ovs-security-context"
 )
 
 // OVNControllerSpec defines the desired state of OVNController

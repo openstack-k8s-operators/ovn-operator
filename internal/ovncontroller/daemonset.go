@@ -170,6 +170,7 @@ func CreateOVSDaemonSet(
 	labels map[string]string,
 	annotations map[string]string,
 	topology *topologyv1.Topology,
+	hardened bool,
 ) *appsv1.DaemonSet {
 	//
 	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
@@ -227,12 +228,14 @@ func CreateOVSDaemonSet(
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 
+	ovsContainerSecurityContext := getOVSContainerSecurityContext(hardened, privilegedOVSCapabilities)
+
 	initContainers := []corev1.Container{
 		{
 			Name:            "ovsdb-server-init",
 			Command:         []string{"/usr/local/bin/container-scripts/init-ovsdb-server.sh"},
 			Image:           instance.Spec.OvsContainerImage,
-			SecurityContext: getPrivilegedHostPathSecurityContext(privilegedOVSCapabilities),
+			SecurityContext: ovsContainerSecurityContext,
 			Env:             env.MergeEnvs([]corev1.EnvVar{}, envVars),
 			VolumeMounts:    GetOVSDbVolumeMounts(),
 		},
@@ -251,7 +254,7 @@ func CreateOVSDaemonSet(
 				},
 			},
 			Image:           instance.Spec.OvsContainerImage,
-			SecurityContext: getPrivilegedHostPathSecurityContext(privilegedOVSCapabilities),
+			SecurityContext: ovsContainerSecurityContext,
 			Env:             env.MergeEnvs([]corev1.EnvVar{}, envVars),
 			VolumeMounts:    GetOVSDbVolumeMounts(),
 			// TODO: consider the fact that resources are now double booked
@@ -271,7 +274,7 @@ func CreateOVSDaemonSet(
 				},
 			},
 			Image:           instance.Spec.OvsContainerImage,
-			SecurityContext: getPrivilegedHostPathSecurityContext(privilegedOVSCapabilities),
+			SecurityContext: ovsContainerSecurityContext,
 			Env:             env.MergeEnvs([]corev1.EnvVar{}, envVars),
 			VolumeMounts:    GetVswitchdVolumeMounts(),
 			// TODO: consider the fact that resources are now double booked
@@ -296,7 +299,7 @@ func CreateOVSDaemonSet(
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
-					SecurityContext:    getPrivilegedDaemonSetPodSecurityContext(),
+					SecurityContext:    getOVSPodSecurityContext(hardened),
 					ServiceAccountName: instance.RbacResourceName(),
 					InitContainers:     initContainers,
 					Containers:         containers,

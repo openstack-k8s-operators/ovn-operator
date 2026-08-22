@@ -175,19 +175,80 @@ var _ = Describe("OVNController controller", func() {
 				Namespace: namespace,
 				Name:      "ovn-controller-ovs",
 			})
-			expectPrivilegedDaemonSetPodSecurityContext(ds.Spec.Template.Spec.SecurityContext)
-			expectPrivilegedHostPathSecurityContext(
+			expectLegacyOVSDaemonSetPodSecurityContext(ds.Spec.Template.Spec.SecurityContext)
+			expectLegacyOVSHostPathSecurityContext(
 				ds.Spec.Template.Spec.InitContainers[0].SecurityContext,
 				true,
 			)
-			expectPrivilegedHostPathSecurityContext(
+			expectLegacyOVSHostPathSecurityContext(
 				ds.Spec.Template.Spec.Containers[0].SecurityContext,
 				true,
 			)
-			expectPrivilegedHostPathSecurityContext(
+			expectLegacyOVSHostPathSecurityContext(
 				ds.Spec.Template.Spec.Containers[1].SecurityContext,
 				true,
 			)
+		})
+
+		When("hardened OVS security context is enabled via annotation", func() {
+			BeforeEach(func() {
+				Eventually(func(g Gomega) {
+					ovnController := GetOVNController(OVNControllerName)
+					if ovnController.Annotations == nil {
+						ovnController.Annotations = map[string]string{}
+					}
+					ovnController.Annotations[ovnv1.OVNHardenedOVSSecurityContextLabel] = "true"
+					g.Expect(k8sClient.Update(ctx, ovnController)).Should(Succeed())
+				}, timeout, interval).Should(Succeed())
+			})
+
+			It("should configure hardened security contexts on the OVS DaemonSet", func() {
+				daemonSetNameOVS := types.NamespacedName{
+					Namespace: namespace,
+					Name:      "ovn-controller-ovs",
+				}
+				Eventually(func(g Gomega) {
+					ds := &appsv1.DaemonSet{}
+					g.Expect(k8sClient.Get(ctx, daemonSetNameOVS, ds)).Should(Succeed())
+					podSecurityContext := ds.Spec.Template.Spec.SecurityContext
+					g.Expect(podSecurityContext).NotTo(BeNil())
+					g.Expect(podSecurityContext.SeccompProfile).NotTo(BeNil())
+					g.Expect(podSecurityContext.SeccompProfile.Type).To(Equal(corev1.SeccompProfileTypeRuntimeDefault))
+
+					for _, container := range append(ds.Spec.Template.Spec.InitContainers, ds.Spec.Template.Spec.Containers...) {
+						securityContext := container.SecurityContext
+						g.Expect(securityContext).NotTo(BeNil())
+						g.Expect(securityContext.AllowPrivilegeEscalation).NotTo(BeNil())
+						g.Expect(*securityContext.AllowPrivilegeEscalation).To(BeTrue())
+						g.Expect(securityContext.ReadOnlyRootFilesystem).NotTo(BeNil())
+						g.Expect(*securityContext.ReadOnlyRootFilesystem).To(BeFalse())
+						g.Expect(securityContext.Privileged).NotTo(BeNil())
+						g.Expect(*securityContext.Privileged).To(BeTrue())
+						g.Expect(securityContext.SeccompProfile).NotTo(BeNil())
+						g.Expect(securityContext.SeccompProfile.Type).To(Equal(corev1.SeccompProfileTypeRuntimeDefault))
+					}
+				}, timeout, interval).Should(Succeed())
+			})
+		})
+
+		When("hardened OVS security context annotation is invalid", func() {
+			BeforeEach(func() {
+				Eventually(func(g Gomega) {
+					ovnController := GetOVNController(OVNControllerName)
+					if ovnController.Annotations == nil {
+						ovnController.Annotations = map[string]string{}
+					}
+					ovnController.Annotations[ovnv1.OVNHardenedOVSSecurityContextLabel] = "maybe"
+					g.Expect(k8sClient.Update(ctx, ovnController)).Should(Succeed())
+				}, timeout, interval).Should(Succeed())
+			})
+
+			It("should report ServiceConfigReady as false", func() {
+				Eventually(func(g Gomega) {
+					conditions := OVNControllerConditionGetter(OVNControllerName)
+					g.Expect(conditions.IsFalse(condition.ServiceConfigReadyCondition)).To(BeTrue())
+				}, timeout, interval).Should(Succeed())
+			})
 		})
 
 		When("OVNDBCluster instances are available without networkAttachments", func() {

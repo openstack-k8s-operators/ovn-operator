@@ -212,50 +212,35 @@ metadata:
 spec:
   template:
     spec:
-      securityContext:
-        seccompProfile:
-          type: RuntimeDefault
       initContainers:
       - name: ovsdb-server-init
         securityContext:
-          allowPrivilegeEscalation: true
           capabilities:
             add:
             - NET_ADMIN
             - SYS_ADMIN
             - SYS_NICE
           privileged: true
-          readOnlyRootFilesystem: false
           runAsUser: 0
-          seccompProfile:
-            type: RuntimeDefault
       containers:
       - name: ovsdb-server
         securityContext:
-          allowPrivilegeEscalation: true
           capabilities:
             add:
             - NET_ADMIN
             - SYS_ADMIN
             - SYS_NICE
           privileged: true
-          readOnlyRootFilesystem: false
           runAsUser: 0
-          seccompProfile:
-            type: RuntimeDefault
       - name: ovs-vswitchd
         securityContext:
-          allowPrivilegeEscalation: true
           capabilities:
             add:
             - NET_ADMIN
             - SYS_ADMIN
             - SYS_NICE
           privileged: true
-          readOnlyRootFilesystem: false
           runAsUser: 0
-          seccompProfile:
-            type: RuntimeDefault
 status:
   numberMisscheduled: 0
 ---
@@ -327,50 +312,35 @@ metadata:
     service: ovn-controller-ovs
   generateName: ovn-controller-ovs-
 spec:
-  securityContext:
-    seccompProfile:
-      type: RuntimeDefault
   initContainers:
   - name: ovsdb-server-init
     securityContext:
-      allowPrivilegeEscalation: true
       capabilities:
         add:
         - NET_ADMIN
         - SYS_ADMIN
         - SYS_NICE
       privileged: true
-      readOnlyRootFilesystem: false
       runAsUser: 0
-      seccompProfile:
-        type: RuntimeDefault
   containers:
   - name: ovsdb-server
     securityContext:
-      allowPrivilegeEscalation: true
       capabilities:
         add:
         - NET_ADMIN
         - SYS_ADMIN
         - SYS_NICE
       privileged: true
-      readOnlyRootFilesystem: false
       runAsUser: 0
-      seccompProfile:
-        type: RuntimeDefault
   - name: ovs-vswitchd
     securityContext:
-      allowPrivilegeEscalation: true
       capabilities:
         add:
         - NET_ADMIN
         - SYS_ADMIN
         - SYS_NICE
       privileged: true
-      readOnlyRootFilesystem: false
       runAsUser: 0
-      seccompProfile:
-        type: RuntimeDefault
 status:
   phase: Running
   containerStatuses:

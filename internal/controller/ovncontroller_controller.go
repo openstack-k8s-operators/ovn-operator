@@ -39,6 +39,7 @@ import (
 
 	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/annotations"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/configmap"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/daemonset"
@@ -662,9 +663,25 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	instance.Status.DesiredNumberScheduled = dset.GetDaemonSet().Status.DesiredNumberScheduled
 	instance.Status.NumberReady = dset.GetDaemonSet().Status.NumberReady
 
+	hardenedOVS, exists, err := annotations.GetBoolFromAnnotation(
+		instance.GetAnnotations(), ovnv1.OVNHardenedOVSSecurityContextLabel)
+	if err != nil {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.ServiceConfigReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.ServiceConfigReadyErrorMessage,
+			err.Error()))
+		return ctrl.Result{}, err
+	}
+	if !exists {
+		hardenedOVS = false
+	}
+	Log.Info("Reconciling OVS DaemonSet security context mode", "hardenedOVS", hardenedOVS)
+
 	// Define a new DaemonSet object for OVS (ovsdb-server + ovs-vswitchd)
 	ovsdset := daemonset.NewDaemonSet(
-		ovncontroller.CreateOVSDaemonSet(instance, inputHash, ovsServiceLabels, serviceAnnotations, topology),
+		ovncontroller.CreateOVSDaemonSet(instance, inputHash, ovsServiceLabels, serviceAnnotations, topology, hardenedOVS),
 		time.Duration(5)*time.Second,
 	)
 

@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ovn-controller-ovs
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: ovsdb-server-init
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+            - SYS_ADMIN
+            - SYS_NICE
+          privileged: true
+          runAsUser: 0
+      containers:
+      - name: ovsdb-server
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+            - SYS_ADMIN
+            - SYS_NICE
+          privileged: true
+          runAsUser: 0
+      - name: ovs-vswitchd
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+            - SYS_ADMIN
+            - SYS_NICE
+          privileged: true
+          runAsUser: 0
+status:
+  numberMisscheduled: 0
