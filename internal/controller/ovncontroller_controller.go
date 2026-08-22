@@ -387,6 +387,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 
 	// ConfigMap
 	configMapVars := make(map[string]env.Setter)
+	TLSConfigMapVars := make(map[string]env.Setter)
 	// ConfigMap for metrics daemonset
 	metricsConfigMapVars := make(map[string]env.Setter)
 
@@ -426,7 +427,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		}
 
 		if hash != "" {
-			configMapVars[tls.CABundleKey] = env.SetValue(hash)
+			TLSConfigMapVars[tls.CABundleKey] = env.SetValue(hash)
 		}
 	}
 
@@ -450,7 +451,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 				err.Error()))
 			return ctrl.Result{}, err
 		}
-		configMapVars[tls.TLSHashName] = env.SetValue(hash)
+		TLSConfigMapVars[tls.TLSHashName] = env.SetValue(hash)
 	}
 
 	//
@@ -483,12 +484,21 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 	// all cert input checks out so report InputReady
 	instance.Status.Conditions.MarkTrue(condition.TLSInputReadyCondition, condition.InputReadyMessage)
+	OVNConfigMapVars := make(map[string]env.Setter)
+
+	// Need to merge configMapVars with TLSMapVars to create OVNInputHash
+	for k, v := range TLSConfigMapVars {
+		OVNConfigMapVars[k] = v
+	}
+	for k, v := range OVNConfigMapVars {
+		OVNConfigMapVars[k] = v
+	}
 
 	//
 	// create Configmap required for OVNController input
 	// - %-scripts configmap holding scripts to e.g. bootstrap the service
 	//
-	err = r.generateServiceConfigMaps(ctx, helper, instance, &configMapVars)
+	err = r.generateServiceConfigMaps(ctx, helper, instance, &OVNConfigMapVars)
 	if err != nil {
 		instance.Status.Conditions.Set(condition.FalseCondition(
 			condition.ServiceConfigReadyCondition,
@@ -503,8 +513,9 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	// create hash over all the different input resources to identify if any those changed
 	// and a restart/recreate is required.
 	//
-	inputHash, hashChanged, err := r.createHashOfInputHashes(ctx, instance, configMapVars)
-	if err != nil {
+	OVNinputHash, OVNhashChanged, OVNerr := r.createHashOfInputHashesOVN(ctx, instance, OVNConfigMapVars)
+	OVSinputHash, OVShashChanged, OVSerr := r.createHashOfInputHashesOVS(ctx, instance, configMapVars)
+	if OVNerr != nil || OVSerr != nil {
 		instance.Status.Conditions.Set(condition.FalseCondition(
 			condition.ServiceConfigReadyCondition,
 			condition.ErrorReason,
@@ -512,11 +523,13 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 			condition.ServiceConfigReadyErrorMessage,
 			err.Error()))
 		return ctrl.Result{}, err
-	} else if hashChanged {
+	}
+	if OVNhashChanged || OVShashChanged {
 		// Hash changed and instance status should be updated (which will be done by main defer func),
 		// so we need to return and reconcile again
 		return ctrl.Result{}, nil
 	}
+
 	// TODO(slaweq): configure service (ovn controller and ovs settings)
 	instance.Status.Conditions.MarkTrue(condition.ServiceConfigReadyCondition, condition.ServiceConfigReadyMessage)
 
@@ -637,7 +650,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 
 	// Define a new DaemonSet object for OVNController
 	dset := daemonset.NewDaemonSet(
-		ovncontroller.CreateOVNDaemonSet(instance, inputHash, ovnServiceLabels, topology),
+		ovncontroller.CreateOVNDaemonSet(instance, OVNinputHash, ovnServiceLabels, topology),
 		time.Duration(5)*time.Second,
 	)
 
@@ -664,7 +677,7 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 
 	// Define a new DaemonSet object for OVS (ovsdb-server + ovs-vswitchd)
 	ovsdset := daemonset.NewDaemonSet(
-		ovncontroller.CreateOVSDaemonSet(instance, inputHash, ovsServiceLabels, serviceAnnotations, topology),
+		ovncontroller.CreateOVSDaemonSet(instance, OVSinputHash, ovsServiceLabels, serviceAnnotations, topology),
 		time.Duration(5)*time.Second,
 	)
 
@@ -972,6 +985,24 @@ func (r *OVNControllerReconciler) generateServiceConfigMaps(
 	return configmap.EnsureConfigMaps(ctx, h, instance, extraCms, nil)
 }
 
+// createHashOfInputsHashesOVN - calls create Hash of Hashes to modify the OVN input hash
+func (r *OVNControllerReconciler) createHashOfInputHashesOVN(
+	ctx context.Context,
+	instance *ovnv1.OVNController,
+	envVars map[string]env.Setter,
+) (string, bool, error) {
+	return r.createHashOfInputHashes(ctx, instance, envVars, ovnv1.OVNInputHash)
+}
+
+// createHashOfInputsHashesOVS - calls create Hash of Hashes to modify the OVS input hash
+func (r *OVNControllerReconciler) createHashOfInputHashesOVS(
+	ctx context.Context,
+	instance *ovnv1.OVNController,
+	envVars map[string]env.Setter,
+) (string, bool, error) {
+	return r.createHashOfInputHashes(ctx, instance, envVars, ovnv1.OVSInputHash)
+}
+
 // createHashOfInputHashes - creates a hash of hashes which gets added to the resources which requires a restart
 // if any of the input resources change, like configs, passwords, ...
 //
@@ -980,6 +1011,7 @@ func (r *OVNControllerReconciler) createHashOfInputHashes(
 	ctx context.Context,
 	instance *ovnv1.OVNController,
 	envVars map[string]env.Setter,
+	hashkey string,
 ) (string, bool, error) {
 	Log := r.GetLogger(ctx)
 
@@ -990,7 +1022,7 @@ func (r *OVNControllerReconciler) createHashOfInputHashes(
 	if err != nil {
 		return hash, changed, err
 	}
-	if hashMap, changed = util.SetHash(instance.Status.Hash, common.InputHashName, hash); changed {
+	if hashMap, changed = util.SetHash(instance.Status.Hash, hashkey, hash); changed {
 		instance.Status.Hash = hashMap
 		Log.Info(fmt.Sprintf("Input maps hash %s - %s", common.InputHashName, hash))
 	}
