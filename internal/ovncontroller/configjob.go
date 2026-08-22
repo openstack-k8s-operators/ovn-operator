@@ -49,6 +49,15 @@ func ConfigJob(
 		return nil, err
 	}
 
+	ovsPodUIDs, err := getOVSPodUIDs(
+		ctx,
+		k8sClient,
+		instance,
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	internalEndpoint, err := sbCluster.GetInternalEndpoint()
 	if err != nil {
 		return nil, err
@@ -66,6 +75,11 @@ func ConfigJob(
 	envVars["OVSLogLevel"] = env.SetValue(instance.Spec.OVSLogLevel)
 
 	for _, ovnPod := range ovnPods.Items {
+		// Include the OVS pod UID for this node so that the config job
+		// hash changes when the OVS pod is recreated (e.g. after node
+		// replacement), which forces external_ids reconfiguration.
+		envVars["OVSPodUID"] = env.SetValue(ovsPodUIDs[ovnPod.Spec.NodeName])
+
 		commands := []string{
 			"/usr/local/bin/container-scripts/init.sh",
 			"&&",
