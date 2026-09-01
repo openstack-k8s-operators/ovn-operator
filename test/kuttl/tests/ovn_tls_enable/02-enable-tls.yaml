@@ -1,6 +1,12 @@
 apiVersion: kuttl.dev/v1beta1
 kind: TestStep
 commands:
+  # Snapshot the ovn-controller-ovs pods (name + uid) BEFORE enabling TLS, so
+  # 02-assert can verify they are not restarted/recreated by the TLS rollout.
+  - script: |
+      oc get pods -n $NAMESPACE -l service=ovn-controller-ovs -o json | \
+        jq -r '.items[] | "\(.metadata.name) \(.metadata.uid)"' | \
+        sort > /tmp/ovn-controller-ovs-snapshot-$NAMESPACE.txt
   - script: |
       cp ../../../../config/samples/ovn_* enable_tls/
       oc kustomize enable_tls | oc apply -n $NAMESPACE -f -
