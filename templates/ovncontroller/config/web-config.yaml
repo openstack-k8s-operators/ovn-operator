@@ -1,0 +1,5 @@
+{{- if .TLS }}
+tls_server_config:
+  cert_file: {{ .OVN_METRICS_CERT_PATH }}
+  key_file: {{ .OVN_METRICS_KEY_PATH }}
+{{- end }}
