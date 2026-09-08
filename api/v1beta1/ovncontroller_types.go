@@ -45,6 +45,8 @@ const (
 
 	// ServiceNameOVNController - ovn-controller service name
 	ServiceNameOVNController = "ovn-controller"
+	// ServiceNameOVSController - ovn-controller-ovs service name
+	ServiceNameOVSController = "ovn-controller-ovs"
 	// TODO: remove when all external consumers switch to ServiceNameOVNController
 	ServiceNameOvnController = "ovn-controller"
 
