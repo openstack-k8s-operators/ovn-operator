@@ -420,6 +420,36 @@ func expectPrivilegedHostPathSecurityContext(
 	}
 }
 
+func expectLegacyOVSDaemonSetPodSecurityContext(podSecurityContext *corev1.PodSecurityContext) {
+	if podSecurityContext == nil {
+		return
+	}
+	Expect(podSecurityContext.SeccompProfile).To(BeNil())
+}
+
+func expectLegacyOVSHostPathSecurityContext(
+	securityContext *corev1.SecurityContext,
+	withOVSCapabilities bool,
+) {
+	Expect(securityContext).NotTo(BeNil())
+	Expect(securityContext.Privileged).NotTo(BeNil())
+	Expect(*securityContext.Privileged).To(BeTrue())
+	Expect(securityContext.RunAsUser).NotTo(BeNil())
+	Expect(*securityContext.RunAsUser).To(Equal(int64(0)))
+	Expect(securityContext.AllowPrivilegeEscalation).To(BeNil())
+	Expect(securityContext.ReadOnlyRootFilesystem).To(BeNil())
+	Expect(securityContext.SeccompProfile).To(BeNil())
+
+	if withOVSCapabilities {
+		Expect(securityContext.Capabilities).NotTo(BeNil())
+		Expect(securityContext.Capabilities.Add).To(ContainElements(
+			corev1.Capability("NET_ADMIN"),
+			corev1.Capability("SYS_ADMIN"),
+			corev1.Capability("SYS_NICE"),
+		))
+	}
+}
+
 // Topology functions
 
 // GetSampleDaemonSetTopologySpec - A sample (and opinionated) Topology Spec used to
