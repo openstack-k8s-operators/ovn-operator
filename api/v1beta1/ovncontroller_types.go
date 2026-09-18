@@ -39,9 +39,9 @@ const (
 	// Container image fall-back defaults
 
 	// OVNControllerOVSContainerImage is the fall-back container image for OVNController ovs-*
-	OVNControllerOVSContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-base:current-podified"
+	OVNControllerOVSContainerImage = "quay.io/openstack-s2i-containers/openstack-ovn-base:master-latest"
 	// OVNControllerContainerImage is the fall-back container image for OVNController ovn-controller
-	OVNControllerContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-controller:current-podified"
+	OVNControllerContainerImage = "quay.io/openstack-s2i-containers/openstack-ovn-controller:master-latest"
 
 	// ServiceNameOVNController - ovn-controller service name
 	ServiceNameOVNController = "ovn-controller"
