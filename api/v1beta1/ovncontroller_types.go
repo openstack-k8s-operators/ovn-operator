@@ -17,6 +17,9 @@ limitations under the License.
 package v1beta1
 
 import (
+	"encoding/json"
+	"sort"
+
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -250,6 +253,28 @@ type Bond struct {
 	// +listType=set
 	// +kubebuilder:default={}
 	Links []string `json:"links"`
+}
+
+// MarshalJSON implements json.Marshaler.
+// It creates a copy of BondConfig with sorted Links to guarantee deterministic JSON output.
+func (b Bond) MarshalJSON() ([]byte, error) {
+	// Copy and sort links to prevent mutating original struct
+	var sortedLinks []string
+	if b.Links != nil {
+		sortedLinks = make([]string, len(b.Links))
+		copy(sortedLinks, b.Links)
+		sort.Strings(sortedLinks)
+	}
+
+	// Alias to avoid infinite recursion during json.Marshal
+	type Alias Bond
+	return json.Marshal(&struct {
+		Links []string `json:"links,omitempty"`
+		Alias
+	}{
+		Links: sortedLinks,
+		Alias: (Alias)(b),
+	})
 }
 
 // RbacConditionsSet - set the conditions for the rbac object
