@@ -53,8 +53,8 @@ var _ = Describe("OVNController controller", func() {
 
 		It("should have the Spec fields initialized", func() {
 			OVNController := GetOVNController(OVNControllerName)
-			Expect(OVNController.Spec.OvsContainerImage).Should(Equal("quay.io/podified-antelope-centos9/openstack-ovn-base:current-podified"))
-			Expect(OVNController.Spec.OvnContainerImage).Should(Equal("quay.io/podified-antelope-centos9/openstack-ovn-controller:current-podified"))
+			Expect(OVNController.Spec.OvsContainerImage).Should(Equal("quay.io/openstack-s2i-containers/openstack-ovn-base:master-latest"))
+			Expect(OVNController.Spec.OvnContainerImage).Should(Equal("quay.io/openstack-s2i-containers/openstack-ovn-controller:master-latest"))
 		})
 
 		It("should have the Status fields initialized", func() {

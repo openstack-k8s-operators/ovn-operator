@@ -30,7 +30,7 @@ const (
 	// Container image fall-back defaults
 
 	// OVNNorthdContainerImage is the fall-back container image for OVNNorthd
-	OVNNorthdContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-northd:current-podified"
+	OVNNorthdContainerImage = "quay.io/openstack-s2i-containers/openstack-ovn-northd:master-latest"
 	// OpenstackNetworkExporterImage is the fall-back container image for openstack-network-exporter
 	OpenstackNetworkExporterImage = "quay.io/openstack-k8s-operators/openstack-network-exporter:current-podified"
 	// ServiceNameOVNNorthd -
