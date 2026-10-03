@@ -82,7 +82,7 @@ func (r *OVNControllerReconciler) GetClient() client.Client {
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovncontrollers/finalizers,verbs=update;patch
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete;
-//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
+//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;delete;
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;get;list;patch;update;watch
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;patch;update;delete;
@@ -692,9 +692,33 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 	Log.Info("Reconciling OVS DaemonSet security context mode", "hardenedOVS", hardenedOVS)
 
+	// (averdagu) Set new stablished hash for OVS daemonset (netAttach + NicMappings)
+	// Since ovs-controller daemonset has been updated to onDelete strategy
+	// it won't automatically recreate the pod on CR update, this works when
+	// the image is changed (as it's responsability of the user to delete the
+	// running pods so change takes place) but it needs to restart the containers
+	// if either networkAttachments or NicMappings had been changed, adding
+	// a new Hash to know whenever these values had been changed to delete the pods.
+	networkChangeHashData := map[string]interface{}{
+		"networkAttachment": instance.Spec.NetworkAttachment,
+		"nicMappings":       instance.Spec.NicMappings,
+		"bondConfig":        instance.Spec.BondConfiguration,
+	}
+
+	// Check if networkHash changed
+	networkHash, netHashChange, netErr := r.createHashOfNetworkHashes(ctx, r.Client, instance, networkChangeHashData)
+	if netErr != nil {
+		Log.Info(fmt.Sprintf("Error on create Hash of network: %s", err))
+		return ctrlResult, err
+	}
+	Log.Info(fmt.Sprintf("ARNAU - NetworkHash (%s), netHashChange (%t)", networkHash, netHashChange))
+
+	// if the hash have changed, after ovsdset resources have been updated, it needs to kill all
+	// pods that still have old hash
+
 	// Define a new DaemonSet object for OVS (ovsdb-server + ovs-vswitchd)
 	ovsdset := daemonset.NewDaemonSet(
-		ovncontroller.CreateOVSDaemonSet(instance, OVSinputHash, ovsServiceLabels, serviceAnnotations, topology, hardenedOVS),
+		ovncontroller.CreateOVSDaemonSet(instance, OVSinputHash, networkHash, ovsServiceLabels, serviceAnnotations, topology, hardenedOVS),
 		time.Duration(5)*time.Second,
 	)
 
@@ -714,6 +738,24 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 			condition.SeverityInfo,
 			condition.DeploymentReadyRunningMessage))
 		return ctrlResult, nil
+	}
+
+	// If network hash has changed, we need to delete current outaded ovs-pods
+	Log.Info(fmt.Sprintf("ARNAU - netHashChange: %t", netHashChange))
+	if netHashChange {
+		// Check if we have a deletion in progress
+		inProgress, err := r.ovsDeleteInProgress(ctx, instance, networkHash)
+		if err != nil {
+			Log.Info(fmt.Sprintf("Error: %s", err))
+		}
+		if inProgress {
+			// Wait until deletion has been finalized, to mimic
+			// a rolling update
+			return ctrl.Result{}, nil
+		}
+		// Delete the pods where the network hash is different from expected
+		// Get all current network hashes from all ovn-controller-ovs pods
+		return r.deleteOlderOVSPods(ctx, instance, networkHash)
 	}
 
 	instance.Status.OVSNumberReady = ovsdset.GetDaemonSet().Status.NumberReady
@@ -1028,6 +1070,39 @@ func (r *OVNControllerReconciler) createHashOfInputHashes(
 	return hash, changed, nil
 }
 
+func (r *OVNControllerReconciler) createHashOfNetworkHashes(
+	ctx context.Context,
+	k8sClient client.Client,
+	instance *ovnv1.OVNController,
+	netVars map[string]any,
+) (string, bool, error) {
+	Log := r.GetLogger(ctx)
+
+	networkHash, netErr := util.ObjectHash(netVars)
+	changed := false
+	if netErr != nil {
+		return networkHash, changed, netErr
+	}
+	// Get all current network hashes from all ovn-controller-ovs pods
+	podList, err := ovncontroller.GetOVSControllerPods(ctx, k8sClient, instance)
+	if err != nil {
+		return networkHash, changed, err
+	}
+	for _, ovsPod := range podList.Items {
+		for _, podEnv := range ovsPod.Spec.Containers[0].Env {
+			if podEnv.Name == "NETWORK_HASH" {
+				if podEnv.Value != networkHash {
+					Log.Info(fmt.Sprintf("Hash of network the Pod: %s has changed the network hash: %s (old) - %s (new)", ovsPod.Name, podEnv.Value, networkHash))
+					changed = true
+					return networkHash, changed, nil
+				}
+			}
+		}
+	}
+
+	return networkHash, changed, nil
+}
+
 // createMetricsHashOfInputHashes - creates a metrics-specific hash of hashes for the metrics daemonset
 // This is separate from the main config hash to avoid unnecessary restarts when non-metrics configs change
 func (r *OVNControllerReconciler) createMetricsHashOfInputHashes(
@@ -1047,6 +1122,120 @@ func (r *OVNControllerReconciler) createMetricsHashOfInputHashes(
 		Log.Info(fmt.Sprintf("Metrics input maps hash %s - %s", "MetricsInputHashName", hash))
 	}
 	return hash, nil
+}
+
+// OVSDeleteInProgress - Check if the update of the pods is still in progress
+func (r *OVNControllerReconciler) ovsDeleteInProgress(
+	ctx context.Context,
+	instance *ovnv1.OVNController,
+	networkHash string,
+) (bool, error) {
+	Log := r.GetLogger(ctx)
+	inProgress := false
+	networkHashFound := false
+
+	podList, err := ovncontroller.GetOVSControllerPods(ctx, r.Client, instance)
+	if err != nil {
+		Log.Info(fmt.Sprintf("Error: %s", err))
+		return true, err
+	}
+	/*podJSON, err := json.MarshalIndent(ovsPod, "", "  ")
+	if err != nil {
+		Log.Error(err, fmt.Sprintf("Failed to marshal pod %s to JSON", ovsPod.Name))
+	} else {
+		// Print directly to stdout/logs
+		Log.Info(fmt.Sprintf("Pod Info (%s):\n%s\n", ovsPod.Name, string(podJSON)))
+	}*/
+	// Need to check which pod needs to be restarted
+	for _, ovsPod := range podList.Items {
+		networkHashFound = false
+		for _, podEnv := range ovsPod.Spec.Containers[0].Env {
+			if podEnv.Name == "NETWORK_HASH" {
+				networkHashFound = true
+				if podEnv.Value == networkHash {
+					// This is a new pod, check if it's Running
+					// Check that all pods are running/terminating
+
+					// Check that those structs are not nil, if are nil it means it hadn't been pick up yet by kubelet
+					if ovsPod.Status.InitContainerStatuses == nil || ovsPod.Status.ContainerStatuses == nil {
+						inProgress = true
+						return inProgress, nil
+					}
+
+					// Init containers needs to be Terminated and with exitCode 0
+					for _, initContainerStatus := range ovsPod.Status.InitContainerStatuses {
+						if initContainerStatus.State.Running != nil || initContainerStatus.State.Waiting != nil {
+							// InitContainerStatus is either still running or being created
+							inProgress = true
+							return inProgress, nil
+						}
+					}
+
+					// Containers needs to be running
+					for _, podStatus := range ovsPod.Status.ContainerStatuses {
+						// Pod is not running yet or is running but not ready
+						if podStatus.State.Running == nil || !podStatus.Ready {
+							inProgress = true
+							return inProgress, nil
+						}
+					}
+					// Check pod overall status
+					Log.Info(fmt.Sprintf("Pod name (%s) status: %s", ovsPod.Name, ovsPod.Status.Phase))
+					if ovsPod.Status.Phase != "Running" {
+						Log.Info(fmt.Sprintf("Pod name (%s) status: %s", ovsPod.Name, ovsPod.Status.Phase))
+						inProgress = true
+						return inProgress, nil
+					}
+				} else {
+					// Pod still has the old network Hash, check if any of those are in terminating state
+					if !ovsPod.DeletionTimestamp.IsZero() {
+						// Pod has deletionTimestamp it's scheduled for terminating
+						inProgress = true
+						return inProgress, nil
+					}
+				}
+			}
+		}
+		if !networkHashFound {
+			// pod didn't have the network_hash env variable
+			Log.Info(fmt.Sprintf("ARNAU - Pod %s has no network_hash", ovsPod.Name))
+		}
+	}
+	return inProgress, nil
+}
+
+// deleteOlderOVSPods - Deletes OVS pods which has an older NETWORK_HASH
+func (r *OVNControllerReconciler) deleteOlderOVSPods(
+	ctx context.Context,
+	instance *ovnv1.OVNController,
+	networkHash string,
+) (ctrl.Result, error) {
+	Log := r.GetLogger(ctx)
+
+	podList, err := ovncontroller.GetOVSControllerPods(ctx, r.Client, instance)
+	if err != nil {
+		Log.Info(fmt.Sprintf("Error: %s", err))
+		return ctrl.Result{}, err
+	}
+	// Need to check which pod needs to be restarted
+	for _, ovsPod := range podList.Items {
+		for _, podEnv := range ovsPod.Spec.Containers[0].Env {
+			if podEnv.Name == "NETWORK_HASH" {
+				if podEnv.Value != networkHash {
+					Log.Info(fmt.Sprintf("deleteOlderOVSPods Pod: %s have outdated hash, deleting pod", ovsPod.Name))
+					err := r.Delete(ctx, &ovsPod)
+					if err != nil {
+						Log.Info(fmt.Sprintf("ERROR deleteOlderOVSPods: %s", err))
+						return ctrl.Result{}, err
+					}
+
+					return ctrl.Result{Requeue: true}, nil
+				}
+			}
+		}
+	}
+
+	return ctrl.Result{}, nil
 }
 
 // isDaemonSetRolloutComplete checks if a DaemonSet rollout is complete and all pods are ready
