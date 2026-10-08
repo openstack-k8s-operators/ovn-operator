@@ -43,12 +43,33 @@ func getOVNControllerPods(
 	instance *ovnv1.OVNController,
 ) (*corev1.PodList, error) {
 
+	return getControllerPods(ctx, k8sClient, instance, ovnv1.ServiceNameOVNController)
+}
+
+// GetOVSControllerPods - returns a list of all pods with service=ovn-controller-ovs
+func GetOVSControllerPods(
+	ctx context.Context,
+	k8sClient client.Client,
+	instance *ovnv1.OVNController,
+) (*corev1.PodList, error) {
+
+	return getControllerPods(ctx, k8sClient, instance, ovnv1.ServiceNameOVS)
+}
+
+// getControllerPods - generic function that returns a list of all pods with service
+func getControllerPods(
+	ctx context.Context,
+	k8sClient client.Client,
+	instance *ovnv1.OVNController,
+	service string,
+) (*corev1.PodList, error) {
+
 	podList := &corev1.PodList{}
 	podListOpts := &client.ListOptions{
 		Namespace: instance.Namespace,
 	}
 	client.MatchingLabels{
-		"service": ovnv1.ServiceNameOVNController,
+		"service": service,
 	}.ApplyToList(podListOpts)
 
 	if err := k8sClient.List(ctx, podList, podListOpts); err != nil {

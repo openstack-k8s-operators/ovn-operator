@@ -6,3 +6,19 @@
     vars:
       cifmw_test_operator_tempest_include_list: |
         neutron_tempest_plugin.scenario
+
+- job:
+    name: ovn-operator-edpm-baremetal-minor-update
+    parent: cifmw-crc-podified-edpm-baremetal-minor-update
+    dependencies: ["openstack-k8s-operators-content-provider"]
+    irrelevant-files:
+      - .*/*.md
+      - ^\..*$
+      - ^docs/.*$
+      - ^LICENSE$
+      - ^OWNERS$
+      - ^OWNERS_ALIASES$
+      - ^PROJECT$
+      - ^README.md$
+      - tests?\/functional
+      - roles/.*/molecule/.*
