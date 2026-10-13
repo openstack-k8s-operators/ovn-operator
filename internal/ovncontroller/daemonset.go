@@ -167,6 +167,7 @@ func CreateOVNDaemonSet(
 func CreateOVSDaemonSet(
 	instance *ovnv1.OVNController,
 	configHash string,
+	networkHash string,
 	labels map[string]string,
 	annotations map[string]string,
 	topology *topologyv1.Topology,
@@ -227,6 +228,7 @@ func CreateOVSDaemonSet(
 
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
+	envVars["NETWORK_HASH"] = env.SetValue(networkHash)
 
 	ovsContainerSecurityContext := getOVSContainerSecurityContext(hardened, privilegedOVSCapabilities)
 
@@ -293,6 +295,10 @@ func CreateOVSDaemonSet(
 		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
+			},
+			// Set the Update Strategy type specifically to OnDelete
+			UpdateStrategy: appsv1.DaemonSetUpdateStrategy{
+				Type: appsv1.OnDeleteDaemonSetStrategyType,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{

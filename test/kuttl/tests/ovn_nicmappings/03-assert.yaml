@@ -10,6 +10,7 @@ timeout: 300
 commands:
     - script: |
         controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller-ovs -o name|head -1)
+        oc rsh -n $NAMESPACE ${controller_pod} ip a show || exit 1
         oc rsh -n $NAMESPACE ${controller_pod} ip link show dev datacentre2 || exit 1
         oc rsh -n $NAMESPACE ${controller_pod} ip link show dev br-datacentre2 || exit 1
         oc rsh -n $NAMESPACE ${controller_pod} ovs-vsctl list-ports br-datacentre2 | grep datacentre2 || exit 1
