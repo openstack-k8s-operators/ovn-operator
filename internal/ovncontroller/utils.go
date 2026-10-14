@@ -58,3 +58,27 @@ func getOVNControllerPods(
 
 	return podList, nil
 }
+
+func getOVSPodUIDs(
+	ctx context.Context,
+	k8sClient client.Client,
+	instance *ovnv1.OVNController,
+) (map[string]string, error) {
+	podList := &corev1.PodList{}
+	podListOpts := &client.ListOptions{
+		Namespace: instance.Namespace,
+	}
+	client.MatchingLabels{
+		"service": ovnv1.ServiceNameOVS,
+	}.ApplyToList(podListOpts)
+
+	if err := k8sClient.List(ctx, podList, podListOpts); err != nil {
+		return nil, fmt.Errorf("error listing OVS pods for instance %s: %w", instance.Name, err)
+	}
+
+	uidsByNode := make(map[string]string)
+	for _, p := range podList.Items {
+		uidsByNode[p.Spec.NodeName] = string(p.UID)
+	}
+	return uidsByNode, nil
+}
