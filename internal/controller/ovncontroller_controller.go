@@ -82,7 +82,7 @@ func (r *OVNControllerReconciler) GetClient() client.Client {
 //+kubebuilder:rbac:groups=ovn.openstack.org,resources=ovncontrollers/finalizers,verbs=update;patch
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete;
-//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
+//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;get;list;patch;update;watch
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;patch;update;delete;
