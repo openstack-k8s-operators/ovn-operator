@@ -533,6 +533,7 @@ func GetMetricsConfigMap(
 		Type:      util.TemplateTypeNone,
 		AdditionalTemplate: map[string]string{
 			"openstack-network-exporter.yaml": "/ovncontroller/config/openstack-network-exporter.yaml",
+			"web-config.yaml":                 "/ovncontroller/config/web-config.yaml",
 		},
 		InstanceType:  instance.Kind,
 		ConfigOptions: templateParameters,
