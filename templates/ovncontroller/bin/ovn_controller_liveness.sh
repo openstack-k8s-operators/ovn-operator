@@ -17,8 +17,11 @@ check_ovn_controller_pid() {
 # Function to check the running status of ovn-controller
 check_ovn_controller_status() {
     # Capture output and check exit status
-    if ! output=$(ovn-appctl -t ovn-controller debug/status 2>&1); then
-        error_exit "ERROR - Failed to get status from ovn-controller, ovn-appctl exit status: $?"
+    if output=$(ovn-appctl -t ovn-controller debug/status 2>&1); then
+        :
+    else
+        status=$?
+        error_exit "ERROR - Failed to get status from ovn-controller, ovn-appctl exit status: ${status}, output: ${output}"
     fi
 
     if [ "$output" != "running" ]; then

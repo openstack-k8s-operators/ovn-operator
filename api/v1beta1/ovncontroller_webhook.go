@@ -94,6 +94,7 @@ func (r *OVNControllerSpecCore) ValidateCreate(basePath *field.Path, namespace s
 	// When a TopologyRef CR is referenced, fail if a different Namespace is
 	// referenced because is not supported
 	errors = append(errors, r.ValidateTopology(basePath, namespace)...)
+	errors = append(errors, r.ValidateProbes(basePath.Child("override", "probes"))...)
 
 	return errors
 }
@@ -102,12 +103,7 @@ func (r *OVNControllerSpecCore) ValidateCreate(basePath *field.Path, namespace s
 func (r *OVNController) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	ovncontrollerlog.Info("validate update", "name", r.Name)
 
-	errors := field.ErrorList{}
-	basePath := field.NewPath("spec")
-
-	// When a TopologyRef CR is referenced, fail if a different Namespace is
-	// referenced because is not supported
-	errors = append(errors, r.Spec.ValidateTopology(basePath, r.Namespace)...)
+	errors := r.Spec.OVNControllerSpecCore.ValidateCreate(field.NewPath("spec"), r.Namespace)
 
 	if len(errors) != 0 {
 		return nil, apierrors.NewInvalid(
@@ -118,17 +114,11 @@ func (r *OVNController) ValidateUpdate(old runtime.Object) (admission.Warnings, 
 }
 
 func (r OVNControllerSpec) ValidateUpdate(old OVNControllerSpec, basePath *field.Path, namespace string) field.ErrorList {
-	return r.OVNControllerSpecCore.ValidateCreate(basePath, namespace)
+	return r.OVNControllerSpecCore.ValidateUpdate(old, basePath, namespace)
 }
 
 func (r *OVNControllerSpecCore) ValidateUpdate(old OVNControllerSpec, basePath *field.Path, namespace string) field.ErrorList {
-	allErrs := field.ErrorList{}
-
-	// When a TopologyRef CR is referenced, fail if a different Namespace is
-	// referenced because is not supported
-	allErrs = append(allErrs, r.ValidateTopology(basePath, namespace)...)
-
-	return allErrs
+	return r.ValidateCreate(basePath, namespace)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
