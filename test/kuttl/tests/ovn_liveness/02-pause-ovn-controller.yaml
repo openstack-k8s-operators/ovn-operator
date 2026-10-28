@@ -3,10 +3,33 @@
 #
 # - Force one of the liveness checks to return fail in order to restart
 # ovn-controller
+# - First verify a temporary pause can recover within the configured tolerance
 #
 apiVersion: kuttl.dev/v1beta1
 kind: TestStep
 commands:
   - script: |
+      set -eu
+      oc patch -n "$NAMESPACE" ovncontroller ovncontroller-sample --type merge \
+        -p '{"spec":{"override":{"probes":{"livenessProbes":{"failureThreshold":8}}}}}'
+      # Wait for reconciliation to update the template before watching rollout.
+      for attempt in $(seq 1 60); do
+        threshold=$(oc get ds -n "$NAMESPACE" ovn-controller -o jsonpath='{.spec.template.spec.containers[0].livenessProbe.failureThreshold}')
+        if [ "$threshold" = 8 ]; then
+          break
+        fi
+        sleep 1
+      done
+      test "$threshold" = 8
+      oc rollout status -n "$NAMESPACE" ds/ovn-controller --timeout=300s
       controller_pod=$(oc get pod -n $NAMESPACE -l service=ovn-controller -o name|head -1)
+      before=$(oc get -n "$NAMESPACE" "$controller_pod" -o jsonpath='{.status.containerStatuses[0].restartCount}')
+      oc rsh -n "$NAMESPACE" "$controller_pod" ovn-appctl -t ovn-controller debug/pause
+      # Exceeds the default failure window but is within the override's window.
+      sleep 20
+      oc rsh -n "$NAMESPACE" "$controller_pod" ovn-appctl -t ovn-controller debug/resume
+      test "$(oc rsh -n "$NAMESPACE" "$controller_pod" ovn-appctl -t ovn-controller debug/status)" = running
+      after=$(oc get -n "$NAMESPACE" "$controller_pod" -o jsonpath='{.status.containerStatuses[0].restartCount}')
+      test "$before" = "$after"
+      # A persistent pause must still cause a restart, checked by 02-assert.yaml.
       oc rsh -n $NAMESPACE ${controller_pod} ovn-appctl -t ovn-controller debug/pause
