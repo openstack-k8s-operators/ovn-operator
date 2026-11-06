@@ -650,8 +650,18 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 
 	// Define a new DaemonSet object for OVNController
+	ovnDaemonSet, err := ovncontroller.CreateOVNDaemonSet(instance, OVNinputHash, ovnServiceLabels, topology)
+	if err != nil {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.DeploymentReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.DeploymentReadyErrorMessage,
+			err.Error()))
+		return ctrl.Result{}, err
+	}
 	dset := daemonset.NewDaemonSet(
-		ovncontroller.CreateOVNDaemonSet(instance, OVNinputHash, ovnServiceLabels, topology),
+		ovnDaemonSet,
 		time.Duration(5)*time.Second,
 	)
 

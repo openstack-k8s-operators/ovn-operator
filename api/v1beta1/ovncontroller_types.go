@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/probes"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
@@ -96,6 +97,11 @@ type OVNControllerSpecCore struct {
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
 	// +kubebuilder:validation:Optional
+	// Override customizes the generated ovn-controller container. It does not
+	// change the probes of the OVS or metrics containers.
+	Override OVNControllerOverrideSpec `json:"override,omitempty"`
+
+	// +kubebuilder:validation:Optional
 	// NodeSelector to target subset of worker nodes running this service
 	NodeSelector *map[string]string `json:"nodeSelector,omitempty"`
 
@@ -134,6 +140,14 @@ type OVNControllerSpecCore struct {
 	// +kubebuilder:validation:Optional
 	// MetricsTLS - Parameters related to TLS for metrics daemonset
 	MetricsTLS tls.SimpleService `json:"metricsTLS,omitempty"`
+}
+
+// OVNControllerOverrideSpec overrides the generated ovn-controller container.
+type OVNControllerOverrideSpec struct {
+	// +kubebuilder:validation:Optional
+	// Probes overrides liveness and readiness checks and optionally enables a
+	// startup check. Unspecified settings retain the operator defaults.
+	Probes probes.OverrideSpec `json:"probes,omitempty"`
 }
 
 // OVNControllerStatus defines the observed state of OVNController

@@ -34,7 +34,11 @@ func CreateOVNDaemonSet(
 	configHash string,
 	labels map[string]string,
 	topology *topologyv1.Topology,
-) *appsv1.DaemonSet {
+) (*appsv1.DaemonSet, error) {
+	probeSet, err := instance.Spec.GetProbeSet()
+	if err != nil {
+		return nil, fmt.Errorf("invalid ovn-controller probes: %w", err)
+	}
 	volumes := GetOVNControllerVolumes(instance.Name, instance.Namespace, false)
 	mounts := GetOVNControllerVolumeMounts(false)
 
@@ -66,32 +70,6 @@ func CreateOVNDaemonSet(
 		}...)
 	}
 
-	ovnControllerLivenessProbe := &corev1.Probe{
-		// TODO might need tuning
-		TimeoutSeconds:      5,
-		PeriodSeconds:       5,
-		InitialDelaySeconds: 30,
-	}
-
-	ovnControllerReadinessProbe := &corev1.Probe{
-		// TODO might need tuning
-		TimeoutSeconds:      5,
-		PeriodSeconds:       5,
-		InitialDelaySeconds: 30,
-	}
-
-	ovnControllerLivenessProbe.Exec = &corev1.ExecAction{
-		Command: []string{
-			"/usr/local/bin/container-scripts/ovn_controller_liveness.sh",
-		},
-	}
-
-	ovnControllerReadinessProbe.Exec = &corev1.ExecAction{
-		Command: []string{
-			"/usr/local/bin/container-scripts/ovn_controller_readiness.sh",
-		},
-	}
-
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 
@@ -110,8 +88,9 @@ func CreateOVNDaemonSet(
 			SecurityContext: getPrivilegedHostPathSecurityContext(privilegedOVSCapabilities),
 			Env:             env.MergeEnvs([]corev1.EnvVar{}, envVars),
 			VolumeMounts:    mounts,
-			ReadinessProbe:  ovnControllerReadinessProbe,
-			LivenessProbe:   ovnControllerLivenessProbe,
+			ReadinessProbe:  probeSet.Readiness,
+			LivenessProbe:   probeSet.Liveness,
+			StartupProbe:    probeSet.Startup,
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
@@ -160,7 +139,7 @@ func CreateOVNDaemonSet(
 		}
 	}
 
-	return daemonset
+	return daemonset, nil
 }
 
 // CreateOVSDaemonSet creates a DaemonSet for OVS (Open vSwitch) pods
