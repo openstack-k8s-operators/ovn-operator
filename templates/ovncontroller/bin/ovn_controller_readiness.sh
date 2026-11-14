@@ -9,8 +9,11 @@ error_exit() {
 
 # Check if ovn-controller is connected to the OVN SB database
 check_ovn_controller_connection() {
-    if ! output=$(ovn-appctl -t ovn-controller connection-status 2>&1); then
-        error_exit "ERROR - Failed to get connection status from ovn-controller, ovn-appctl exit status: $?"
+    if output=$(ovn-appctl -t ovn-controller connection-status 2>&1); then
+        :
+    else
+        status=$?
+        error_exit "ERROR - Failed to get connection status from ovn-controller, ovn-appctl exit status: ${status}, output: ${output}"
     fi
 
     if [ "$output" != "connected" ]; then
