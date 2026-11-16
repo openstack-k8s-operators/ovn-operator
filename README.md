@@ -76,6 +76,72 @@ make manifests
 
 More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
 
+## OVN controller probe configuration
+
+The `ovn-controller` container checks liveness and readiness every 5 seconds,
+with a 5-second timeout and a 30-second initial delay. Three consecutive
+liveness failures restart the container; readiness failures mark the Pod
+unready. Liveness checks that the process exists and `debug/status` returns
+`running`. Readiness checks that `connection-status` returns `connected`.
+These commands use the controller's local control socket. Heavy flow computation
+can delay their responses even when the controller is making progress.
+
+Configure the container through `OVNController.spec.override.probes`. For example:
+
+```yaml
+apiVersion: ovn.openstack.org/v1beta1
+kind: OVNController
+metadata:
+  name: ovncontroller
+spec:
+  override:
+    probes:
+      livenessProbes:
+        timeoutSeconds: 30
+```
+
+The value above illustrates the API; select timings using measured probe latency
+and the acceptable time to detect a persistent hang. Existing defaults are
+unchanged when overrides are omitted. Increasing tolerance prevents premature
+restarts but does not make flow computation faster. Readiness can be tuned
+independently using `readinessProbes`.
+
+The shared lib-common API supports `initialDelaySeconds`, `timeoutSeconds`,
+`periodSeconds`, and `failureThreshold`, plus `type` (`Exec` or `HTTP`),
+`command`, `path`, `port`, and `scheme`. Partial overrides inherit the defaults;
+zero timing values use lib-common's inheritance semantics. Explicit zero timeout,
+period, and failure threshold values are rejected by the CRD schema. Setting an
+initial delay to zero retains the default delay. HTTP checks require a port and
+a reachable endpoint supplied by the chosen image; the default controller does
+not expose an HTTP health endpoint.
+
+Startup probing is disabled by default. Providing `startupProbes` enables it,
+starting with the default liveness command and timings. For example,
+`startupProbes: {failureThreshold: 60}` tolerates a longer initialization.
+Startup probing gates liveness and readiness until it succeeds; it does not
+protect a controller that stalls after startup. Removing overrides restores
+the defaults. Changes update the DaemonSet Pod template and cause a rolling
+update. OVS and metrics container probes are unaffected.
+
+For deployments managed by `OpenStackControlPlane`, configure the parent CR:
+
+```yaml
+spec:
+  ovn:
+    template:
+      ovnController:
+        override:
+          probes:
+            livenessProbes:
+              timeoutSeconds: 30
+```
+
+This requires an openstack-operator release that includes the updated OVN API,
+parent CRD, and bundled OVN CRD. Updating only ovn-operator does not add fields
+to the parent CRD. Configure the parent rather than patching its child CR or
+DaemonSet, which reconciliation manages.
+
+
 ## License
 
 Copyright 2022.
